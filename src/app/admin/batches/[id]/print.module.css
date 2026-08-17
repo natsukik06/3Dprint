@@ -1,0 +1,94 @@
+.page {
+  background: #f8fafc;
+  min-height: 100%;
+}
+
+.sheet {
+  background: #ffffff;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.cell {
+  position: relative;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 110px;
+  cursor: pointer;
+  background: #ffffff;
+}
+
+.cellEmpty {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: default;
+}
+
+.cellCompleted {
+  background: #ecfdf5;
+  border-color: #34d399;
+}
+
+.gridId {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.checkbox {
+  font-size: 10px;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.checkmark {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 18px;
+  color: #16a34a;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .page {
+    background: #ffffff;
+  }
+
+  .grid {
+    gap: 3mm;
+  }
+
+  .cell {
+    min-height: 0;
+    padding: 2mm;
+    border: 0.5pt solid #666666;
+    break-inside: avoid;
+  }
+
+  .cellEmpty {
+    background: #ffffff;
+  }
+
+  .cellCompleted {
+    background: #ffffff;
+  }
+
+  .checkmark {
+    color: #000000;
+  }
+}

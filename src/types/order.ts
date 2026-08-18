@@ -53,6 +53,9 @@ export const MIN_BOTTOM_HOLE_DIAMETER_MM = 5;
 export const MAX_BOTTOM_HOLE_DIAMETER_MM = 25;
 // Fixed diameter for the top hardware hole (ヒートン金具用).
 export const HARDWARE_HOLE_DIAMETER_MM = 3;
+// Diameter for the automatically-placed drain/vent hole added when hollowing
+// a model that has no customer-specified hole (so the cavity is never sealed).
+export const DEFAULT_DRAIN_HOLE_DIAMETER_MM = 2;
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -157,4 +160,5 @@ export type OrderRecord = {
   finishedModelUrl: string | null;
   wallThicknessMm: number | null;
   hasVentHole: boolean;
+  ventHoleSource: "auto" | "customer" | null;
 };

@@ -101,6 +101,7 @@ export async function submitOrder(
     finishedModelUrl: null,
     wallThicknessMm: null,
     hasVentHole: false,
+    ventHoleSource: null,
   };
 
   const docRef = await addDoc(collection(db, "orders"), order);

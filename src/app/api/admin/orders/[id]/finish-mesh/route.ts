@@ -4,7 +4,12 @@ import { adminDb, adminStorage } from "@/lib/firebaseAdmin";
 import { cutHoles, hollowMesh, type HoleSpec } from "@/lib/meshBoolean";
 import { boundsOfTriangles, computeScaleFactor, extractWorldTriangles } from "@/lib/modelScaling";
 import { trianglesToStl } from "@/lib/stl";
-import { HARDWARE_HOLE_DIAMETER_MM, type BoundingBoxMm, type HolePoint } from "@/types/order";
+import {
+  DEFAULT_DRAIN_HOLE_DIAMETER_MM,
+  HARDWARE_HOLE_DIAMETER_MM,
+  type BoundingBoxMm,
+  type HolePoint,
+} from "@/types/order";
 
 const DEFAULT_WALL_THICKNESS_MM = 2;
 
@@ -87,13 +92,30 @@ export async function POST(
         axis: "y",
       });
     }
+    const ventHoleSource: "auto" | "customer" = holes.length > 0 ? "customer" : "auto";
 
-    let finalTriangles = hollowed;
-    if (holes.length > 0) {
-      const { min, max } = boundsOfTriangles(hollowed);
-      const maxDim = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
-      finalTriangles = await cutHoles(hollowed, holes, maxDim * 2);
+    // The hollowed cavity must never end up sealed: if the customer didn't
+    // request a hardware/cork hole, drill a small drain hole straight up
+    // through the model's bottom-center so it always vents automatically.
+    const { min: hollowedMin, max: hollowedMax } = boundsOfTriangles(hollowed);
+    if (holes.length === 0) {
+      holes.push({
+        position: [
+          (hollowedMin[0] + hollowedMax[0]) / 2,
+          hollowedMin[1],
+          (hollowedMin[2] + hollowedMax[2]) / 2,
+        ],
+        diameterMm: DEFAULT_DRAIN_HOLE_DIAMETER_MM,
+        axis: "y",
+      });
     }
+
+    const maxDim = Math.max(
+      hollowedMax[0] - hollowedMin[0],
+      hollowedMax[1] - hollowedMin[1],
+      hollowedMax[2] - hollowedMin[2]
+    );
+    const finalTriangles = await cutHoles(hollowed, holes, maxDim * 2);
 
     const stl = trianglesToStl(finalTriangles);
     const bucket = adminStorage.bucket();
@@ -104,14 +126,16 @@ export async function POST(
     await orderRef.update({
       finishedModelUrl,
       wallThicknessMm,
-      hasVentHole: holes.length > 0,
+      hasVentHole: true,
+      ventHoleSource,
     });
 
     return NextResponse.json({
       finishedModelUrl,
       wallThicknessMm,
       holesCut: holes.length,
-      hasVentHole: holes.length > 0,
+      hasVentHole: true,
+      ventHoleSource,
     });
   } catch (error) {
     console.error("finish-mesh failed", error);

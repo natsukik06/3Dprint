@@ -60,6 +60,7 @@ type OrderDetail = {
   finishedModelUrl: string | null;
   wallThicknessMm: number | null;
   hasVentHole: boolean;
+  ventHoleSource: "auto" | "customer" | null;
 };
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -107,6 +108,7 @@ function AdminOrderDetail({ id }: { id: string }) {
       finishedModelUrl: data.finishedModelUrl ?? null,
       wallThicknessMm: data.wallThicknessMm ?? null,
       hasVentHole: data.hasVentHole ?? false,
+      ventHoleSource: data.ventHoleSource ?? null,
     };
   }
 
@@ -352,14 +354,12 @@ function AdminOrderDetail({ id }: { id: string }) {
           <>
             <InfoRow
               label="通気穴"
-              value={order.hasVentHole ? "あり" : "なし（要注意）"}
+              value={
+                order.ventHoleSource === "customer"
+                  ? "あり（顧客指定の金具穴/コルク穴を使用）"
+                  : "あり（自動追加・底面中心）"
+              }
             />
-            {!order.hasVentHole && (
-              <p className="mt-1 text-xs text-amber-600">
-                中空化しましたが穴の指定がなく、内部が完全に密閉されています。このままではレジンが内部に閉じ込められるため、Photon
-                Workshop側でドレンホールを追加してください。
-              </p>
-            )}
             <a
               href={order.finishedModelUrl}
               target="_blank"

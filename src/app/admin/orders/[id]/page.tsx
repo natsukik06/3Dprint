@@ -57,6 +57,9 @@ type OrderDetail = {
   status: OrderStatus;
   batchId: string | null;
   gridId: string | null;
+  finishedModelUrl: string | null;
+  wallThicknessMm: number | null;
+  hasVentHole: boolean;
 };
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -75,6 +78,8 @@ function AdminOrderDetail({ id }: { id: string }) {
   );
   const [reprocessing, setReprocessing] = useState(false);
   const [reprocessError, setReprocessError] = useState<string | null>(null);
+  const [finishingMesh, setFinishingMesh] = useState(false);
+  const [finishMeshError, setFinishMeshError] = useState<string | null>(null);
 
   async function fetchOrder(): Promise<OrderDetail | null> {
     const snap = await getDoc(doc(db, "orders", id));
@@ -99,6 +104,9 @@ function AdminOrderDetail({ id }: { id: string }) {
       status: data.status ?? "pending",
       batchId: data.batchId ?? null,
       gridId: data.gridId ?? null,
+      finishedModelUrl: data.finishedModelUrl ?? null,
+      wallThicknessMm: data.wallThicknessMm ?? null,
+      hasVentHole: data.hasVentHole ?? false,
     };
   }
 
@@ -137,6 +145,30 @@ function AdminOrderDetail({ id }: { id: string }) {
       setReprocessError(err instanceof Error ? err.message : "処理に失敗しました");
     } finally {
       setReprocessing(false);
+    }
+  }
+
+  async function handleFinishMesh() {
+    if (!user) return;
+    setFinishingMesh(true);
+    setFinishMeshError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/orders/${id}/finish-mesh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "処理に失敗しました");
+      setOrder(await fetchOrder());
+    } catch (err) {
+      setFinishMeshError(err instanceof Error ? err.message : "処理に失敗しました");
+    } finally {
+      setFinishingMesh(false);
     }
   }
 
@@ -305,6 +337,56 @@ function AdminOrderDetail({ id }: { id: string }) {
             )}
           </div>
         )}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <InfoRow
+          label="中空化・穴あけ"
+          value={
+            order.finishedModelUrl
+              ? `完了（壁厚${order.wallThicknessMm ?? "-"}mm）`
+              : "未処理"
+          }
+        />
+        {order.finishedModelUrl && (
+          <>
+            <InfoRow
+              label="通気穴"
+              value={order.hasVentHole ? "あり" : "なし（要注意）"}
+            />
+            {!order.hasVentHole && (
+              <p className="mt-1 text-xs text-amber-600">
+                中空化しましたが穴の指定がなく、内部が完全に密閉されています。このままではレジンが内部に閉じ込められるため、Photon
+                Workshop側でドレンホールを追加してください。
+              </p>
+            )}
+            <a
+              href={order.finishedModelUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block text-xs text-slate-800 underline underline-offset-2"
+            >
+              中空化済みSTLをダウンロード
+            </a>
+          </>
+        )}
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={handleFinishMesh}
+            disabled={finishingMesh || (!order.scaledModelUrl && !order.modelUrl)}
+            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+          >
+            {finishingMesh
+              ? "処理中..."
+              : order.finishedModelUrl
+                ? "中空化・穴あけを再実行"
+                : "中空化・穴あけ処理を実行"}
+          </button>
+          {finishMeshError && (
+            <p className="mt-1 text-xs text-red-600">{finishMeshError}</p>
+          )}
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">

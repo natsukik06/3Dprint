@@ -51,6 +51,8 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export const DEFAULT_BOTTOM_HOLE_DIAMETER_MM = 10;
 export const MIN_BOTTOM_HOLE_DIAMETER_MM = 5;
 export const MAX_BOTTOM_HOLE_DIAMETER_MM = 25;
+// Fixed diameter for the top hardware hole (ヒートン金具用).
+export const HARDWARE_HOLE_DIAMETER_MM = 3;
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -152,4 +154,7 @@ export type OrderRecord = {
   status: OrderStatus;
   batchId: string | null;
   gridId: string | null;
+  finishedModelUrl: string | null;
+  wallThicknessMm: number | null;
+  hasVentHole: boolean;
 };

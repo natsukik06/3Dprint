@@ -454,3 +454,14 @@ export function scaleGlb(glb: Buffer, factor: number): Buffer {
 export function determineTargetMaxMm(sizeOption: SizeOption): number {
   return SIZE_TARGET_MM[sizeOption];
 }
+
+/**
+ * Ratio between a scaled model's bounding box and the original it was scaled
+ * from (uniform scale, so any axis would do — picks the largest original
+ * extent to avoid dividing by a near-zero axis).
+ */
+export function computeScaleFactor(original: BoundingBoxMm, scaled: BoundingBoxMm): number {
+  const axis: (keyof BoundingBoxMm)[] = ["x", "y", "z"];
+  const largest = axis.reduce((best, a) => (original[a] > original[best] ? a : best), "x");
+  return original[largest] > 0 ? scaled[largest] / original[largest] : 1;
+}

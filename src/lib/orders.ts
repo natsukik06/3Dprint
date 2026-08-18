@@ -98,6 +98,9 @@ export async function submitOrder(
     status: "pending",
     batchId: null,
     gridId: null,
+    finishedModelUrl: null,
+    wallThicknessMm: null,
+    hasVentHole: false,
   };
 
   const docRef = await addDoc(collection(db, "orders"), order);

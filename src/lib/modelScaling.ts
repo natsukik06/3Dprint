@@ -16,6 +16,8 @@ type GltfNode = {
 type GltfAccessor = {
   bufferView?: number;
   byteOffset?: number;
+  componentType?: number;
+  type?: string;
   count: number;
   min?: number[];
   max?: number[];
@@ -24,11 +26,15 @@ type GltfBufferView = {
   byteOffset?: number;
   byteStride?: number;
 };
+type GltfMeshPrimitive = {
+  attributes: Record<string, number>;
+  indices?: number;
+};
 type GltfJson = {
   scene?: number;
   scenes?: { nodes?: number[] }[];
   nodes: GltfNode[];
-  meshes?: { primitives: { attributes: Record<string, number> }[] }[];
+  meshes?: { primitives: GltfMeshPrimitive[] }[];
   accessors?: GltfAccessor[];
   bufferViews?: GltfBufferView[];
 };
@@ -208,6 +214,69 @@ function readAccessorMinMax(
   return { min, max };
 }
 
+const COMPONENT_BYTE_SIZES: Record<number, number> = {
+  5120: 1, // BYTE
+  5121: 1, // UNSIGNED_BYTE
+  5122: 2, // SHORT
+  5123: 2, // UNSIGNED_SHORT
+  5125: 4, // UNSIGNED_INT
+  5126: 4, // FLOAT
+};
+const TYPE_COMPONENT_COUNTS: Record<string, number> = {
+  SCALAR: 1,
+  VEC2: 2,
+  VEC3: 3,
+  VEC4: 4,
+};
+
+function readComponent(bin: Buffer, offset: number, componentType: number): number {
+  switch (componentType) {
+    case 5120:
+      return bin.readInt8(offset);
+    case 5121:
+      return bin.readUInt8(offset);
+    case 5122:
+      return bin.readInt16LE(offset);
+    case 5123:
+      return bin.readUInt16LE(offset);
+    case 5125:
+      return bin.readUInt32LE(offset);
+    case 5126:
+      return bin.readFloatLE(offset);
+    default:
+      throw new Error(`未対応のcomponentTypeです: ${componentType}`);
+  }
+}
+
+/** Reads every element of an accessor as an array of component tuples. */
+function readAccessorData(json: GltfJson, bin: Buffer | null, accessorIndex: number): number[][] {
+  const accessor = json.accessors?.[accessorIndex];
+  if (!accessor) throw new Error("アクセサが見つかりません");
+  const numComponents = TYPE_COMPONENT_COUNTS[accessor.type ?? "VEC3"] ?? 3;
+
+  if (accessor.bufferView === undefined || !bin) {
+    return Array.from({ length: accessor.count }, () => new Array(numComponents).fill(0));
+  }
+  const bufferView = json.bufferViews?.[accessor.bufferView];
+  if (!bufferView) throw new Error("bufferViewが見つかりません");
+
+  const componentType = accessor.componentType ?? 5126;
+  const componentSize = COMPONENT_BYTE_SIZES[componentType] ?? 4;
+  const byteStride = bufferView.byteStride ?? numComponents * componentSize;
+  const baseOffset = (bufferView.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+
+  const result: number[][] = [];
+  for (let i = 0; i < accessor.count; i++) {
+    const elementOffset = baseOffset + i * byteStride;
+    const values: number[] = [];
+    for (let c = 0; c < numComponents; c++) {
+      values.push(readComponent(bin, elementOffset + c * componentSize, componentType));
+    }
+    result.push(values);
+  }
+  return result;
+}
+
 function forEachMeshNode(
   json: GltfJson,
   visit: (node: GltfNode, worldMatrix: Mat4) => void
@@ -277,6 +346,76 @@ export function computeBoundingBoxMm(glb: Buffer): BoundingBoxMm {
   }
 
   return { x: max[0] - min[0], y: max[1] - min[1], z: max[2] - min[2] };
+}
+
+/**
+ * Extracts every triangle of every mesh primitive in a GLB's default scene, resolved
+ * to world space (indexed and non-indexed primitives both supported). Returned as a
+ * flat Float32Array of 9 numbers per triangle (3 vertices x xyz).
+ */
+export function extractWorldTriangles(glb: Buffer): Float32Array {
+  const { json, bin } = parseGlb(glb);
+  const triangles: number[] = [];
+
+  forEachMeshNode(json, (node, world) => {
+    if (node.mesh === undefined) return;
+    const mesh = json.meshes?.[node.mesh];
+    if (!mesh) return;
+
+    for (const primitive of mesh.primitives) {
+      const posIndex = primitive.attributes?.POSITION;
+      if (posIndex === undefined) continue;
+      const positions = readAccessorData(json, bin, posIndex).map(([x, y, z]) =>
+        transformPoint(world, [x, y, z])
+      );
+
+      const indices =
+        primitive.indices !== undefined
+          ? readAccessorData(json, bin, primitive.indices).map(([i]) => i)
+          : positions.map((_, i) => i);
+
+      for (let i = 0; i + 2 < indices.length; i += 3) {
+        const a = positions[indices[i]];
+        const b = positions[indices[i + 1]];
+        const c = positions[indices[i + 2]];
+        if (!a || !b || !c) continue;
+        triangles.push(...a, ...b, ...c);
+      }
+    }
+  });
+
+  return Float32Array.from(triangles);
+}
+
+/** World-space AABB of a flat triangle array (as returned by extractWorldTriangles). */
+export function boundsOfTriangles(triangles: Float32Array): {
+  min: [number, number, number];
+  max: [number, number, number];
+} {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+
+  for (let i = 0; i + 2 < triangles.length; i += 3) {
+    min[0] = Math.min(min[0], triangles[i]);
+    min[1] = Math.min(min[1], triangles[i + 1]);
+    min[2] = Math.min(min[2], triangles[i + 2]);
+    max[0] = Math.max(max[0], triangles[i]);
+    max[1] = Math.max(max[1], triangles[i + 1]);
+    max[2] = Math.max(max[2], triangles[i + 2]);
+  }
+
+  if (!isFinite(min[0])) {
+    throw new Error("GLBにメッシュのPOSITIONデータが見つかりませんでした");
+  }
+  return { min, max };
+}
+
+/** World-space AABB derived from the actual triangle data (not accessor min/max). */
+export function computeWorldBoundsMm(glb: Buffer): {
+  min: [number, number, number];
+  max: [number, number, number];
+} {
+  return boundsOfTriangles(extractWorldTriangles(glb));
 }
 
 /**

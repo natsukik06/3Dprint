@@ -5,17 +5,24 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AdminGate } from "@/components/admin/AdminGate";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { buildGridSequence } from "@/lib/batches";
 import { db } from "@/lib/firebase";
+import { PLATE_DEPTH_MM, PLATE_WIDTH_MM } from "@/lib/plateLayout";
 import type { PrintBatchRecord } from "@/types/batch";
 import styles from "./print.module.css";
 
 type BatchState = (PrintBatchRecord & { id: string }) | null | undefined;
+type PlateResult = { index: number; itemCount: number; gridIds: string[]; url: string };
 
 function BatchGridDashboard({ id }: { id: string }) {
+  const { user } = useAuth();
   const [batch, setBatch] = useState<BatchState>(undefined);
   const [printedAt] = useState(() => new Date());
   const gridSequence = useMemo(() => buildGridSequence(), []);
+  const [plateResults, setPlateResults] = useState<PlateResult[] | null>(null);
+  const [plateGenerating, setPlateGenerating] = useState(false);
+  const [plateError, setPlateError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +64,26 @@ function BatchGridDashboard({ id }: { id: string }) {
     }
   }
 
+  async function handleGeneratePlateLayout() {
+    if (!user) return;
+    setPlateGenerating(true);
+    setPlateError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/batches/${id}/plate-layout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "プレート配置の生成に失敗しました");
+      setPlateResults(json.plates);
+    } catch (err) {
+      setPlateError(err instanceof Error ? err.message : "プレート配置の生成に失敗しました");
+    } finally {
+      setPlateGenerating(false);
+    }
+  }
+
   if (batch === undefined) {
     return <p className="text-sm text-slate-500">読み込み中...</p>;
   }
@@ -75,14 +102,52 @@ function BatchGridDashboard({ id }: { id: string }) {
         >
           ← バッチ一覧に戻る
         </Link>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-        >
-          🖨️ 作業シートを印刷
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleGeneratePlateLayout}
+            disabled={plateGenerating}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {plateGenerating ? "配置生成中..." : "プレート配置ファイルを生成"}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+          >
+            🖨️ 作業シートを印刷
+          </button>
+        </div>
       </div>
+
+      {(plateError || plateResults) && (
+        <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
+          {plateError && <p className="text-sm text-red-600">{plateError}</p>}
+          {plateResults && (
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-slate-900">
+                {PLATE_WIDTH_MM}×{PLATE_DEPTH_MM}mmプレートに自動配置しました（{plateResults.length}枚に分割）
+              </p>
+              {plateResults.map((plate) => (
+                <div key={plate.index} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">
+                    プレート{plate.index}（{plate.itemCount}個: {plate.gridIds.join(", ")}）
+                  </span>
+                  <a
+                    href={plate.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-800 underline underline-offset-2"
+                  >
+                    STLダウンロード
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className={styles.sheet}>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-slate-300 pb-2">

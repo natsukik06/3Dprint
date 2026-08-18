@@ -13,5 +13,9 @@ service firebase.storage {
       allow read: if true;
       allow write: if true;
     }
+    match /batches/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }

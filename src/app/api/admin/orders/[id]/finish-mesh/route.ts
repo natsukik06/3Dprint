@@ -23,6 +23,16 @@ function scalePoint(p: HolePoint, factor: number): [number, number, number] {
   return [p.x * factor, p.y * factor, p.z * factor];
 }
 
+// Direction is scale-invariant (our scaling is always uniform), so the
+// captured surface normal can be reused as-is. Falls back to vertical for
+// records saved before normal capture was added.
+function holeDirection(p: HolePoint): [number, number, number] {
+  if (typeof p.nx === "number" && typeof p.ny === "number" && typeof p.nz === "number") {
+    return [p.nx, p.ny, p.nz];
+  }
+  return [0, 1, 0];
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -82,14 +92,14 @@ export async function POST(
       holes.push({
         position: scalePoint(order.holePosition, scaleFactor),
         diameterMm: HARDWARE_HOLE_DIAMETER_MM,
-        axis: "y",
+        direction: holeDirection(order.holePosition),
       });
     }
     if (order.bottomHolePosition && order.bottomHoleDiameterMm) {
       holes.push({
         position: scalePoint(order.bottomHolePosition, scaleFactor),
         diameterMm: order.bottomHoleDiameterMm,
-        axis: "y",
+        direction: holeDirection(order.bottomHolePosition),
       });
     }
     const ventHoleSource: "auto" | "customer" = holes.length > 0 ? "customer" : "auto";
@@ -106,7 +116,7 @@ export async function POST(
           (hollowedMin[2] + hollowedMax[2]) / 2,
         ],
         diameterMm: DEFAULT_DRAIN_HOLE_DIAMETER_MM,
-        axis: "y",
+        direction: [0, 1, 0],
       });
     }
 

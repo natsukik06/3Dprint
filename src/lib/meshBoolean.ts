@@ -99,22 +99,79 @@ export async function hollowMesh(
   return manifoldToTriangles(shell);
 }
 
-export type DrillAxis = "x" | "y" | "z";
-
 export type HoleSpec = {
   position: [number, number, number];
   diameterMm: number;
-  axis?: DrillAxis;
+  /**
+   * World-space direction the hole is drilled along (need not be normalized).
+   * Since the cylinder is centered on `position` and drilled through in both
+   * directions, the sign doesn't matter — only the axis it defines. Defaults
+   * to straight up ([0, 1, 0]) when omitted (e.g. legacy hole records saved
+   * before surface-normal capture was added).
+   */
+  direction?: [number, number, number];
 };
 
-// Rotation (degrees, applied about the global X/Y/Z axes per Manifold's
-// convention) that maps a cylinder built along its default local Z axis onto
-// the requested drill axis.
-const AXIS_ROTATION: Record<DrillAxis, [number, number, number]> = {
-  z: [0, 0, 0],
-  y: [-90, 0, 0],
-  x: [0, 90, 0],
-};
+/**
+ * Builds a column-major 4x4 transform (as Manifold's Mat4 expects) that
+ * rotates a shape built along the local +Z axis to align with `direction`,
+ * then translates it to `position`. Uses Rodrigues' rotation formula rather
+ * than solving for Euler angles, since it handles an arbitrary target axis
+ * (including the anti-parallel case) without special-casing.
+ */
+function buildAlignAndTranslate(
+  direction: [number, number, number],
+  position: [number, number, number]
+): number[] {
+  let [dx, dy, dz] = direction;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+  dx /= len;
+  dy /= len;
+  dz /= len;
+
+  // cross(z, d) = (-dy, dx, 0); dot(z, d) = dz
+  const dot = dz;
+  let r00 = 1, r01 = 0, r02 = 0;
+  let r10 = 0, r11 = 1, r12 = 0;
+  let r20 = 0, r21 = 0, r22 = 1;
+
+  if (dot < -0.999999) {
+    // Anti-parallel to +Z: 180° about the X axis (any perpendicular axis works).
+    r11 = -1;
+    r22 = -1;
+  } else if (dot < 0.999999) {
+    const ax = -dy;
+    const ay = dx;
+    const axisLen = Math.sqrt(ax * ax + ay * ay) || 1;
+    const ux = ax / axisLen;
+    const uy = ay / axisLen;
+    const sinT = axisLen;
+    const cosT = dot;
+    const t = 1 - cosT;
+
+    r00 = cosT + ux * ux * t;
+    r01 = ux * uy * t;
+    r02 = uy * sinT;
+
+    r10 = uy * ux * t;
+    r11 = cosT + uy * uy * t;
+    r12 = -ux * sinT;
+
+    r20 = -uy * sinT;
+    r21 = ux * sinT;
+    r22 = cosT;
+  }
+  // else dot >= 0.999999: already aligned with +Z, identity rotation.
+
+  const [px, py, pz] = position;
+  // Column-major 4x4.
+  return [
+    r00, r10, r20, 0,
+    r01, r11, r21, 0,
+    r02, r12, r22, 0,
+    px, py, pz, 1,
+  ];
+}
 
 /**
  * Cuts one or more cylindrical holes through a triangle-soup mesh via a real
@@ -133,10 +190,16 @@ export async function cutHoles(
 
   for (const hole of holes) {
     const radius = hole.diameterMm / 2;
-    const axis = hole.axis ?? "y";
-    const cylinder = wasm.Manifold.cylinder(throughLengthMm, radius, radius, 32, true)
-      .rotate(AXIS_ROTATION[axis])
-      .translate(hole.position);
+    const direction = hole.direction ?? [0, 1, 0];
+    const transform = buildAlignAndTranslate(direction, hole.position);
+    const cylinder = wasm.Manifold.cylinder(throughLengthMm, radius, radius, 32, true).transform(
+      transform as unknown as [
+        number, number, number, number,
+        number, number, number, number,
+        number, number, number, number,
+        number, number, number, number,
+      ]
+    );
     solid = solid.subtract(cylinder);
     if (solid.status() !== "NoError") {
       throw new Error(`穴あけ処理の結果が不正な形状になりました（status: ${solid.status()}）`);

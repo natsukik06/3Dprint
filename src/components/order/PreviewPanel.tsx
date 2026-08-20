@@ -439,7 +439,14 @@ export function PreviewPanel({
     );
     if (!hit) return;
 
-    const point = { x: hit.position.x, y: hit.position.y, z: hit.position.z };
+    const point = {
+      x: hit.position.x,
+      y: hit.position.y,
+      z: hit.position.z,
+      nx: hit.normal.x,
+      ny: hit.normal.y,
+      nz: hit.normal.z,
+    };
     if (placingHoleTarget === "top") {
       setValue("holePosition", point);
     } else if (placingHoleTarget === "bottom") {
@@ -482,6 +489,17 @@ export function PreviewPanel({
       return; // was a drag to orbit the camera, not a tap to place the hole
     }
     updatePlacementPoint(viewer, event);
+  }
+
+  function normalAttr(
+    point: { nx?: number; ny?: number; nz?: number },
+    fallback: readonly [number, number, number]
+  ): string {
+    const [fx, fy, fz] = fallback;
+    const nx = point.nx ?? fx;
+    const ny = point.ny ?? fy;
+    const nz = point.nz ?? fz;
+    return `${nx}m ${ny}m ${nz}m`;
   }
 
   function startPlacing(target: "top" | "bottom") {
@@ -544,7 +562,7 @@ export function PreviewPanel({
                   type="button"
                   slot="hotspot-hole"
                   data-position={`${holePosition.x}m ${holePosition.y}m ${holePosition.z}m`}
-                  data-normal="0m 1m 0m"
+                  data-normal={normalAttr(holePosition, [0, 1, 0])}
                   className="flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 shadow"
                   aria-label="上の穴（金具用）の位置"
                 />
@@ -554,7 +572,7 @@ export function PreviewPanel({
                   type="button"
                   slot="hotspot-bottom-hole"
                   data-position={`${bottomHolePosition.x}m ${bottomHolePosition.y}m ${bottomHolePosition.z}m`}
-                  data-normal="0m -1m 0m"
+                  data-normal={normalAttr(bottomHolePosition, [0, -1, 0])}
                   style={{
                     width: `${Math.max(12, (bottomHoleDiameterMm ?? 10) * 1.2)}px`,
                     height: `${Math.max(12, (bottomHoleDiameterMm ?? 10) * 1.2)}px`,
@@ -858,7 +876,7 @@ export function PreviewPanel({
                     type="button"
                     slot="hotspot-hole"
                     data-position={`${holePosition.x}m ${holePosition.y}m ${holePosition.z}m`}
-                    data-normal="0m 1m 0m"
+                    data-normal={normalAttr(holePosition, [0, 1, 0])}
                     className="flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 shadow"
                     aria-label="上の穴（金具用）の位置"
                   />
@@ -868,7 +886,7 @@ export function PreviewPanel({
                     type="button"
                     slot="hotspot-bottom-hole"
                     data-position={`${bottomHolePosition.x}m ${bottomHolePosition.y}m ${bottomHolePosition.z}m`}
-                    data-normal="0m -1m 0m"
+                    data-normal={normalAttr(bottomHolePosition, [0, -1, 0])}
                     style={{
                       width: `${Math.max(12, (bottomHoleDiameterMm ?? 10) * 1.2)}px`,
                       height: `${Math.max(12, (bottomHoleDiameterMm ?? 10) * 1.2)}px`,

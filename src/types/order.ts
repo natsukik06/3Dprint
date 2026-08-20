@@ -28,7 +28,20 @@ export type Pose = (typeof POSE_OPTIONS)[number];
 export type MagicColor = (typeof MAGIC_COLOR_OPTIONS)[number];
 export type DeliveryTimeSlot = (typeof DELIVERY_TIME_SLOT_OPTIONS)[number];
 export type ColorQuantities = Record<MagicColor, number>;
-export type HolePoint = { x: number; y: number; z: number };
+// Position plus the local surface normal at that point (captured via
+// model-viewer's positionAndNormalFromPoint), so holes can be drilled
+// perpendicular to the actual surface instead of always straight down.
+// nx/ny/nz are optional for backward compatibility with records saved
+// before normal capture was added; consumers should fall back to a
+// vertical direction when absent.
+export type HolePoint = {
+  x: number;
+  y: number;
+  z: number;
+  nx?: number;
+  ny?: number;
+  nz?: number;
+};
 export type SizeOption = (typeof SIZE_OPTIONS)[number];
 export type OrderStatus = (typeof ORDER_STATUS_OPTIONS)[number];
 export type BoundingBoxMm = { x: number; y: number; z: number };
@@ -112,10 +125,24 @@ export const orderFormSchema = z.object({
   generationCreditsUsed: z.number().int().min(0),
   wantsHardware: z.boolean(),
   holePosition: z
-    .object({ x: z.number(), y: z.number(), z: z.number() })
+    .object({
+      x: z.number(),
+      y: z.number(),
+      z: z.number(),
+      nx: z.number().optional(),
+      ny: z.number().optional(),
+      nz: z.number().optional(),
+    })
     .nullable(),
   bottomHolePosition: z
-    .object({ x: z.number(), y: z.number(), z: z.number() })
+    .object({
+      x: z.number(),
+      y: z.number(),
+      z: z.number(),
+      nx: z.number().optional(),
+      ny: z.number().optional(),
+      nz: z.number().optional(),
+    })
     .nullable(),
   bottomHoleDiameterMm: z
     .number()

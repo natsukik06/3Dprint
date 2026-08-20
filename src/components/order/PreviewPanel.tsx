@@ -122,7 +122,9 @@ export function PreviewPanel({
   const modelViewerRef = useRef<ModelViewerElement | null>(null);
   const modalModelViewerRef = useRef<ModelViewerElement | null>(null);
   const suppressResetRef = useRef(false);
-  const activePointerViewerRef = useRef<ModelViewerElement | null>(null);
+  const pointerDownInfoRef = useRef<{ x: number; y: number; time: number } | null>(
+    null
+  );
 
   const { user } = useAuth();
   const credits = useCredits();
@@ -445,47 +447,41 @@ export function PreviewPanel({
     }
   }
 
+  // Camera rotation (model-viewer's own camera-controls) is left fully enabled
+  // at all times, even while placing a hole. A "tap" (small movement, short
+  // duration) places/moves the point; anything bigger is treated as a drag to
+  // orbit the camera and is left alone, so users can freely rotate to see the
+  // underside of the model before tapping where they want the hole.
+  const TAP_MAX_DISTANCE_PX = 8;
+  const TAP_MAX_DURATION_MS = 400;
+
   function handlePlacementPointerDown(
     viewer: ModelViewerElement | null,
     event: React.PointerEvent<HTMLElement>
   ) {
     if (!placingHoleTarget || !viewer) return;
-    event.preventDefault();
-    viewer.removeAttribute("camera-controls");
-    viewer.setPointerCapture(event.pointerId);
-    activePointerViewerRef.current = viewer;
-    updatePlacementPoint(viewer, event);
-  }
-
-  function handlePlacementPointerMove(
-    viewer: ModelViewerElement | null,
-    event: React.PointerEvent<HTMLElement>
-  ) {
-    if (
-      !placingHoleTarget ||
-      !viewer ||
-      activePointerViewerRef.current !== viewer
-    ) {
-      return;
-    }
-    updatePlacementPoint(viewer, event);
+    pointerDownInfoRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      time: Date.now(),
+    };
   }
 
   function handlePlacementPointerUp(
     viewer: ModelViewerElement | null,
     event: React.PointerEvent<HTMLElement>
   ) {
-    if (
-      !placingHoleTarget ||
-      !viewer ||
-      activePointerViewerRef.current !== viewer
-    ) {
-      return;
+    if (!placingHoleTarget || !viewer) return;
+    const start = pointerDownInfoRef.current;
+    pointerDownInfoRef.current = null;
+    if (!start) return;
+
+    const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+    const duration = Date.now() - start.time;
+    if (distance > TAP_MAX_DISTANCE_PX || duration > TAP_MAX_DURATION_MS) {
+      return; // was a drag to orbit the camera, not a tap to place the hole
     }
     updatePlacementPoint(viewer, event);
-    viewer.setAttribute("camera-controls", "");
-    activePointerViewerRef.current = null;
-    setPlacingHoleTarget(null);
   }
 
   function startPlacing(target: "top" | "bottom") {
@@ -538,9 +534,6 @@ export function PreviewPanel({
               }}
               onPointerDown={(event) =>
                 handlePlacementPointerDown(modelViewerRef.current, event)
-              }
-              onPointerMove={(event) =>
-                handlePlacementPointerMove(modelViewerRef.current, event)
               }
               onPointerUp={(event) =>
                 handlePlacementPointerUp(modelViewerRef.current, event)
@@ -709,7 +702,7 @@ export function PreviewPanel({
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-slate-600">
             <span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-500 align-middle" />
-            上の穴（金具用）を開ける位置をモデル上で指定できます（押したまま動かして調整）
+            上の穴（金具用）を開ける位置をモデル上で指定できます（回転させてタップするだけ）
           </p>
           <button
             type="button"
@@ -718,7 +711,7 @@ export function PreviewPanel({
           >
             <MapPin className="h-3.5 w-3.5" />
             {placingHoleTarget === "top"
-              ? "拡大画面でモデルを押したまま調整..."
+              ? "指定中（完了するには下のボタン）"
               : holePosition
                 ? "位置を選び直す"
                 : "位置を指定する"}
@@ -746,7 +739,7 @@ export function PreviewPanel({
             >
               <MapPin className="h-3.5 w-3.5" />
               {placingHoleTarget === "bottom"
-                ? "拡大画面でモデルを押したまま調整..."
+                ? "指定中（完了するには下のボタン）"
                 : bottomHolePosition
                   ? "位置を選び直す"
                   : "位置を指定する"}
@@ -774,7 +767,7 @@ export function PreviewPanel({
             </p>
           )}
           <p className="mt-1 text-[10px] text-slate-400">
-            ※現時点では位置・大きさの記録のみです（自動穴あけ加工は未対応）
+            ※ここで指定した位置・大きさをもとに、製造時に自動で穴あけ加工されます
           </p>
         </div>
       )}
@@ -856,9 +849,6 @@ export function PreviewPanel({
                 onPointerDown={(event) =>
                   handlePlacementPointerDown(modalModelViewerRef.current, event)
                 }
-                onPointerMove={(event) =>
-                  handlePlacementPointerMove(modalModelViewerRef.current, event)
-                }
                 onPointerUp={(event) =>
                   handlePlacementPointerUp(modalModelViewerRef.current, event)
                 }
@@ -890,11 +880,23 @@ export function PreviewPanel({
               </model-viewer>
             )}
             {expandedView === "model" && placingHoleTarget && (
-              <p className="pointer-events-none absolute inset-x-0 top-4 z-10 text-center text-sm font-medium text-white">
-                モデルを押したまま動かして
-                {placingHoleTarget === "top" ? "上の穴" : "下の穴"}
-                の位置を調整し、指を離すと決定します
-              </p>
+              <>
+                <p className="pointer-events-none absolute inset-x-0 top-4 z-10 text-center text-sm font-medium text-white">
+                  モデルを回転・拡大できます。
+                  {placingHoleTarget === "top" ? "上の穴" : "下の穴"}
+                  を開けたい場所を軽くタップしてください
+                </p>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setPlacingHoleTarget(null);
+                  }}
+                  className="absolute inset-x-0 bottom-4 z-10 mx-auto w-fit rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 shadow hover:bg-slate-100"
+                >
+                  完了
+                </button>
+              </>
             )}
             {expandedView === "preview" && activePreview.phase === "success" && (
               // eslint-disable-next-line @next/next/no-img-element

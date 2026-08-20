@@ -16,6 +16,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { signInWithGoogle } from "@/lib/auth";
 import { db } from "@/lib/firebase";
+import { injectHoleMarkers, type MarkerSpec } from "@/lib/glbMarker";
 import { MAGIC_COLOR_LABELS } from "@/lib/pricing";
 import {
   DEFAULT_BOTTOM_HOLE_DIAMETER_MM,
@@ -69,6 +70,14 @@ type ModelState =
   | { phase: "error"; message: string };
 
 const POLL_INTERVAL_MS = 4000;
+
+// Visual-only indicator pegs (not the real hole diameter) showing where and
+// in which direction a hole will actually be drilled, rendered as real 3D
+// geometry injected into the previewed GLB so occlusion/lighting look right.
+const HOLE_MARKER_DIAMETER_MM = 0.8;
+const HOLE_MARKER_HEIGHT_MM = 8;
+const TOP_HOLE_MARKER_COLOR: [number, number, number] = [0.937, 0.267, 0.267]; // red-500
+const BOTTOM_HOLE_MARKER_COLOR: [number, number, number] = [0.961, 0.62, 0.043]; // amber-500
 
 function applyMaterialAppearance(
   modelViewer: ModelViewerElement,
@@ -125,6 +134,11 @@ export function PreviewPanel({
   const pointerDownInfoRef = useRef<{ x: number; y: number; time: number } | null>(
     null
   );
+  const modelBufferCacheRef = useRef<{ url: string; buffer: ArrayBuffer } | null>(
+    null
+  );
+  const markerBlobUrlRef = useRef<string | null>(null);
+  const [markerModelUrl, setMarkerModelUrl] = useState<string | null>(null);
 
   const { user } = useAuth();
   const credits = useCredits();
@@ -153,6 +167,93 @@ export function PreviewPanel({
 
   const currentModelUrl =
     modelState.phase === "success" ? modelState.modelUrl : null;
+
+  // Renders the placed hole(s) as real 3D marker geometry (position + actual
+  // drill direction) injected into a copy of the GLB, so the preview shows
+  // correctly-occluded/lit pegs instead of a flat camera-facing dot.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function rebuild() {
+      const markers: MarkerSpec[] = [];
+      if (holePosition) {
+        markers.push({
+          position: [holePosition.x, holePosition.y, holePosition.z],
+          direction:
+            typeof holePosition.nx === "number" &&
+            typeof holePosition.ny === "number" &&
+            typeof holePosition.nz === "number"
+              ? [holePosition.nx, holePosition.ny, holePosition.nz]
+              : [0, 1, 0],
+          diameterMm: HOLE_MARKER_DIAMETER_MM,
+          heightMm: HOLE_MARKER_HEIGHT_MM,
+          colorRgb: TOP_HOLE_MARKER_COLOR,
+        });
+      }
+      if (bottomHolePosition) {
+        markers.push({
+          position: [bottomHolePosition.x, bottomHolePosition.y, bottomHolePosition.z],
+          direction:
+            typeof bottomHolePosition.nx === "number" &&
+            typeof bottomHolePosition.ny === "number" &&
+            typeof bottomHolePosition.nz === "number"
+              ? [bottomHolePosition.nx, bottomHolePosition.ny, bottomHolePosition.nz]
+              : [0, -1, 0],
+          diameterMm: HOLE_MARKER_DIAMETER_MM,
+          heightMm: HOLE_MARKER_HEIGHT_MM,
+          colorRgb: BOTTOM_HOLE_MARKER_COLOR,
+        });
+      }
+
+      if (!currentModelUrl || markers.length === 0) {
+        if (markerBlobUrlRef.current) {
+          URL.revokeObjectURL(markerBlobUrlRef.current);
+          markerBlobUrlRef.current = null;
+        }
+        setMarkerModelUrl(null);
+        return;
+      }
+
+      try {
+        let cached = modelBufferCacheRef.current;
+        if (!cached || cached.url !== currentModelUrl) {
+          const res = await fetch(currentModelUrl);
+          if (!res.ok) throw new Error("モデルの取得に失敗しました");
+          const buffer = await res.arrayBuffer();
+          cached = { url: currentModelUrl, buffer };
+          modelBufferCacheRef.current = cached;
+        }
+        if (cancelled) return;
+
+        const augmented = injectHoleMarkers(cached.buffer, markers);
+        const blob = new Blob([augmented], { type: "model/gltf-binary" });
+        const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        if (markerBlobUrlRef.current) URL.revokeObjectURL(markerBlobUrlRef.current);
+        markerBlobUrlRef.current = url;
+        setMarkerModelUrl(url);
+      } catch (error) {
+        console.error("hole marker preview failed", error);
+        setMarkerModelUrl(null);
+      }
+    }
+
+    rebuild();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentModelUrl, holePosition, bottomHolePosition]);
+
+  useEffect(() => {
+    return () => {
+      if (markerBlobUrlRef.current) URL.revokeObjectURL(markerBlobUrlRef.current);
+    };
+  }, []);
+
+  const displayModelUrl = markerModelUrl ?? currentModelUrl ?? undefined;
 
   useEffect(() => {
     import("@google/model-viewer");
@@ -540,7 +641,7 @@ export function PreviewPanel({
           {modelState.phase === "success" && (
             <model-viewer
               ref={modelViewerRef}
-              src={modelState.modelUrl}
+              src={displayModelUrl}
               alt="生成された3Dモデルのプレビュー"
               camera-controls
               auto-rotate={!placingHoleTarget}
@@ -854,7 +955,7 @@ export function PreviewPanel({
             {expandedView === "model" && modelState.phase === "success" && (
               <model-viewer
                 ref={modalModelViewerRef}
-                src={modelState.modelUrl}
+                src={displayModelUrl}
                 alt="生成された3Dモデルのプレビュー（拡大）"
                 camera-controls
                 auto-rotate={!placingHoleTarget}

@@ -31,6 +31,10 @@ type OrderDetail = {
   modelUrl: string | null;
   finishedPreviewUrls: Partial<Record<MagicColor, string>>;
   subject: string;
+  furColorNote: string;
+  breedNote: string;
+  accessoryNote: string;
+  bodyFeatureNote: string;
   pose: Pose;
   colorQuantities: ColorQuantities;
   wantsHardware: boolean;
@@ -279,6 +283,18 @@ function AdminOrderDetail({ id }: { id: string }) {
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <InfoRow label="作りたいもの" value={order.subject} />
+        {order.furColorNote && (
+          <InfoRow label="毛色・柄" value={order.furColorNote} />
+        )}
+        {order.breedNote && (
+          <InfoRow label="犬種・ミックス" value={order.breedNote} />
+        )}
+        {order.accessoryNote && (
+          <InfoRow label="服・首輪などの扱い" value={order.accessoryNote} />
+        )}
+        {order.bodyFeatureNote && (
+          <InfoRow label="しっぽ・耳など体の特徴" value={order.bodyFeatureNote} />
+        )}
         <InfoRow label="ポーズ" value={POSE_LABELS[order.pose]} />
         <InfoRow
           label="カラー・個数"

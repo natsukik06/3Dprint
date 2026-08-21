@@ -25,6 +25,10 @@ export function OrderForm() {
     defaultValues: {
       photos: [],
       subject: "",
+      furColorNote: "",
+      breedNote: "",
+      accessoryNote: "",
+      bodyFeatureNote: "",
       pose: "auto",
       sizeOption: "S",
       colorQuantities: {
@@ -59,9 +63,27 @@ export function OrderForm() {
     formState: { errors, isSubmitting },
   } = methods;
 
-  const [photos, subject, pose, colorQuantities] = useWatch({
+  const [
+    photos,
+    subject,
+    pose,
+    colorQuantities,
+    furColorNote,
+    breedNote,
+    accessoryNote,
+    bodyFeatureNote,
+  ] = useWatch({
     control,
-    name: ["photos", "subject", "pose", "colorQuantities"],
+    name: [
+      "photos",
+      "subject",
+      "pose",
+      "colorQuantities",
+      "furColorNote",
+      "breedNote",
+      "accessoryNote",
+      "bodyFeatureNote",
+    ],
   });
 
   const [generatedModelUrl, setGeneratedModelUrl] = useState<string | null>(null);
@@ -181,6 +203,12 @@ export function OrderForm() {
             subject={subject ?? ""}
             pose={pose}
             colorQuantities={colorQuantities}
+            petDetails={{
+              furColorNote,
+              breedNote,
+              accessoryNote,
+              bodyFeatureNote,
+            }}
             onGenerated={handleGenerated}
           />
         </SectionCard>

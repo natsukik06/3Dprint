@@ -26,6 +26,7 @@ import {
   type ColorQuantities,
   type MagicColor,
   type OrderFormValues,
+  type PetDetails,
   type Pose,
 } from "@/types/order";
 import type { ModelViewerElement } from "@google/model-viewer";
@@ -43,8 +44,17 @@ type PreviewPanelProps = {
   subject: string;
   pose: Pose;
   colorQuantities: ColorQuantities;
+  petDetails: PetDetails;
   onGenerated: (result: GeneratedResult | null) => void;
 };
+
+function appendPetDetails(formData: FormData, petDetails: PetDetails) {
+  if (petDetails.furColorNote) formData.append("furColorNote", petDetails.furColorNote);
+  if (petDetails.breedNote) formData.append("breedNote", petDetails.breedNote);
+  if (petDetails.accessoryNote) formData.append("accessoryNote", petDetails.accessoryNote);
+  if (petDetails.bodyFeatureNote)
+    formData.append("bodyFeatureNote", petDetails.bodyFeatureNote);
+}
 
 type GeneratedModel = {
   taskId: string;
@@ -139,6 +149,7 @@ export function PreviewPanel({
   subject,
   pose,
   colorQuantities,
+  petDetails,
   onGenerated,
 }: PreviewPanelProps) {
   const purchasedColors = MAGIC_COLOR_OPTIONS.filter(
@@ -379,6 +390,7 @@ export function PreviewPanel({
       formData.append("subject", subject);
       formData.append("pose", pose);
       formData.append("magicColor", activeColor);
+      appendPetDetails(formData, petDetails);
 
       const res = await fetch("/api/generate-preview", {
         method: "POST",
@@ -493,6 +505,7 @@ export function PreviewPanel({
       photos.forEach((file) => formData.append("photos", file));
       formData.append("subject", subject);
       formData.append("pose", pose);
+      appendPetDetails(formData, petDetails);
 
       const res = await fetch("/api/generate-model", {
         method: "POST",

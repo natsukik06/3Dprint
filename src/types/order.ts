@@ -36,6 +36,12 @@ export type Pose = (typeof POSE_OPTIONS)[number];
 export type MagicColor = (typeof MAGIC_COLOR_OPTIONS)[number];
 export type DeliveryTimeSlot = (typeof DELIVERY_TIME_SLOT_OPTIONS)[number];
 export type ColorQuantities = Record<MagicColor, number>;
+export type PetDetails = {
+  furColorNote?: string;
+  breedNote?: string;
+  accessoryNote?: string;
+  bodyFeatureNote?: string;
+};
 // Position plus the local surface normal at that point (captured via
 // model-viewer's positionAndNormalFromPoint), so holes can be drilled
 // perpendicular to the actual surface instead of always straight down.
@@ -124,6 +130,13 @@ export const orderFormSchema = z.object({
     .array(imageFileSchema)
     .max(MAX_REFERENCE_PHOTOS, `写真は${MAX_REFERENCE_PHOTOS}枚までです`),
   subject: z.string().min(1, "何を作りたいか入力してください"),
+  furColorNote: z.string().max(200, "200文字以内で入力してください").optional(),
+  breedNote: z.string().max(200, "200文字以内で入力してください").optional(),
+  accessoryNote: z.string().max(200, "200文字以内で入力してください").optional(),
+  bodyFeatureNote: z
+    .string()
+    .max(200, "200文字以内で入力してください")
+    .optional(),
   pose: z.enum(POSE_OPTIONS, "ポーズを選択してください"),
   sizeOption: z.enum(SIZE_OPTIONS, "サイズを選択してください"),
   colorQuantities: colorQuantitiesSchema,
@@ -175,6 +188,10 @@ export type OrderRecord = {
   modelUrl: string | null;
   finishedPreviewUrls: Partial<Record<MagicColor, string>>;
   subject: string;
+  furColorNote: string;
+  breedNote: string;
+  accessoryNote: string;
+  bodyFeatureNote: string;
   pose: Pose;
   sizeOption: SizeOption;
   colorQuantities: ColorQuantities;

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { generateFinishedPreview, type ImagePayload } from "@/lib/gemini";
 import { uploadFinishedPreview } from "@/lib/orders";
+import { readPetDetails } from "@/lib/petDetails";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 import {
   MAGIC_COLOR_OPTIONS,
@@ -60,11 +61,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const referencePhotos = await Promise.all(photoFiles.map(toImagePayload));
+    const petDetails = readPetDetails(formData);
     const finishedPreview = await generateFinishedPreview(
       referencePhotos,
       subject,
       pose as Pose,
-      magicColor as MagicColor
+      magicColor as MagicColor,
+      petDetails
     );
 
     const previewId = crypto.randomUUID();

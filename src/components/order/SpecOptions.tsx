@@ -2,6 +2,7 @@
 
 import { Minus, Plus } from "lucide-react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
+import { PetDetailsFields } from "@/components/order/PetDetailsFields";
 import { RadioCard } from "@/components/ui/RadioCard";
 import {
   ADDITIONAL_UNIT_PRICE_YEN,
@@ -49,6 +50,8 @@ export function SpecOptions() {
           <p className="text-sm text-red-600">{errors.subject.message}</p>
         )}
       </div>
+
+      <PetDetailsFields />
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-slate-700">ポーズ</legend>

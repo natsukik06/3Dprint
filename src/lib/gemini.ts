@@ -1,6 +1,6 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import sharp from "sharp";
-import type { MagicColor, Pose } from "@/types/order";
+import type { MagicColor, PetDetails, Pose } from "@/types/order";
 
 const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
 
@@ -23,6 +23,31 @@ const MAGIC_COLOR_PHRASES: Record<MagicColor, string> = {
 };
 
 export type ImagePayload = { data: string; mimeType: string };
+
+// Photos alone often don't convey things like "fur is dyed/faded", breed identity, whether
+// clothing should be removed, or a docked tail — this turns whatever the customer filled in into
+// plain sentences appended to the generation prompt so those details actually reach the model.
+function petDetailsPhrase(details?: PetDetails): string {
+  if (!details) return "";
+  const parts: string[] = [];
+  if (details.furColorNote?.trim()) {
+    parts.push(`fur color/pattern: ${details.furColorNote.trim()}`);
+  }
+  if (details.breedNote?.trim()) {
+    parts.push(`breed: ${details.breedNote.trim()}`);
+  }
+  if (details.accessoryNote?.trim()) {
+    parts.push(`clothing/accessories: ${details.accessoryNote.trim()}`);
+  }
+  if (details.bodyFeatureNote?.trim()) {
+    parts.push(`other body features: ${details.bodyFeatureNote.trim()}`);
+  }
+  if (parts.length === 0) return "";
+  return (
+    " The customer also provided these details, which take priority over the reference photos " +
+    `wherever they conflict: ${parts.join("; ")}.`
+  );
+}
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -74,7 +99,7 @@ const GRID_CELLS: Record<View, { row: 0 | 1; col: 0 | 1 }> = {
 // information the reconstruction needs and was over-smoothing coat/fur shape in the process. Only
 // the print-safety constraint (no fragile paper-thin geometry) is kept, and phrased narrowly so it
 // doesn't erase the pet's actual silhouette.
-function figureGridPrompt(subject: string, pose: Pose): string {
+function figureGridPrompt(subject: string, pose: Pose, petDetails?: PetDetails): string {
   return (
     "A single image containing a precise 2x2 grid of four photos of the same small figurine of " +
     `${subject}, in ${POSE_PHRASES[pose]}. The grid has exactly four equal-sized quadrants with no ` +
@@ -104,7 +129,8 @@ function figureGridPrompt(subject: string, pose: Pose): string {
     "tapers down to a sharp point. Soft even studio lighting with no harsh shadows or reflections. " +
     "Precise anatomical proportions, full body visible and centered within each quadrant, no text " +
     "or watermark anywhere. Use the attached reference photos to match the subject's shape, " +
-    "features, coloring, and identity exactly."
+    "features, coloring, and identity exactly." +
+    petDetailsPhrase(petDetails)
   );
 }
 
@@ -142,13 +168,14 @@ async function splitGridImage(image: ImagePayload): Promise<Record<View, ImagePa
 export async function generateWhiteClayViews(
   referencePhotos: ImagePayload[],
   subject: string,
-  pose: Pose
+  pose: Pose,
+  petDetails?: PetDetails
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
   const gridImage = await generateImage(
     client,
     referencePhotos,
-    figureGridPrompt(subject, pose)
+    figureGridPrompt(subject, pose, petDetails)
   );
   return splitGridImage(gridImage);
 }
@@ -158,7 +185,8 @@ export async function generateFinishedPreview(
   referencePhotos: ImagePayload[],
   subject: string,
   pose: Pose,
-  magicColor: MagicColor
+  magicColor: MagicColor,
+  petDetails?: PetDetails
 ): Promise<ImagePayload> {
   const client = getClient();
   const interiorPhrase =
@@ -173,7 +201,8 @@ export async function generateFinishedPreview(
     `${POSE_PHRASES[pose]}. The entire body is made of ultra-clear glass-like resin. ` +
     `${interiorPhrase} Cinematic lighting, centered composition, no text or ` +
     "watermark. Use the attached reference photos to match the subject's shape, " +
-    "features, and identity.";
+    "features, and identity." +
+    petDetailsPhrase(petDetails);
 
   return generateImage(client, referencePhotos, prompt);
 }

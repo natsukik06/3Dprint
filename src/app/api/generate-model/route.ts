@@ -7,6 +7,7 @@ import {
 } from "@/lib/gemini";
 import { uploadReferencePhotos } from "@/lib/orders";
 import { createMultiviewTask, uploadImageToTripo } from "@/lib/tripo";
+import { readPetDetails } from "@/lib/petDetails";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 import { POSE_OPTIONS, type Pose } from "@/types/order";
 
@@ -58,9 +59,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const referencePhotos = await Promise.all(photoFiles.map(toImagePayload));
+    const petDetails = readPetDetails(formData);
 
     const [whiteClayViews, referenceImageUrls] = await Promise.all([
-      generateWhiteClayViews(referencePhotos, subject, pose as Pose),
+      generateWhiteClayViews(referencePhotos, subject, pose as Pose, petDetails),
       uploadReferencePhotos(photoFiles),
     ]);
 

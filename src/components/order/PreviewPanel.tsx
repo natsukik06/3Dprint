@@ -79,6 +79,22 @@ const HOLE_MARKER_HEIGHT_MM = 8;
 const TOP_HOLE_MARKER_COLOR: [number, number, number] = [0.937, 0.267, 0.267]; // red-500
 const BOTTOM_HOLE_MARKER_COLOR: [number, number, number] = [0.961, 0.62, 0.043]; // amber-500
 
+// Flat alpha blending just makes the model look like semi-see-through
+// plastic, not real clear resin/crystal. Real transparency needs light to
+// actually pass through and refract, which is what KHR_materials_transmission
+// (+ ior/thickness/attenuation) simulates — model-viewer's scene-graph API
+// exposes all of it, so use that instead of faking it with alpha.
+const CLEAR_MATERIAL_IOR = 1.5; // typical for clear acrylic/resin
+const CLEAR_MATERIAL_ROUGHNESS = 0.05; // glossy, not matte
+
+// Original (non-clear) roughness/metallic per material, captured the first
+// time we touch it, so toggling clear mode off restores the model's actual
+// matte appearance instead of leaving it glossy.
+const originalMaterialAppearance = new WeakMap<
+  object,
+  { roughness: number; metallic: number }
+>();
+
 function applyMaterialAppearance(
   modelViewer: ModelViewerElement,
   clear: boolean
@@ -86,16 +102,35 @@ function applyMaterialAppearance(
   const model = modelViewer.model;
   if (!model) return;
 
+  const dimensions = modelViewer.getDimensions();
+  const thickness =
+    Math.max(dimensions.x, dimensions.y, dimensions.z) * 0.15 || 1;
+
   for (const material of model.materials) {
-    const [r, g, b] = material.pbrMetallicRoughness.baseColorFactor;
-    material.pbrMetallicRoughness.setBaseColorFactor([
-      r,
-      g,
-      b,
-      clear ? 0.35 : 1,
-    ]);
-    material.setAlphaMode(clear ? "BLEND" : "OPAQUE");
-    material.setDoubleSided(clear);
+    if (!originalMaterialAppearance.has(material)) {
+      originalMaterialAppearance.set(material, {
+        roughness: material.pbrMetallicRoughness.roughnessFactor,
+        metallic: material.pbrMetallicRoughness.metallicFactor,
+      });
+    }
+    const original = originalMaterialAppearance.get(material)!;
+
+    if (clear) {
+      material.setTransmissionFactor(1);
+      material.setIor(CLEAR_MATERIAL_IOR);
+      material.setThicknessFactor(thickness);
+      material.setAttenuationColor([1, 1, 1]);
+      material.pbrMetallicRoughness.setRoughnessFactor(CLEAR_MATERIAL_ROUGHNESS);
+      material.pbrMetallicRoughness.setMetallicFactor(0);
+      material.setAlphaMode("OPAQUE");
+      material.setDoubleSided(true);
+    } else {
+      material.setTransmissionFactor(0);
+      material.pbrMetallicRoughness.setRoughnessFactor(original.roughness);
+      material.pbrMetallicRoughness.setMetallicFactor(original.metallic);
+      material.setAlphaMode("OPAQUE");
+      material.setDoubleSided(false);
+    }
   }
 }
 

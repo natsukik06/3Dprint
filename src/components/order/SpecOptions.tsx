@@ -5,6 +5,7 @@ import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { RadioCard } from "@/components/ui/RadioCard";
 import {
   ADDITIONAL_UNIT_PRICE_YEN,
+  FIGURE_PRICE_YEN,
   MAGIC_COLOR_LABELS,
   POSE_LABELS,
   getTotalQuantity,
@@ -14,7 +15,6 @@ import {
   MAX_TOTAL_QUANTITY,
   POSE_OPTIONS,
   SIZE_LABELS,
-  SIZE_OPTIONS,
   type OrderFormValues,
 } from "@/types/order";
 
@@ -80,31 +80,10 @@ export function SpecOptions() {
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-slate-700">サイズ</legend>
-        <Controller
-          name="sizeOption"
-          control={control}
-          render={({ field, fieldState }) => (
-            <div className="space-y-2">
-              <div className="grid gap-2 sm:grid-cols-2">
-                {SIZE_OPTIONS.map((option) => (
-                  <RadioCard
-                    key={option}
-                    name={field.name}
-                    value={option}
-                    checked={field.value === option}
-                    onChange={field.onChange}
-                    label={SIZE_LABELS[option]}
-                  />
-                ))}
-              </div>
-              {fieldState.error && (
-                <p className="text-sm text-red-600">
-                  {fieldState.error.message}
-                </p>
-              )}
-            </div>
-          )}
-        />
+        <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          {SIZE_LABELS.S}
+        </p>
+        <input type="hidden" {...register("sizeOption")} />
       </fieldset>
 
       <fieldset className="space-y-2">
@@ -112,8 +91,13 @@ export function SpecOptions() {
           魔法のカラー・個数
         </legend>
         <p className="text-xs text-slate-500">
-          同じ形状を複数のカラーで注文できます（1個目¥8,000、2個目以降は+
-          {ADDITIONAL_UNIT_PRICE_YEN}円、最大{MAX_TOTAL_QUANTITY}個。3個以上で送料無料）
+          同じ形状を複数のカラーで注文できます（1個目¥
+          {FIGURE_PRICE_YEN.toLocaleString()}、2個目以降は+
+          {ADDITIONAL_UNIT_PRICE_YEN}円、最大{MAX_TOTAL_QUANTITY}個。
+          <span className="font-semibold text-slate-700">
+            3個以上で送料無料
+          </span>
+          ）
         </p>
         <Controller
           name="colorQuantities"

@@ -22,6 +22,10 @@ export const DELIVERY_TIME_SLOT_OPTIONS = [
   "19-21",
 ] as const;
 export const SIZE_OPTIONS = ["S", "L"] as const;
+// Launch is S-only (3cm keychain size) to keep production simple. L stays
+// fully wired up server-side (scaling/shipping/pricing) for when it's
+// reintroduced — only the customer-facing size picker is restricted.
+export const AVAILABLE_SIZE_OPTIONS = ["S"] as const satisfies readonly (typeof SIZE_OPTIONS)[number][];
 export const ORDER_STATUS_OPTIONS = [
   "awaiting_payment",
   "pending",

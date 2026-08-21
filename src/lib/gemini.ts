@@ -1,17 +1,11 @@
 import { GoogleGenAI, Modality } from "@google/genai";
+import sharp from "sharp";
 import type { MagicColor, Pose } from "@/types/order";
 
 const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
 
 export type View = "front" | "left" | "back" | "right";
 export const VIEWS: View[] = ["front", "left", "back", "right"];
-
-const VIEW_PHRASES: Record<View, string> = {
-  front: "front view",
-  left: "left side view",
-  back: "back view (rear)",
-  right: "right side view",
-};
 
 const POSE_PHRASES: Record<Pose, string> = {
   sitting: "a sitting pose",
@@ -66,41 +60,80 @@ async function generateImage(
   };
 }
 
-function whiteClayPrompt(subject: string, pose: Pose, view: View): string {
+// Quadrant layout used by whiteClayGridPrompt/splitGridImage — must stay in sync.
+const GRID_CELLS: Record<View, { row: 0 | 1; col: 0 | 1 }> = {
+  front: { row: 0, col: 0 },
+  left: { row: 0, col: 1 },
+  back: { row: 1, col: 0 },
+  right: { row: 1, col: 1 },
+};
+
+function whiteClayGridPrompt(subject: string, pose: Pose): string {
   return (
-    `A highly detailed, photorealistic image of a single small matte-white clay sculpture ` +
-    `of ${subject}, in ${POSE_PHRASES[pose]}. Photographed as one shot from a ${VIEWS.length}-shot ` +
-    "turntable sequence: the sculpture sits on a fixed turntable at a fixed camera height and " +
-    `fixed camera distance, and this frame is the ${VIEW_PHRASES[view]} of that same sequence — ` +
-    "identical scale, identical framing, identical pose to the other shots in the sequence, only " +
-    "the turntable rotation differs. The subject is entirely one smooth, continuous surface of " +
-    "plain matte white clay: no texture, no color, no fur strands or hair detail sculpted into the " +
-    "surface — simplify fur/feathers/wrinkles into smooth, gently rounded volumes the way a clay " +
-    "sculptor would, since this will be 3D printed at a few centimeters tall and fine strand-like " +
-    "detail would be too fragile to print. Keep every part thick and continuous; avoid thin " +
-    "protrusions that taper to a point. Clean plain white background, soft even studio lighting " +
-    "with no harsh shadows or reflections. 8k resolution, precise anatomical proportions, full " +
-    "body visible, centered in frame, no text or watermark. Use the attached reference photos to " +
-    "match the subject's shape, features, and identity."
+    "A single image containing a precise 2x2 grid of four photos of the same small matte-white " +
+    `clay sculpture of ${subject}, in ${POSE_PHRASES[pose]}. The grid has exactly four equal-sized ` +
+    "quadrants with no border, no divider lines, and no grid lines drawn — just four separate " +
+    "photos placed edge to edge on a shared plain white background. Top-left quadrant: front view. " +
+    "Top-right quadrant: left side view. Bottom-left quadrant: back view (rear). Bottom-right " +
+    "quadrant: right side view. All four photos show the exact same turntable photography setup: " +
+    "identical camera height, identical camera distance, identical scale, identical pose — only the " +
+    "turntable rotation differs between quadrants. Leave generous plain white margin around the " +
+    "sculpture within each quadrant so no part of the sculpture comes close to the quadrant " +
+    "boundary. The subject is entirely one smooth, continuous surface of plain matte white clay: no " +
+    "texture, no color, no fur strands or hair detail sculpted into the surface — simplify " +
+    "fur/feathers/wrinkles into smooth, gently rounded volumes the way a clay sculptor would, since " +
+    "this will be 3D printed at a few centimeters tall and fine strand-like detail would be too " +
+    "fragile to print. Keep every part thick and continuous; avoid thin protrusions that taper to a " +
+    "point. Soft even studio lighting with no harsh shadows or reflections. Precise anatomical " +
+    "proportions, full body visible and centered within each quadrant, no text or watermark " +
+    "anywhere. Use the attached reference photos to match the subject's shape, features, and " +
+    "identity."
   );
 }
 
-/** Generates all four white-clay turnaround views used for the 3D reconstruction. */
+async function splitGridImage(image: ImagePayload): Promise<Record<View, ImagePayload>> {
+  const buffer = Buffer.from(image.data, "base64");
+  const { width, height } = await sharp(buffer).metadata();
+  if (!width || !height) {
+    throw new Error("Gemini grid image is missing dimensions");
+  }
+  const halfW = Math.floor(width / 2);
+  const halfH = Math.floor(height / 2);
+
+  const entries = await Promise.all(
+    VIEWS.map(async (view) => {
+      const { row, col } = GRID_CELLS[view];
+      const left = col === 1 ? halfW : 0;
+      const top = row === 1 ? halfH : 0;
+      const cropWidth = col === 1 ? width - halfW : halfW;
+      const cropHeight = row === 1 ? height - halfH : halfH;
+      const cropped = await sharp(buffer)
+        .extract({ left, top, width: cropWidth, height: cropHeight })
+        .png()
+        .toBuffer();
+      return [view, { data: cropped.toString("base64"), mimeType: "image/png" }] as const;
+    })
+  );
+  return Object.fromEntries(entries) as Record<View, ImagePayload>;
+}
+
+/**
+ * Generates all four white-clay turnaround views used for the 3D reconstruction as a single
+ * Gemini call (one 2x2 grid image split locally), instead of four separate calls — cuts Gemini
+ * cost to a quarter since pricing is flat per image regardless of what's drawn in it.
+ */
 export async function generateWhiteClayViews(
   referencePhotos: ImagePayload[],
   subject: string,
   pose: Pose
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
-  const results = await Promise.all(
-    VIEWS.map((view) =>
-      generateImage(client, referencePhotos, whiteClayPrompt(subject, pose, view))
-    )
+  const gridImage = await generateImage(
+    client,
+    referencePhotos,
+    whiteClayGridPrompt(subject, pose)
   );
-  return Object.fromEntries(VIEWS.map((view, i) => [view, results[i]])) as Record<
-    View,
-    ImagePayload
-  >;
+  return splitGridImage(gridImage);
 }
 
 /** Generates a single "finished look" crystal-material preview image. */

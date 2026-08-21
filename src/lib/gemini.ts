@@ -60,7 +60,7 @@ async function generateImage(
   };
 }
 
-// Quadrant layout used by whiteClayGridPrompt/splitGridImage — must stay in sync.
+// Quadrant layout used by figureGridPrompt/splitGridImage — must stay in sync.
 const GRID_CELLS: Record<View, { row: 0 | 1; col: 0 | 1 }> = {
   front: { row: 0, col: 0 },
   left: { row: 0, col: 1 },
@@ -68,26 +68,32 @@ const GRID_CELLS: Record<View, { row: 0 | 1; col: 0 | 1 }> = {
   right: { row: 1, col: 1 },
 };
 
-function whiteClayGridPrompt(subject: string, pose: Pose): string {
+// Deliberately NOT flattened to plain white/no-texture: Tripo's multiview_to_model call uses
+// texture:false/pbr:false so color is discarded from the final mesh anyway, but Tripo still reads
+// color/shading as a shape cue during reconstruction — stripping it to white clay was removing
+// information the reconstruction needs and was over-smoothing coat/fur shape in the process. Only
+// the print-safety constraint (no fragile paper-thin geometry) is kept, and phrased narrowly so it
+// doesn't erase the pet's actual silhouette.
+function figureGridPrompt(subject: string, pose: Pose): string {
   return (
-    "A single image containing a precise 2x2 grid of four photos of the same small matte-white " +
-    `clay sculpture of ${subject}, in ${POSE_PHRASES[pose]}. The grid has exactly four equal-sized ` +
-    "quadrants with no border, no divider lines, and no grid lines drawn — just four separate " +
-    "photos placed edge to edge on a shared plain white background. Top-left quadrant: front view. " +
-    "Top-right quadrant: left side view. Bottom-left quadrant: back view (rear). Bottom-right " +
-    "quadrant: right side view. All four photos show the exact same turntable photography setup: " +
-    "identical camera height, identical camera distance, identical scale, identical pose — only the " +
-    "turntable rotation differs between quadrants. Leave generous plain white margin around the " +
-    "sculpture within each quadrant so no part of the sculpture comes close to the quadrant " +
-    "boundary. The subject is entirely one smooth, continuous surface of plain matte white clay: no " +
-    "texture, no color, no fur strands or hair detail sculpted into the surface — simplify " +
-    "fur/feathers/wrinkles into smooth, gently rounded volumes the way a clay sculptor would, since " +
-    "this will be 3D printed at a few centimeters tall and fine strand-like detail would be too " +
-    "fragile to print. Keep every part thick and continuous; avoid thin protrusions that taper to a " +
-    "point. Soft even studio lighting with no harsh shadows or reflections. Precise anatomical " +
-    "proportions, full body visible and centered within each quadrant, no text or watermark " +
-    "anywhere. Use the attached reference photos to match the subject's shape, features, and " +
-    "identity."
+    "A single image containing a precise 2x2 grid of four photos of the same small figurine of " +
+    `${subject}, in ${POSE_PHRASES[pose]}. The grid has exactly four equal-sized quadrants with no ` +
+    "border, no divider lines, and no grid lines drawn — just four separate photos placed edge to " +
+    "edge on a shared plain white background. Top-left quadrant: front view. Top-right quadrant: " +
+    "left side view. Bottom-left quadrant: back view (rear). Bottom-right quadrant: right side " +
+    "view. All four photos show the exact same turntable photography setup: identical camera " +
+    "height, identical camera distance, identical scale, identical pose — only the turntable " +
+    "rotation differs between quadrants. Leave generous plain white margin around the figurine " +
+    "within each quadrant so no part of it comes close to the quadrant boundary. Render the " +
+    "figurine's actual colors, markings, and coat pattern as closely as possible to the reference " +
+    "photos — do not simplify it to a plain or single-color material. This will be 3D printed at " +
+    "only a few centimeters tall, so keep the sculpted form itself sturdy: render fur/feathers as " +
+    "defined locks or tufts of a real, printable thickness rather than fine wispy individual " +
+    "strands, keep every part of the body thick and continuous, and avoid any thin protrusion that " +
+    "tapers down to a sharp point. Soft even studio lighting with no harsh shadows or reflections. " +
+    "Precise anatomical proportions, full body visible and centered within each quadrant, no text " +
+    "or watermark anywhere. Use the attached reference photos to match the subject's shape, " +
+    "features, coloring, and identity exactly."
   );
 }
 
@@ -118,9 +124,9 @@ async function splitGridImage(image: ImagePayload): Promise<Record<View, ImagePa
 }
 
 /**
- * Generates all four white-clay turnaround views used for the 3D reconstruction as a single
- * Gemini call (one 2x2 grid image split locally), instead of four separate calls — cuts Gemini
- * cost to a quarter since pricing is flat per image regardless of what's drawn in it.
+ * Generates all four turnaround views used for the 3D reconstruction as a single Gemini call
+ * (one 2x2 grid image split locally), instead of four separate calls — cuts Gemini cost to a
+ * quarter since pricing is flat per image regardless of what's drawn in it.
  */
 export async function generateWhiteClayViews(
   referencePhotos: ImagePayload[],
@@ -131,7 +137,7 @@ export async function generateWhiteClayViews(
   const gridImage = await generateImage(
     client,
     referencePhotos,
-    whiteClayGridPrompt(subject, pose)
+    figureGridPrompt(subject, pose)
   );
   return splitGridImage(gridImage);
 }

@@ -11,7 +11,9 @@ import {
   type HolePoint,
 } from "@/types/order";
 
-const DEFAULT_WALL_THICKNESS_MM = 2;
+// Matches the real production process: 0.8mm shell, later filled with
+// clear epoxy + glitter through the cork hole (see production workflow).
+const DEFAULT_WALL_THICKNESS_MM = 0.8;
 
 function buildPublicUrl(bucketName: string, path: string): string {
   return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(

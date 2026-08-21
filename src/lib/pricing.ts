@@ -7,7 +7,7 @@ import {
   type Pose,
 } from "@/types/order";
 
-export const FIGURE_PRICE_YEN = 8000;
+export const FIGURE_PRICE_YEN = 1500;
 export const ADDITIONAL_UNIT_PRICE_YEN = 400;
 export const SHIPPING_FEE_YEN = 700;
 export const FREE_SHIPPING_MIN_QUANTITY = 3;

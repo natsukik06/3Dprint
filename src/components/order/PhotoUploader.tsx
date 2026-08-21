@@ -2,6 +2,7 @@
 
 import { ImageUp, X } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { MAX_REFERENCE_PHOTOS } from "@/types/order";
 
@@ -11,11 +12,18 @@ type PhotoUploaderProps = {
   error?: string;
 };
 
+const SLOT_LABELS: Record<number, string> = {
+  0: "①全体像",
+  1: "②特徴",
+};
+
 function PhotoThumbnail({
   file,
+  slotLabel,
   onRemove,
 }: {
   file: File;
+  slotLabel?: string;
   onRemove: () => void;
 }) {
   const [previewUrl] = useState(() => URL.createObjectURL(file));
@@ -34,6 +42,11 @@ function PhotoThumbnail({
           className="object-cover"
           unoptimized
         />
+      )}
+      {slotLabel && (
+        <span className="absolute bottom-0 left-0 right-0 truncate bg-black/60 px-1 py-0.5 text-center text-[9px] text-white">
+          {slotLabel}
+        </span>
       )}
       <button
         type="button"
@@ -65,8 +78,16 @@ export function PhotoUploader({ photos, onChange, error }: PhotoUploaderProps) {
   return (
     <div className="space-y-2">
       <p className="text-sm text-slate-600">
-        ペットや、立体化したいものの写真をアップロードしてください（正面・横・後ろなど色々な角度があると精度が上がります・最大{MAX_REFERENCE_PHOTOS}枚）
+        1枚目は<b>全体像</b>がわかる写真、2枚目は<b>特徴</b>
+        がわかる写真がおすすめです（正面・横・後ろなど角度違いがあるとさらに精度が上がります・最大{MAX_REFERENCE_PHOTOS}枚）
       </p>
+      <Link
+        href="/guide/photo-tips"
+        target="_blank"
+        className="inline-block text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700"
+      >
+        良い写真・避けたい写真の例を見る
+      </Link>
 
       <input
         ref={inputRef}
@@ -82,6 +103,7 @@ export function PhotoUploader({ photos, onChange, error }: PhotoUploaderProps) {
           <PhotoThumbnail
             key={`${file.name}-${index}`}
             file={file}
+            slotLabel={SLOT_LABELS[index]}
             onRemove={() => handleRemove(index)}
           />
         ))}

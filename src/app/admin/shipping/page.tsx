@@ -7,7 +7,11 @@ import { AdminGate } from "@/components/admin/AdminGate";
 import { db } from "@/lib/firebase";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { DELIVERY_TIME_SLOT_LABELS } from "@/lib/pricing";
-import { SHIPPING_METHOD_BY_SIZE, type DeliveryTimeSlot, type SizeOption } from "@/types/order";
+import {
+  SHIPPING_METHOD_BY_SIZE,
+  type DeliveryTimeSlot,
+  type OrderItemDraft,
+} from "@/types/order";
 
 const CSV_HEADERS = [
   "注文ID",
@@ -17,6 +21,7 @@ const CSV_HEADERS = [
   "電話番号",
   "配送希望日",
   "配送希望時間帯",
+  "セット内容",
   "サイズ",
   "配送方法",
 ];
@@ -36,6 +41,7 @@ function ShippingExportButton({ method }: { method: string }) {
       );
       const rows = snap.docs.map((d) => {
         const data = d.data();
+        const items = (data.items ?? []) as OrderItemDraft[];
         return [
           d.id,
           data.customerName ?? "",
@@ -44,7 +50,8 @@ function ShippingExportButton({ method }: { method: string }) {
           data.phoneNumber ?? "",
           data.deliveryDate ?? "",
           DELIVERY_TIME_SLOT_LABELS[(data.deliveryTimeSlot ?? "none") as DeliveryTimeSlot],
-          (data.sizeOption ?? "") as SizeOption,
+          items.map((item) => item.subject).join(" / "),
+          items.map((item) => item.sizeOption).join(" / "),
           method,
         ];
       });

@@ -1,6 +1,11 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, adminStorage } from "@/lib/firebaseAdmin";
 import { computeBoundingBoxMm, determineTargetMaxMm, scaleGlb } from "@/lib/modelScaling";
-import { SHIPPING_METHOD_BY_SIZE, type BoundingBoxMm, type SizeOption } from "@/types/order";
+import {
+  determineShippingMethod,
+  type BoundingBoxMm,
+  type OrderItemDraft,
+} from "@/types/order";
 
 function buildPublicUrl(bucketName: string, path: string): string {
   return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
@@ -10,34 +15,15 @@ function buildPublicUrl(bucketName: string, path: string): string {
 
 export type ProcessOrderResult =
   | { status: "already_processed" }
-  | { status: "processed"; scaledModelUrl: string; shippingMethod: string; maxDimensionMm: number };
+  | { status: "processed"; shippingMethod: string; itemCount: number };
 
-/**
- * Auto-scales an order's model to its size option's target dimension and
- * assigns the matching shipping method. Idempotent (skips if already run).
- * Shared by the admin "reprocess" API route and the post-payment webhook.
- */
-export async function runOrderProcessing(orderId: string): Promise<ProcessOrderResult> {
-  const orderRef = adminDb.collection("orders").doc(orderId);
-  const snap = await orderRef.get();
-  if (!snap.exists) {
-    throw new Error("注文が見つかりません");
-  }
-
-  const order = snap.data() as {
-    modelUrl: string | null;
-    sizeOption: SizeOption;
-    scaledModelUrl: string | null;
-  };
-
-  if (order.scaledModelUrl) {
-    return { status: "already_processed" };
-  }
-  if (!order.modelUrl) {
-    throw new Error("3Dモデルが未生成のため処理できません");
-  }
-
-  const modelRes = await fetch(order.modelUrl);
+async function scaleOneItem(
+  orderId: string,
+  itemIndex: number,
+  item: OrderItemDraft,
+  customerName: string
+) {
+  const modelRes = await fetch(item.modelUrl);
   if (!modelRes.ok) {
     throw new Error(`Failed to download model: ${modelRes.status}`);
   }
@@ -53,7 +39,7 @@ export async function runOrderProcessing(orderId: string): Promise<ProcessOrderR
     throw new Error("モデルのバウンディングボックスを計算できませんでした");
   }
 
-  const targetMaxMm = determineTargetMaxMm(order.sizeOption);
+  const targetMaxMm = determineTargetMaxMm(item.sizeOption);
   const factor = targetMaxMm / originalMaxDimension;
   const scaledBuffer = scaleGlb(originalBuffer, factor);
   const scaledBoundingBoxMm: BoundingBoxMm = {
@@ -63,26 +49,77 @@ export async function runOrderProcessing(orderId: string): Promise<ProcessOrderR
   };
 
   const bucket = adminStorage.bucket();
-  const path = `models/${orderId}-scaled.glb`;
+  const path = `models/${orderId}-${itemIndex}-scaled.glb`;
   await bucket.file(path).save(scaledBuffer, {
     contentType: "model/gltf-binary",
   });
   const scaledModelUrl = buildPublicUrl(bucket.name, path);
-
-  const shippingMethod = SHIPPING_METHOD_BY_SIZE[order.sizeOption];
   const maxDimensionMm = Math.max(
     scaledBoundingBoxMm.x,
     scaledBoundingBoxMm.y,
     scaledBoundingBoxMm.z
   );
 
-  await orderRef.update({
+  await adminDb.collection("order_items").add({
+    ...item,
+    orderId,
+    itemIndex,
+    customerName,
     modelBoundingBoxMm,
     scaledModelUrl,
     scaledBoundingBoxMm,
     maxDimensionMm,
-    shippingMethod,
+    status: "pending",
+    batchId: null,
+    gridId: null,
+    finishedModelUrl: null,
+    wallThicknessMm: null,
+    hasVentHole: false,
+    ventHoleSource: null,
+    createdAt: FieldValue.serverTimestamp(),
   });
+}
 
-  return { status: "processed", scaledModelUrl, shippingMethod, maxDimensionMm };
+/**
+ * Scales each item's model to its size option's target dimension, fans them out into individual
+ * `order_items` docs (one per physical piece to print), and assigns the whole order's shipping
+ * method (the strictest method required by any item). Idempotent (skips if items already exist
+ * for this order) -- shared by the admin "reprocess" API route and the post-payment webhook.
+ */
+export async function runOrderProcessing(orderId: string): Promise<ProcessOrderResult> {
+  const orderRef = adminDb.collection("orders").doc(orderId);
+  const snap = await orderRef.get();
+  if (!snap.exists) {
+    throw new Error("注文が見つかりません");
+  }
+
+  const existing = await adminDb
+    .collection("order_items")
+    .where("orderId", "==", orderId)
+    .limit(1)
+    .get();
+  if (!existing.empty) {
+    return { status: "already_processed" };
+  }
+
+  const order = snap.data() as {
+    items: OrderItemDraft[];
+    customerName: string;
+  };
+  if (!order.items || order.items.length === 0) {
+    throw new Error("セットにアイテムがありません");
+  }
+
+  await Promise.all(
+    order.items.map((item, index) =>
+      scaleOneItem(orderId, index, item, order.customerName)
+    )
+  );
+
+  const shippingMethod = determineShippingMethod(
+    order.items.map((item) => ({ sizeOption: item.sizeOption }))
+  );
+  await orderRef.update({ shippingMethod });
+
+  return { status: "processed", shippingMethod, itemCount: order.items.length };
 }

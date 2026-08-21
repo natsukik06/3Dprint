@@ -6,13 +6,13 @@ import type { OrderFormValues } from "@/types/order";
 
 export function EstimateSummary() {
   const { control } = useFormContext<OrderFormValues>();
-  const [colorQuantities, generationCreditsUsed] = useWatch({
+  const [items, generationCreditsUsed] = useWatch({
     control,
-    name: ["colorQuantities", "generationCreditsUsed"],
+    name: ["items", "generationCreditsUsed"],
   });
 
   const { quantity, subtotalYen, shippingYen, discountYen, totalPriceYen } =
-    calculateEstimate({ colorQuantities, generationCreditsUsed });
+    calculateEstimate({ items, generationCreditsUsed });
 
   return (
     <div className="rounded-xl bg-slate-800 p-4 text-white">

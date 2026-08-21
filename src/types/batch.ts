@@ -1,6 +1,7 @@
 import type { SizeOption } from "@/types/order";
 
 export type PrintBatchOrderEntry = {
+  itemId: string;
   orderId: string;
   gridId: string;
   customerName: string;

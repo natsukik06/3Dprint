@@ -44,7 +44,7 @@ export async function POST(
     return NextResponse.json({ error: "管理者権限が必要です" }, { status: 403 });
   }
 
-  const { id: orderId } = await params;
+  const { id: itemId } = await params;
   let wallThicknessMm = DEFAULT_WALL_THICKNESS_MM;
   try {
     const body = await request.json();
@@ -56,12 +56,12 @@ export async function POST(
   }
 
   try {
-    const orderRef = adminDb.collection("orders").doc(orderId);
-    const snap = await orderRef.get();
+    const itemRef = adminDb.collection("order_items").doc(itemId);
+    const snap = await itemRef.get();
     if (!snap.exists) {
-      return NextResponse.json({ error: "注文が見つかりません" }, { status: 404 });
+      return NextResponse.json({ error: "アイテムが見つかりません" }, { status: 404 });
     }
-    const order = snap.data() as {
+    const item = snap.data() as {
       modelUrl: string | null;
       scaledModelUrl: string | null;
       modelBoundingBoxMm: BoundingBoxMm | null;
@@ -72,14 +72,14 @@ export async function POST(
       bottomHoleDiameterMm: number | null;
     };
 
-    const sourceUrl = order.scaledModelUrl ?? order.modelUrl;
+    const sourceUrl = item.scaledModelUrl ?? item.modelUrl;
     if (!sourceUrl) {
       return NextResponse.json({ error: "3Dモデルが未生成のため処理できません" }, { status: 400 });
     }
-    const usingScaledModel = Boolean(order.scaledModelUrl);
+    const usingScaledModel = Boolean(item.scaledModelUrl);
     const scaleFactor =
-      usingScaledModel && order.modelBoundingBoxMm && order.scaledBoundingBoxMm
-        ? computeScaleFactor(order.modelBoundingBoxMm, order.scaledBoundingBoxMm)
+      usingScaledModel && item.modelBoundingBoxMm && item.scaledBoundingBoxMm
+        ? computeScaleFactor(item.modelBoundingBoxMm, item.scaledBoundingBoxMm)
         : 1;
 
     const modelRes = await fetch(sourceUrl);
@@ -90,18 +90,18 @@ export async function POST(
     const hollowed = await hollowMesh(originalTriangles, wallThicknessMm);
 
     const holes: HoleSpec[] = [];
-    if (order.wantsHardware && order.holePosition) {
+    if (item.wantsHardware && item.holePosition) {
       holes.push({
-        position: scalePoint(order.holePosition, scaleFactor),
+        position: scalePoint(item.holePosition, scaleFactor),
         diameterMm: HARDWARE_HOLE_DIAMETER_MM,
-        direction: holeDirection(order.holePosition),
+        direction: holeDirection(item.holePosition),
       });
     }
-    if (order.bottomHolePosition && order.bottomHoleDiameterMm) {
+    if (item.bottomHolePosition && item.bottomHoleDiameterMm) {
       holes.push({
-        position: scalePoint(order.bottomHolePosition, scaleFactor),
-        diameterMm: order.bottomHoleDiameterMm,
-        direction: holeDirection(order.bottomHolePosition),
+        position: scalePoint(item.bottomHolePosition, scaleFactor),
+        diameterMm: item.bottomHoleDiameterMm,
+        direction: holeDirection(item.bottomHolePosition),
       });
     }
     const ventHoleSource: "auto" | "customer" = holes.length > 0 ? "customer" : "auto";
@@ -131,11 +131,11 @@ export async function POST(
 
     const stl = trianglesToStl(finalTriangles);
     const bucket = adminStorage.bucket();
-    const path = `models/${orderId}-finished.stl`;
+    const path = `models/${itemId}-finished.stl`;
     await bucket.file(path).save(stl, { contentType: "model/stl" });
     const finishedModelUrl = buildPublicUrl(bucket.name, path);
 
-    await orderRef.update({
+    await itemRef.update({
       finishedModelUrl,
       wallThicknessMm,
       hasVentHole: true,

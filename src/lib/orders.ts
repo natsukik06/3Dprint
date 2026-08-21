@@ -2,7 +2,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { calculateEstimate } from "@/lib/pricing";
-import type { MagicColor, OrderFormValues, OrderRecord } from "@/types/order";
+import type { OrderFormValues, OrderRecord } from "@/types/order";
 
 function buildImagePath(file: File): string {
   const extension = file.name.split(".").pop() ?? "jpg";
@@ -53,38 +53,18 @@ export async function uploadFinishedPreview(
   return getDownloadURL(previewRef);
 }
 
-export async function submitOrder(
-  values: OrderFormValues,
-  modelUrl: string | null,
-  finishedPreviewUrls: Partial<Record<MagicColor, string>>,
-  referenceImageUrls: string[]
-): Promise<string> {
+export async function submitOrder(values: OrderFormValues): Promise<string> {
   const { totalPriceYen, shippingYen, discountYen } = calculateEstimate({
-    colorQuantities: values.colorQuantities,
+    items: values.items,
     generationCreditsUsed: values.generationCreditsUsed,
   });
 
   const order: OrderRecord = {
-    referenceImageUrls,
-    modelUrl,
-    finishedPreviewUrls,
-    subject: values.subject,
-    furColorNote: values.furColorNote ?? "",
-    breedNote: values.breedNote ?? "",
-    accessoryNote: values.accessoryNote ?? "",
-    bodyFeatureNote: values.bodyFeatureNote ?? "",
-    pose: values.pose,
-    sizeOption: values.sizeOption,
-    colorQuantities: values.colorQuantities,
+    items: values.items,
     estimatedPriceYen: totalPriceYen,
     shippingYen,
     discountYen,
-    wantsHardware: values.wantsHardware,
-    holePosition: values.wantsHardware ? values.holePosition : null,
-    bottomHolePosition: values.bottomHolePosition,
-    bottomHoleDiameterMm: values.bottomHolePosition
-      ? values.bottomHoleDiameterMm
-      : null,
+    shippingMethod: null,
     customerName: values.customerName,
     customerEmail: values.customerEmail,
     postalCode: values.postalCode,
@@ -94,18 +74,6 @@ export async function submitOrder(
     deliveryTimeSlot: values.deliveryTimeSlot,
     requestNote: values.requestNote ?? "",
     createdAt: serverTimestamp(),
-    shippingMethod: null,
-    modelBoundingBoxMm: null,
-    scaledModelUrl: null,
-    scaledBoundingBoxMm: null,
-    maxDimensionMm: null,
-    status: "awaiting_payment",
-    batchId: null,
-    gridId: null,
-    finishedModelUrl: null,
-    wallThicknessMm: null,
-    hasVentHole: false,
-    ventHoleSource: null,
     paymentStatus: "unpaid",
     paidAt: null,
     stripeCheckoutSessionId: null,

@@ -34,7 +34,6 @@ export async function POST(request: NextRequest) {
       if (orderId) {
         await adminDb.collection("orders").doc(orderId).update({
           paymentStatus: "paid",
-          status: "pending",
           paidAt: FieldValue.serverTimestamp(),
         });
         // Fire-and-forget: don't block the webhook response on the (slower)

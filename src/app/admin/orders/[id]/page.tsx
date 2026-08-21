@@ -1,6 +1,6 @@
 "use client";
 
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,34 +16,18 @@ import {
 import {
   MAGIC_COLOR_OPTIONS,
   ORDER_STATUS_LABELS,
-  type BoundingBoxMm,
-  type ColorQuantities,
   type DeliveryTimeSlot,
-  type HolePoint,
-  type MagicColor,
-  type OrderStatus,
-  type Pose,
-  type SizeOption,
+  type OrderItemDraft,
+  type OrderItemRecord,
+  type PaymentStatus,
 } from "@/types/order";
 
 type OrderDetail = {
-  referenceImageUrls: string[];
-  modelUrl: string | null;
-  finishedPreviewUrls: Partial<Record<MagicColor, string>>;
-  subject: string;
-  furColorNote: string;
-  breedNote: string;
-  accessoryNote: string;
-  bodyFeatureNote: string;
-  pose: Pose;
-  colorQuantities: ColorQuantities;
-  wantsHardware: boolean;
-  holePosition: HolePoint | null;
-  bottomHolePosition: HolePoint | null;
-  bottomHoleDiameterMm: number | null;
+  items: OrderItemDraft[];
   estimatedPriceYen: number;
   shippingYen: number;
   discountYen: number;
+  shippingMethod: string | null;
   customerName: string;
   customerEmail: string;
   postalCode: string;
@@ -53,21 +37,13 @@ type OrderDetail = {
   deliveryTimeSlot: DeliveryTimeSlot;
   requestNote: string;
   createdAt: { toDate: () => Date } | null;
-  sizeOption: SizeOption;
-  shippingMethod: string | null;
-  scaledModelUrl: string | null;
-  maxDimensionMm: number | null;
-  scaledBoundingBoxMm: BoundingBoxMm | null;
-  status: OrderStatus;
-  batchId: string | null;
-  gridId: string | null;
-  finishedModelUrl: string | null;
-  wallThicknessMm: number | null;
-  hasVentHole: boolean;
-  ventHoleSource: "auto" | "customer" | null;
-  paymentStatus: "unpaid" | "paid";
+  paymentStatus: PaymentStatus;
   paidAt: { toDate: () => Date } | null;
 };
+
+// Production data for one item, keyed by its position in order.items. Only exists once payment
+// succeeds and processOrder fans the order out into order_items docs.
+type ItemProduction = OrderItemRecord & { id: string };
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -78,64 +54,37 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AdminOrderDetail({ id }: { id: string }) {
+function ItemCard({
+  item,
+  index,
+  production,
+  onProductionChange,
+}: {
+  item: OrderItemDraft;
+  index: number;
+  production: ItemProduction | null;
+  onProductionChange: (next: ItemProduction) => void;
+}) {
   const { user } = useAuth();
-  const [order, setOrder] = useState<OrderDetail | null | undefined>(
-    undefined
-  );
   const [reprocessing, setReprocessing] = useState(false);
   const [reprocessError, setReprocessError] = useState<string | null>(null);
   const [finishingMesh, setFinishingMesh] = useState(false);
   const [finishMeshError, setFinishMeshError] = useState<string | null>(null);
 
-  async function fetchOrder(): Promise<OrderDetail | null> {
-    const snap = await getDoc(doc(db, "orders", id));
-    if (!snap.exists()) return null;
-    const data = snap.data();
-    return {
-      ...(data as OrderDetail),
-      referenceImageUrls: data.referenceImageUrls ?? [],
-      finishedPreviewUrls: data.finishedPreviewUrls ?? {},
-      colorQuantities: data.colorQuantities ?? {
-        starryBlue: 0,
-        galaxyGreen: 0,
-        clearAurora: 0,
-      },
-      bottomHolePosition: data.bottomHolePosition ?? null,
-      bottomHoleDiameterMm: data.bottomHoleDiameterMm ?? null,
-      sizeOption: data.sizeOption ?? "S",
-      shippingMethod: data.shippingMethod ?? null,
-      scaledModelUrl: data.scaledModelUrl ?? null,
-      maxDimensionMm: data.maxDimensionMm ?? null,
-      scaledBoundingBoxMm: data.scaledBoundingBoxMm ?? null,
-      status: data.status ?? "pending",
-      batchId: data.batchId ?? null,
-      gridId: data.gridId ?? null,
-      finishedModelUrl: data.finishedModelUrl ?? null,
-      wallThicknessMm: data.wallThicknessMm ?? null,
-      hasVentHole: data.hasVentHole ?? false,
-      ventHoleSource: data.ventHoleSource ?? null,
-      paymentStatus: data.paymentStatus ?? "unpaid",
-      paidAt: data.paidAt ?? null,
-    };
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchOrder().then((result) => {
-      if (!cancelled) setOrder(result);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
   useEffect(() => {
     import("@google/model-viewer");
   }, []);
 
+  async function refetchProduction() {
+    if (!production) return;
+    const snap = await getDoc(doc(db, "order_items", production.id));
+    if (snap.exists()) {
+      onProductionChange({ id: snap.id, ...(snap.data() as OrderItemRecord) });
+    }
+  }
+
   async function handleReprocess() {
-    if (!user) return;
+    if (!user || !production) return;
     setReprocessing(true);
     setReprocessError(null);
     try {
@@ -146,11 +95,11 @@ function AdminOrderDetail({ id }: { id: string }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ orderId: id }),
+        body: JSON.stringify({ orderId: production.orderId }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "処理に失敗しました");
-      setOrder(await fetchOrder());
+      await refetchProduction();
     } catch (err) {
       setReprocessError(err instanceof Error ? err.message : "処理に失敗しました");
     } finally {
@@ -159,12 +108,12 @@ function AdminOrderDetail({ id }: { id: string }) {
   }
 
   async function handleFinishMesh() {
-    if (!user) return;
+    if (!user || !production) return;
     setFinishingMesh(true);
     setFinishMeshError(null);
     try {
       const idToken = await user.getIdToken();
-      const res = await fetch(`/api/admin/orders/${id}/finish-mesh`, {
+      const res = await fetch(`/api/admin/order-items/${production.id}/finish-mesh`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -174,7 +123,7 @@ function AdminOrderDetail({ id }: { id: string }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "処理に失敗しました");
-      setOrder(await fetchOrder());
+      await refetchProduction();
     } catch (err) {
       setFinishMeshError(err instanceof Error ? err.message : "処理に失敗しました");
     } finally {
@@ -182,20 +131,22 @@ function AdminOrderDetail({ id }: { id: string }) {
     }
   }
 
-  if (order === undefined) {
-    return <p className="text-sm text-slate-500">読み込み中...</p>;
-  }
-  if (order === null) {
-    return <p className="text-sm text-slate-500">注文が見つかりません</p>;
-  }
+  const modelSrc = production?.scaledModelUrl ?? item.modelUrl ?? undefined;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-900">
+        アイテム{index + 1}：{item.subject}
+        <span className="ml-1 rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">
+          {item.sizeOption}
+        </span>
+      </p>
+
       <div className="grid grid-cols-2 gap-2">
         <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-          {order.scaledModelUrl || order.modelUrl ? (
+          {modelSrc ? (
             <model-viewer
-              src={order.scaledModelUrl ?? order.modelUrl ?? undefined}
+              src={modelSrc}
               alt="3Dモデル"
               camera-controls
               auto-rotate
@@ -209,10 +160,10 @@ function AdminOrderDetail({ id }: { id: string }) {
           )}
         </div>
         <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-          {Object.values(order.finishedPreviewUrls)[0] ? (
+          {Object.values(item.finishedPreviewUrls)[0] ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={Object.values(order.finishedPreviewUrls)[0]}
+              src={Object.values(item.finishedPreviewUrls)[0]}
               alt="完成イメージ"
               className="h-full w-full object-cover"
             />
@@ -224,92 +175,71 @@ function AdminOrderDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {Object.keys(order.finishedPreviewUrls).length > 1 && (
-        <div>
-          <p className="mb-1 text-xs font-medium text-slate-500">
-            カラー別 完成イメージ
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {MAGIC_COLOR_OPTIONS.filter((c) => order.finishedPreviewUrls[c]).map(
-              (color) => (
-                <a
-                  key={color}
-                  href={order.finishedPreviewUrls[color]}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex flex-col items-center gap-1"
-                >
-                  <span className="h-16 w-16 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={order.finishedPreviewUrls[color]}
-                      alt={MAGIC_COLOR_LABELS[color]}
-                      className="h-full w-full object-cover"
-                    />
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    {MAGIC_COLOR_LABELS[color]}
-                  </span>
-                </a>
-              )
-            )}
-          </div>
-        </div>
-      )}
-
-      {(order.referenceImageUrls?.length ?? 0) > 0 && (
-        <div>
-          <p className="mb-1 text-xs font-medium text-slate-500">参考写真</p>
-          <div className="flex flex-wrap gap-2">
-            {order.referenceImageUrls.map((url) => (
-              <a
-                key={url}
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="h-16 w-16 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-              >
+      {Object.keys(item.finishedPreviewUrls).length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {MAGIC_COLOR_OPTIONS.filter((c) => item.finishedPreviewUrls[c]).map((color) => (
+            <a
+              key={color}
+              href={item.finishedPreviewUrls[color]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1"
+            >
+              <span className="h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={url}
-                  alt="参考写真"
+                  src={item.finishedPreviewUrls[color]}
+                  alt={MAGIC_COLOR_LABELS[color]}
                   className="h-full w-full object-cover"
                 />
-              </a>
-            ))}
-          </div>
+              </span>
+              <span className="text-[10px] text-slate-500">
+                {MAGIC_COLOR_LABELS[color]}
+              </span>
+            </a>
+          ))}
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <InfoRow label="作りたいもの" value={order.subject} />
-        {order.furColorNote && (
-          <InfoRow label="毛色・柄" value={order.furColorNote} />
+      {item.referenceImageUrls.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {item.referenceImageUrls.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="参考写真" className="h-full w-full object-cover" />
+            </a>
+          ))}
+        </div>
+      )}
+
+      <div>
+        {item.furColorNote && <InfoRow label="毛色・柄" value={item.furColorNote} />}
+        {item.breedNote && <InfoRow label="犬種・ミックス" value={item.breedNote} />}
+        {item.accessoryNote && (
+          <InfoRow label="服・首輪などの扱い" value={item.accessoryNote} />
         )}
-        {order.breedNote && (
-          <InfoRow label="犬種・ミックス" value={order.breedNote} />
+        {item.bodyFeatureNote && (
+          <InfoRow label="しっぽ・耳など体の特徴" value={item.bodyFeatureNote} />
         )}
-        {order.accessoryNote && (
-          <InfoRow label="服・首輪などの扱い" value={order.accessoryNote} />
-        )}
-        {order.bodyFeatureNote && (
-          <InfoRow label="しっぽ・耳など体の特徴" value={order.bodyFeatureNote} />
-        )}
-        <InfoRow label="ポーズ" value={POSE_LABELS[order.pose]} />
+        <InfoRow label="ポーズ" value={POSE_LABELS[item.pose]} />
         <InfoRow
           label="カラー・個数"
-          value={MAGIC_COLOR_OPTIONS.filter(
-            (c) => (order.colorQuantities[c] ?? 0) > 0
-          )
-            .map((c) => `${MAGIC_COLOR_LABELS[c]} ×${order.colorQuantities[c]}`)
+          value={MAGIC_COLOR_OPTIONS.filter((c) => (item.colorQuantities[c] ?? 0) > 0)
+            .map((c) => `${MAGIC_COLOR_LABELS[c]} ×${item.colorQuantities[c]}`)
             .join(" / ")}
         />
         <InfoRow
           label="上の穴（金具用）"
           value={
-            order.wantsHardware
-              ? order.holePosition
-                ? `あり（x=${order.holePosition.x.toFixed(2)}, y=${order.holePosition.y.toFixed(2)}, z=${order.holePosition.z.toFixed(2)}）`
+            item.wantsHardware
+              ? item.holePosition
+                ? `あり（x=${item.holePosition.x.toFixed(2)}, y=${item.holePosition.y.toFixed(2)}, z=${item.holePosition.z.toFixed(2)}）`
                 : "希望あり（位置未指定）"
               : "なし"
           }
@@ -317,11 +247,171 @@ function AdminOrderDetail({ id }: { id: string }) {
         <InfoRow
           label="下の穴（コルク用）"
           value={
-            order.bottomHolePosition
-              ? `x=${order.bottomHolePosition.x.toFixed(2)}, y=${order.bottomHolePosition.y.toFixed(2)}, z=${order.bottomHolePosition.z.toFixed(2)}（直径${order.bottomHoleDiameterMm ?? "-"}mm）`
+            item.bottomHolePosition
+              ? `x=${item.bottomHolePosition.x.toFixed(2)}, y=${item.bottomHolePosition.y.toFixed(2)}, z=${item.bottomHolePosition.z.toFixed(2)}（直径${item.bottomHoleDiameterMm ?? "-"}mm）`
               : "未指定"
           }
         />
+      </div>
+
+      <div className="rounded-xl bg-slate-50 p-3">
+        {!production ? (
+          <p className="text-xs text-slate-500">支払い完了後に生産処理が開始されます</p>
+        ) : (
+          <>
+            <InfoRow
+              label="スケーリング後サイズ"
+              value={
+                production.maxDimensionMm
+                  ? `最大辺 ${production.maxDimensionMm.toFixed(1)}mm`
+                  : "未処理"
+              }
+            />
+            <InfoRow label="ステータス" value={ORDER_STATUS_LABELS[production.status]} />
+            <InfoRow
+              label="バッチ/グリッド"
+              value={
+                production.batchId ? `${production.batchId} / ${production.gridId}` : "未割当"
+              }
+            />
+            {!production.scaledModelUrl && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleReprocess}
+                  disabled={reprocessing}
+                  className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {reprocessing ? "処理中..." : "再スケーリング処理を実行"}
+                </button>
+                {reprocessError && (
+                  <p className="mt-1 text-xs text-red-600">{reprocessError}</p>
+                )}
+              </div>
+            )}
+            <div className="mt-2 border-t border-slate-200 pt-2">
+              <InfoRow
+                label="中空化・穴あけ"
+                value={
+                  production.finishedModelUrl
+                    ? `完了（壁厚${production.wallThicknessMm ?? "-"}mm）`
+                    : "未処理"
+                }
+              />
+              {production.finishedModelUrl && (
+                <>
+                  <InfoRow
+                    label="通気穴"
+                    value={
+                      production.ventHoleSource === "customer"
+                        ? "あり（顧客指定の金具穴/コルク穴を使用）"
+                        : "あり（自動追加・底面中心）"
+                    }
+                  />
+                  <a
+                    href={production.finishedModelUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-block text-xs text-slate-800 underline underline-offset-2"
+                  >
+                    中空化済みSTLをダウンロード
+                  </a>
+                </>
+              )}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleFinishMesh}
+                  disabled={finishingMesh || !production.scaledModelUrl}
+                  className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {finishingMesh
+                    ? "処理中..."
+                    : production.finishedModelUrl
+                      ? "中空化・穴あけを再実行"
+                      : "中空化・穴あけ処理を実行"}
+                </button>
+                {finishMeshError && (
+                  <p className="mt-1 text-xs text-red-600">{finishMeshError}</p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminOrderDetail({ id }: { id: string }) {
+  const [order, setOrder] = useState<OrderDetail | null | undefined>(undefined);
+  const [productionByIndex, setProductionByIndex] = useState<
+    Record<number, ItemProduction>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const snap = await getDoc(doc(db, "orders", id));
+        if (cancelled) return;
+        if (!snap.exists()) {
+          setOrder(null);
+          return;
+        }
+        const data = snap.data();
+        setOrder({
+          items: (data.items ?? []) as OrderItemDraft[],
+          estimatedPriceYen: data.estimatedPriceYen ?? 0,
+          shippingYen: data.shippingYen ?? 0,
+          discountYen: data.discountYen ?? 0,
+          shippingMethod: data.shippingMethod ?? null,
+          customerName: data.customerName ?? "",
+          customerEmail: data.customerEmail ?? "",
+          postalCode: data.postalCode ?? "",
+          address: data.address ?? "",
+          phoneNumber: data.phoneNumber ?? "",
+          deliveryDate: data.deliveryDate ?? null,
+          deliveryTimeSlot: data.deliveryTimeSlot ?? "none",
+          requestNote: data.requestNote ?? "",
+          createdAt: data.createdAt ?? null,
+          paymentStatus: data.paymentStatus ?? "unpaid",
+          paidAt: data.paidAt ?? null,
+        });
+
+        const itemsSnap = await getDocs(
+          query(collection(db, "order_items"), where("orderId", "==", id))
+        );
+        if (cancelled) return;
+        const byIndex: Record<number, ItemProduction> = {};
+        for (const itemDoc of itemsSnap.docs) {
+          const itemData = itemDoc.data() as OrderItemRecord;
+          byIndex[itemData.itemIndex] = { id: itemDoc.id, ...itemData };
+        }
+        setProductionByIndex(byIndex);
+      } catch {
+        if (!cancelled) setOrder(null);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (order === undefined) {
+    return <p className="text-sm text-slate-500">読み込み中...</p>;
+  }
+  if (order === null) {
+    return <p className="text-sm text-slate-500">注文が見つかりません</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <InfoRow label="セット点数" value={`${order.items.length}点`} />
         <InfoRow
           label="送料"
           value={order.shippingYen === 0 ? "無料" : formatYen(order.shippingYen)}
@@ -330,6 +420,7 @@ function AdminOrderDetail({ id }: { id: string }) {
           <InfoRow label="割引" value={`-${formatYen(order.discountYen)}`} />
         )}
         <InfoRow label="合計金額" value={formatYen(order.estimatedPriceYen)} />
+        <InfoRow label="配送方法" value={order.shippingMethod ?? "未処理（支払い後に自動判定）"} />
         <InfoRow
           label="支払い状況"
           value={
@@ -340,95 +431,24 @@ function AdminOrderDetail({ id }: { id: string }) {
         />
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <InfoRow label="サイズ" value={order.sizeOption} />
-        <InfoRow label="配送方法" value={order.shippingMethod ?? "未処理"} />
-        <InfoRow
-          label="スケーリング後サイズ"
-          value={order.maxDimensionMm ? `最大辺 ${order.maxDimensionMm.toFixed(1)}mm` : "未処理"}
-        />
-        <InfoRow label="ステータス" value={ORDER_STATUS_LABELS[order.status]} />
-        <InfoRow
-          label="バッチ/グリッド"
-          value={order.batchId ? `${order.batchId} / ${order.gridId}` : "未割当"}
-        />
-        {!order.scaledModelUrl && (
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={handleReprocess}
-              disabled={reprocessing || !order.modelUrl}
-              className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
-            >
-              {reprocessing ? "処理中..." : "再スケーリング処理を実行"}
-            </button>
-            {reprocessError && (
-              <p className="mt-1 text-xs text-red-600">{reprocessError}</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <InfoRow
-          label="中空化・穴あけ"
-          value={
-            order.finishedModelUrl
-              ? `完了（壁厚${order.wallThicknessMm ?? "-"}mm）`
-              : "未処理"
+      {order.items.map((item, index) => (
+        <ItemCard
+          key={index}
+          item={item}
+          index={index}
+          production={productionByIndex[index] ?? null}
+          onProductionChange={(next) =>
+            setProductionByIndex((prev) => ({ ...prev, [index]: next }))
           }
         />
-        {order.finishedModelUrl && (
-          <>
-            <InfoRow
-              label="通気穴"
-              value={
-                order.ventHoleSource === "customer"
-                  ? "あり（顧客指定の金具穴/コルク穴を使用）"
-                  : "あり（自動追加・底面中心）"
-              }
-            />
-            <a
-              href={order.finishedModelUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-block text-xs text-slate-800 underline underline-offset-2"
-            >
-              中空化済みSTLをダウンロード
-            </a>
-          </>
-        )}
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={handleFinishMesh}
-            disabled={finishingMesh || (!order.scaledModelUrl && !order.modelUrl)}
-            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
-          >
-            {finishingMesh
-              ? "処理中..."
-              : order.finishedModelUrl
-                ? "中空化・穴あけを再実行"
-                : "中空化・穴あけ処理を実行"}
-          </button>
-          {finishMeshError && (
-            <p className="mt-1 text-xs text-red-600">{finishMeshError}</p>
-          )}
-        </div>
-      </div>
+      ))}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <InfoRow label="お名前" value={order.customerName} />
         <InfoRow label="メール" value={order.customerEmail} />
         <InfoRow label="電話番号" value={order.phoneNumber} />
-        <InfoRow
-          label="配送先"
-          value={`〒${order.postalCode} ${order.address}`}
-        />
-        <InfoRow
-          label="お届け希望日"
-          value={order.deliveryDate || "指定なし"}
-        />
+        <InfoRow label="配送先" value={`〒${order.postalCode} ${order.address}`} />
+        <InfoRow label="お届け希望日" value={order.deliveryDate || "指定なし"} />
         <InfoRow
           label="お届け希望時間帯"
           value={DELIVERY_TIME_SLOT_LABELS[order.deliveryTimeSlot]}

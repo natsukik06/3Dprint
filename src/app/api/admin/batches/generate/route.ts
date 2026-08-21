@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const snap = await adminDb
-      .collection("orders")
+      .collection("order_items")
       .where("status", "==", "pending")
       .orderBy("createdAt", "asc")
       .limit(MAX_CAPACITY * 2)
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     if (selected.length === 0) {
       return NextResponse.json(
-        { error: "バッチ生成対象の未処理オーダーがありません" },
+        { error: "バッチ生成対象の未処理アイテムがありません" },
         { status: 400 }
       );
     }
@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
     const entries: PrintBatchOrderEntry[] = selected.map((doc, index) => {
       const data = doc.data();
       return {
-        orderId: doc.id,
+        itemId: doc.id,
+        orderId: data.orderId ?? "",
         gridId: gridSequence[index],
         customerName: data.customerName ?? "",
         subject: data.subject ?? "",
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     });
 
     for (const entry of entries) {
-      writeBatch.update(adminDb.collection("orders").doc(entry.orderId), {
+      writeBatch.update(adminDb.collection("order_items").doc(entry.itemId), {
         status: "batched",
         batchId: batchRef.id,
         gridId: entry.gridId,

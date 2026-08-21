@@ -32,14 +32,14 @@ export async function POST(
       return NextResponse.json({ error: "バッチに注文がありません" }, { status: 400 });
     }
 
-    // Fetch each order's scaled model, resolved to world-space triangles + bounds.
+    // Fetch each item's scaled model, resolved to world-space triangles + bounds.
     const items = await Promise.all(
       entries.map(async (entry) => {
-        const orderSnap = await adminDb.collection("orders").doc(entry.orderId).get();
-        const scaledModelUrl = orderSnap.data()?.scaledModelUrl as string | undefined;
+        const itemSnap = await adminDb.collection("order_items").doc(entry.itemId).get();
+        const scaledModelUrl = itemSnap.data()?.scaledModelUrl as string | undefined;
         if (!scaledModelUrl) {
           throw new Error(
-            `注文 ${entry.orderId}（${entry.gridId}）がスケーリング未処理です`
+            `アイテム ${entry.itemId}（${entry.gridId}）がスケーリング未処理です`
           );
         }
         const modelRes = await fetch(scaledModelUrl);

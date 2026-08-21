@@ -45,7 +45,7 @@ export function getTotalQuantity(colorQuantities: ColorQuantities): number {
 }
 
 export type EstimateInput = {
-  colorQuantities: ColorQuantities;
+  items: { colorQuantities: ColorQuantities }[];
   generationCreditsUsed?: number;
 };
 
@@ -57,11 +57,21 @@ export type Estimate = {
   totalPriceYen: number;
 };
 
+// Every unit counts the same toward the quantity discount and free-shipping threshold, whichever
+// item/model/size it belongs to -- a set of 3 different figures gets exactly the same discount as
+// 3 of the same figure. This falls out of reusing the existing single-item formula across the
+// whole set's combined quantity, so mixed sets aren't a new pricing tier.
 export function calculateEstimate({
-  colorQuantities,
+  items,
   generationCreditsUsed = 0,
 }: EstimateInput): Estimate {
-  const quantity = Math.max(1, getTotalQuantity(colorQuantities));
+  const quantity = items.reduce(
+    (sum, item) => sum + getTotalQuantity(item.colorQuantities),
+    0
+  );
+  if (quantity === 0) {
+    return { quantity: 0, subtotalYen: 0, shippingYen: 0, discountYen: 0, totalPriceYen: 0 };
+  }
   const subtotalYen =
     FIGURE_PRICE_YEN + (quantity - 1) * ADDITIONAL_UNIT_PRICE_YEN;
   const shippingYen = quantity >= FREE_SHIPPING_MIN_QUANTITY ? 0 : SHIPPING_FEE_YEN;

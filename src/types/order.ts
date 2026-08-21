@@ -24,12 +24,8 @@ export const DELIVERY_TIME_SLOT_OPTIONS = [
 ] as const;
 export const SIZE_OPTIONS = ["S", "M", "L"] as const;
 export const AVAILABLE_SIZE_OPTIONS = ["S", "M", "L"] as const satisfies readonly (typeof SIZE_OPTIONS)[number][];
-export const ORDER_STATUS_OPTIONS = [
-  "awaiting_payment",
-  "pending",
-  "batched",
-  "completed",
-] as const;
+// Per-piece production lifecycle (each set item is printed/finished independently).
+export const ORDER_STATUS_OPTIONS = ["pending", "batched", "completed"] as const;
 export const PAYMENT_STATUS_OPTIONS = ["unpaid", "paid"] as const;
 
 export type Pose = (typeof POSE_OPTIONS)[number];
@@ -73,11 +69,29 @@ export const SIZE_LABELS: Record<SizeOption, string> = {
   L: "Lサイズ（最大辺5cm・宅急便コンパクト配送）",
 };
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  awaiting_payment: "支払い待ち",
   pending: "未処理",
   batched: "バッチ割当済み",
   completed: "完了",
 };
+
+// Shipping methods ranked from most- to least-compact. When a set mixes sizes, the whole
+// shipment must use the method required by its bulkiest item — e.g. one L-size item forces
+// 宅急便コンパクト for the entire package even if every other item is S/M. Extend this list (in
+// order) if a new, bulkier shipping method is ever added.
+const SHIPPING_METHOD_PRIORITY = ["クリックポスト", "宅急便コンパクト"] as const;
+
+export function determineShippingMethod(
+  items: { sizeOption: SizeOption }[]
+): string {
+  let best: (typeof SHIPPING_METHOD_PRIORITY)[number] = SHIPPING_METHOD_PRIORITY[0];
+  for (const item of items) {
+    const method = SHIPPING_METHOD_BY_SIZE[item.sizeOption] as (typeof SHIPPING_METHOD_PRIORITY)[number];
+    if (SHIPPING_METHOD_PRIORITY.indexOf(method) > SHIPPING_METHOD_PRIORITY.indexOf(best)) {
+      best = method;
+    }
+  }
+  return best;
+}
 
 // Default fill-port diameter — used both for the admin's own epoxy-fill
 // syringe port and for the "furCavity" product's cork stopper (the customer
@@ -97,6 +111,9 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const MAX_REFERENCE_PHOTOS = 5;
 export const MAX_TOTAL_QUANTITY = 10;
+// Distinct models/subjects allowed in one set. Matches the real packaging constraint discussed
+// for a single クリックポスト-compatible parcel (arranged on card stock + bubble wrap).
+export const MAX_CART_ITEMS = 5;
 
 const imageFileSchema = z
   .instanceof(File, { error: "画像をアップロードしてください" })
@@ -125,11 +142,51 @@ const colorQuantitiesSchema = z
     { error: `合計1〜${MAX_TOTAL_QUANTITY}個の範囲で指定してください` }
   );
 
+const holePointSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  z: z.number(),
+  nx: z.number().optional(),
+  ny: z.number().optional(),
+  nz: z.number().optional(),
+});
+
+// One generated figure within a set: everything needed to reproduce and price it. Captured into
+// the `items` array when the customer clicks "セットに追加"; the top-level draft fields below
+// (subject, pose, sizeOption, ...) are just the in-progress builder for the item not yet added.
+const orderItemSchema = z.object({
+  subject: z.string().min(1, "何を作りたいか入力してください"),
+  furColorNote: z.string().max(200, "200文字以内で入力してください").optional(),
+  breedNote: z.string().max(200, "200文字以内で入力してください").optional(),
+  accessoryNote: z.string().max(200, "200文字以内で入力してください").optional(),
+  bodyFeatureNote: z
+    .string()
+    .max(200, "200文字以内で入力してください")
+    .optional(),
+  pose: z.enum(POSE_OPTIONS),
+  sizeOption: z.enum(SIZE_OPTIONS),
+  colorQuantities: colorQuantitiesSchema,
+  wantsHardware: z.boolean(),
+  holePosition: holePointSchema.nullable(),
+  bottomHolePosition: holePointSchema.nullable(),
+  bottomHoleDiameterMm: z
+    .number()
+    .min(MIN_BOTTOM_HOLE_DIAMETER_MM)
+    .max(MAX_BOTTOM_HOLE_DIAMETER_MM),
+  referenceImageUrls: z.array(z.string()),
+  modelUrl: z.string().min(1, "3Dモデルが生成されていません"),
+  finishedPreviewUrls: z.record(z.string(), z.string()),
+});
+
 export const orderFormSchema = z.object({
+  // Current-item draft fields: the in-progress builder for the item about to be added to the
+  // set. Loosely validated here (the "セットに追加" button gates real requirements procedurally,
+  // e.g. a generated model must exist); `orderItemSchema` above validates what actually lands in
+  // `items` below, which is the real submission payload.
   photos: z
     .array(imageFileSchema)
     .max(MAX_REFERENCE_PHOTOS, `写真は${MAX_REFERENCE_PHOTOS}枚までです`),
-  subject: z.string().min(1, "何を作りたいか入力してください"),
+  subject: z.string(),
   furColorNote: z.string().max(200, "200文字以内で入力してください").optional(),
   breedNote: z.string().max(200, "200文字以内で入力してください").optional(),
   accessoryNote: z.string().max(200, "200文字以内で入力してください").optional(),
@@ -140,6 +197,21 @@ export const orderFormSchema = z.object({
   pose: z.enum(POSE_OPTIONS, "ポーズを選択してください"),
   sizeOption: z.enum(SIZE_OPTIONS, "サイズを選択してください"),
   colorQuantities: colorQuantitiesSchema,
+  wantsHardware: z.boolean(),
+  holePosition: holePointSchema.nullable(),
+  bottomHolePosition: holePointSchema.nullable(),
+  bottomHoleDiameterMm: z
+    .number()
+    .min(MIN_BOTTOM_HOLE_DIAMETER_MM)
+    .max(MAX_BOTTOM_HOLE_DIAMETER_MM),
+  generationCreditsUsed: z.number().int().min(0),
+
+  // The real payload: every item added to the set.
+  items: z
+    .array(orderItemSchema)
+    .min(1, "少なくとも1点をセットに追加してください")
+    .max(MAX_CART_ITEMS, `セットに追加できるのは最大${MAX_CART_ITEMS}点までです`),
+
   customerName: z.string().min(1, "お名前を入力してください"),
   customerEmail: z.email("メールアドレスの形式が正しくありません"),
   postalCode: z.string().min(1, "郵便番号を入力してください"),
@@ -153,55 +225,20 @@ export const orderFormSchema = z.object({
     .optional(),
   agreeCopyright: z.literal(true, "著作権に関する同意が必要です"),
   agreeRisk: z.literal(true, "造形リスクに関する同意が必要です"),
-  generationCreditsUsed: z.number().int().min(0),
-  wantsHardware: z.boolean(),
-  holePosition: z
-    .object({
-      x: z.number(),
-      y: z.number(),
-      z: z.number(),
-      nx: z.number().optional(),
-      ny: z.number().optional(),
-      nz: z.number().optional(),
-    })
-    .nullable(),
-  bottomHolePosition: z
-    .object({
-      x: z.number(),
-      y: z.number(),
-      z: z.number(),
-      nx: z.number().optional(),
-      ny: z.number().optional(),
-      nz: z.number().optional(),
-    })
-    .nullable(),
-  bottomHoleDiameterMm: z
-    .number()
-    .min(MIN_BOTTOM_HOLE_DIAMETER_MM)
-    .max(MAX_BOTTOM_HOLE_DIAMETER_MM),
 });
 
 export type OrderFormValues = z.infer<typeof orderFormSchema>;
+export type OrderItemDraft = z.infer<typeof orderItemSchema>;
 
+// One order document per checkout/shipment: pricing, shipping, and customer info are aggregated
+// across all items. Production tracking (scaling, hollowing, batching) happens per physical piece
+// in the separate `order_items` collection, created by fanning out `items` once payment succeeds.
 export type OrderRecord = {
-  referenceImageUrls: string[];
-  modelUrl: string | null;
-  finishedPreviewUrls: Partial<Record<MagicColor, string>>;
-  subject: string;
-  furColorNote: string;
-  breedNote: string;
-  accessoryNote: string;
-  bodyFeatureNote: string;
-  pose: Pose;
-  sizeOption: SizeOption;
-  colorQuantities: ColorQuantities;
+  items: OrderItemDraft[];
   estimatedPriceYen: number;
   shippingYen: number;
   discountYen: number;
-  wantsHardware: boolean;
-  holePosition: HolePoint | null;
-  bottomHolePosition: HolePoint | null;
-  bottomHoleDiameterMm: number | null;
+  shippingMethod: string | null;
   customerName: string;
   customerEmail: string;
   postalCode: string;
@@ -211,7 +248,16 @@ export type OrderRecord = {
   deliveryTimeSlot: DeliveryTimeSlot;
   requestNote: string;
   createdAt: unknown;
-  shippingMethod: string | null;
+  paymentStatus: PaymentStatus;
+  paidAt: unknown;
+  stripeCheckoutSessionId: string | null;
+};
+
+// One physical piece to be printed/finished, fanned out from a paid order's `items[itemIndex]`.
+export type OrderItemRecord = OrderItemDraft & {
+  orderId: string;
+  itemIndex: number;
+  customerName: string;
   modelBoundingBoxMm: BoundingBoxMm | null;
   scaledModelUrl: string | null;
   scaledBoundingBoxMm: BoundingBoxMm | null;
@@ -223,7 +269,5 @@ export type OrderRecord = {
   wallThicknessMm: number | null;
   hasVentHole: boolean;
   ventHoleSource: "auto" | "customer" | null;
-  paymentStatus: PaymentStatus;
-  paidAt: unknown;
-  stripeCheckoutSessionId: string | null;
+  createdAt: unknown;
 };

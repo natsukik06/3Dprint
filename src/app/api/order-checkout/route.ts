@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     const order = snap.data() as {
-      subject: string;
+      items: { subject: string }[];
       estimatedPriceYen: number;
       paymentStatus: "unpaid" | "paid";
     };
@@ -35,6 +35,9 @@ export async function POST(request: NextRequest) {
     }
 
     const origin = request.headers.get("origin") ?? new URL(request.url).origin;
+    const subjects = (order.items ?? []).map((item) => item.subject).filter(Boolean);
+    const setLabel =
+      subjects.length > 0 ? subjects.join(" / ") : "カスタムフィギュア";
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest) {
             currency: "jpy",
             unit_amount: order.estimatedPriceYen,
             product_data: {
-              name: `オーダーメイドフィギュア「${order.subject || "カスタムフィギュア"}」`,
+              name: `オーダーメイドフィギュアセット「${setLabel}」`,
             },
           },
         },

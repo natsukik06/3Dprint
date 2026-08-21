@@ -11,6 +11,10 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow update, delete: if false;
     }
+    match /order_items/{itemId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
     match /print_batches/{batchId} {
       allow read: if isAdmin();
       allow update: if isAdmin();

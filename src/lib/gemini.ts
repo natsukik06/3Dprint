@@ -67,12 +67,20 @@ async function generateImage(
 
 function whiteClayPrompt(subject: string, pose: Pose, view: View): string {
   return (
-    `A highly detailed, photorealistic image of ${subject}, in ${POSE_PHRASES[pose]}, ` +
-    `${VIEW_PHRASES[view]}. The subject is entirely made of plain, matte white clay: ` +
-    "blank surface, no texture, no colors. Clean white background. Soft studio lighting " +
-    "to emphasize 3D forms and shadows. 8k resolution, precise proportions, full body " +
-    "visible, centered, no text or watermark. Use the attached reference photos to match " +
-    "the subject's shape, features, and identity."
+    `A highly detailed, photorealistic image of a single small matte-white clay sculpture ` +
+    `of ${subject}, in ${POSE_PHRASES[pose]}. Photographed as one shot from a ${VIEWS.length}-shot ` +
+    "turntable sequence: the sculpture sits on a fixed turntable at a fixed camera height and " +
+    `fixed camera distance, and this frame is the ${VIEW_PHRASES[view]} of that same sequence — ` +
+    "identical scale, identical framing, identical pose to the other shots in the sequence, only " +
+    "the turntable rotation differs. The subject is entirely one smooth, continuous surface of " +
+    "plain matte white clay: no texture, no color, no fur strands or hair detail sculpted into the " +
+    "surface — simplify fur/feathers/wrinkles into smooth, gently rounded volumes the way a clay " +
+    "sculptor would, since this will be 3D printed at a few centimeters tall and fine strand-like " +
+    "detail would be too fragile to print. Keep every part thick and continuous; avoid thin " +
+    "protrusions that taper to a point. Clean plain white background, soft even studio lighting " +
+    "with no harsh shadows or reflections. 8k resolution, precise anatomical proportions, full " +
+    "body visible, centered in frame, no text or watermark. Use the attached reference photos to " +
+    "match the subject's shape, features, and identity."
   );
 }
 

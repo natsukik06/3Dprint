@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useFormContext } from "react-hook-form";
 import type { OrderFormValues } from "@/types/order";
 
@@ -40,6 +41,18 @@ export function ConsentSection() {
       {errors.agreeRisk && (
         <p className="text-sm text-red-600">{errors.agreeRisk.message}</p>
       )}
+
+      <p className="text-xs text-slate-500">
+        ご注文にあたっては
+        <Link href="/legal/tokushoho" className="underline hover:text-slate-700" target="_blank">
+          特定商取引法に基づく表記
+        </Link>
+        および
+        <Link href="/legal/privacy" className="underline hover:text-slate-700" target="_blank">
+          プライバシーポリシー
+        </Link>
+        をご確認ください。
+      </p>
     </div>
   );
 }

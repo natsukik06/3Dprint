@@ -83,6 +83,15 @@ export default function Home() {
             注文する
           </Link>
         </div>
+
+        <footer className="mt-12 flex justify-center gap-4 text-xs text-slate-400">
+          <Link href="/legal/tokushoho" className="hover:text-slate-600">
+            特定商取引法に基づく表記
+          </Link>
+          <Link href="/legal/privacy" className="hover:text-slate-600">
+            プライバシーポリシー
+          </Link>
+        </footer>
       </main>
     </div>
   );

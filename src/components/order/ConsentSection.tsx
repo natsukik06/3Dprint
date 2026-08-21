@@ -53,6 +53,17 @@ export function ConsentSection() {
         </span>
       </label>
 
+      <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
+        <input
+          type="checkbox"
+          {...register("agreeMarketingEmail")}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-slate-800"
+        />
+        <span className="text-sm text-slate-700">
+          セール・値下げなどのお知らせメールを受け取ることに同意します（任意・いつでも配信停止できます）
+        </span>
+      </label>
+
       <p className="text-xs text-slate-500">
         ご注文にあたっては
         <Link href="/legal/tokushoho" className="underline hover:text-slate-700" target="_blank">

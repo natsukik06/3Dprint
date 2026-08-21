@@ -144,6 +144,12 @@ export default function AdminPage() {
               >
                 発送CSV
               </Link>
+              <Link
+                href="/admin/marketing"
+                className="text-slate-600 underline underline-offset-2"
+              >
+                お知らせメール
+              </Link>
             </div>
           </div>
           <AdminOrderList />

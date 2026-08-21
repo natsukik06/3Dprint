@@ -74,6 +74,7 @@ export async function submitOrder(values: OrderFormValues): Promise<string> {
     deliveryTimeSlot: values.deliveryTimeSlot,
     requestNote: values.requestNote ?? "",
     agreeShowcase: values.agreeShowcase,
+    agreeMarketingEmail: values.agreeMarketingEmail,
     createdAt: serverTimestamp(),
     paymentStatus: "unpaid",
     paidAt: null,

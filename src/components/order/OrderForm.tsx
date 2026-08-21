@@ -107,6 +107,7 @@ export function OrderForm() {
       agreeCopyright: undefined,
       agreeRisk: undefined,
       agreeShowcase: false,
+      agreeMarketingEmail: false,
       generationCreditsUsed: 0,
     },
   });

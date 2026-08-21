@@ -229,6 +229,10 @@ export const orderFormSchema = z.object({
   // model/photos being used in the shop's own showcase (site gallery, SNS), separate from the
   // required legal consents above.
   agreeShowcase: z.boolean(),
+  // Optional, separate affirmative opt-in for promotional email (price drops, campaigns).
+  // Required to be its own unambiguous checkbox under Japan's 特定電子メール法 -- never bundle
+  // this consent with another one or default it to true.
+  agreeMarketingEmail: z.boolean(),
 });
 
 export type OrderFormValues = z.infer<typeof orderFormSchema>;
@@ -252,6 +256,7 @@ export type OrderRecord = {
   deliveryTimeSlot: DeliveryTimeSlot;
   requestNote: string;
   agreeShowcase: boolean;
+  agreeMarketingEmail: boolean;
   createdAt: unknown;
   paymentStatus: PaymentStatus;
   paidAt: unknown;

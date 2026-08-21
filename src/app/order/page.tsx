@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
 import { CreditPurchase } from "@/components/auth/CreditPurchase";
 import { LoginButton } from "@/components/auth/LoginButton";
@@ -29,7 +30,9 @@ export default function OrderPage() {
             ペットや大切なものの写真から、魔法のカラーで輝くクリスタルフィギュアを作成・注文できます。
           </p>
         </header>
-        <OrderForm />
+        <Suspense fallback={null}>
+          <OrderForm />
+        </Suspense>
       </main>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { ConsentSection } from "@/components/order/ConsentSection";
@@ -66,8 +67,11 @@ export function OrderForm() {
     string[]
   >([]);
   const [submitState, setSubmitState] = useState<
-    { status: "idle" } | { status: "success" } | { status: "error"; message: string }
+    { status: "idle" } | { status: "redirecting" } | { status: "error"; message: string }
   >({ status: "idle" });
+
+  const searchParams = useSearchParams();
+  const checkoutResult = searchParams.get("checkout");
 
   function handlePhotosChange(next: File[]) {
     setValue("photos", next, { shouldValidate: true });
@@ -98,14 +102,17 @@ export function OrderForm() {
         generatedPreviewUrls,
         generatedReferenceImageUrls
       );
-      setSubmitState({ status: "success" });
-      fetch("/api/process-order", {
+      setSubmitState({ status: "redirecting" });
+      const res = await fetch("/api/order-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId }),
-      }).catch((error) => {
-        console.error("process-order request failed", error);
       });
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        throw new Error(json.error ?? "決済ページの作成に失敗しました");
+      }
+      window.location.assign(json.url as string);
     } catch {
       setSubmitState({
         status: "error",
@@ -114,14 +121,27 @@ export function OrderForm() {
     }
   });
 
-  if (submitState.status === "success") {
+  if (checkoutResult === "success") {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">
           ご注文ありがとうございます
         </h2>
         <p className="mt-2 text-sm text-slate-600">
-          ご入力いただいたメールアドレス宛に確認のご連絡をいたします。
+          お支払いが完了しました。ご入力いただいたメールアドレス宛に確認のご連絡をいたします。
+        </p>
+      </div>
+    );
+  }
+
+  if (checkoutResult === "cancel") {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">
+          お支払いがキャンセルされました
+        </h2>
+        <p className="mt-2 text-sm text-slate-600">
+          お支払いが完了しなかったため、注文は確定していません。お手数ですが、もう一度最初からお試しください。
         </p>
       </div>
     );
@@ -188,7 +208,11 @@ export function OrderForm() {
           disabled={isSubmitting || !generatedModelUrl}
           className="w-full rounded-xl bg-slate-800 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSubmitting ? "送信中..." : "この内容で注文する"}
+          {submitState.status === "redirecting"
+            ? "決済ページに移動しています..."
+            : isSubmitting
+              ? "送信中..."
+              : "この内容で注文する（決済へ進む）"}
         </button>
       </form>
     </FormProvider>

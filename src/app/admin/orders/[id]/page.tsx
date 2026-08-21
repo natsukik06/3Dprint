@@ -61,6 +61,8 @@ type OrderDetail = {
   wallThicknessMm: number | null;
   hasVentHole: boolean;
   ventHoleSource: "auto" | "customer" | null;
+  paymentStatus: "unpaid" | "paid";
+  paidAt: { toDate: () => Date } | null;
 };
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -109,6 +111,8 @@ function AdminOrderDetail({ id }: { id: string }) {
       wallThicknessMm: data.wallThicknessMm ?? null,
       hasVentHole: data.hasVentHole ?? false,
       ventHoleSource: data.ventHoleSource ?? null,
+      paymentStatus: data.paymentStatus ?? "unpaid",
+      paidAt: data.paidAt ?? null,
     };
   }
 
@@ -310,6 +314,14 @@ function AdminOrderDetail({ id }: { id: string }) {
           <InfoRow label="割引" value={`-${formatYen(order.discountYen)}`} />
         )}
         <InfoRow label="合計金額" value={formatYen(order.estimatedPriceYen)} />
+        <InfoRow
+          label="支払い状況"
+          value={
+            order.paymentStatus === "paid"
+              ? `支払い済み${order.paidAt ? `（${order.paidAt.toDate().toLocaleString("ja-JP")}）` : ""}`
+              : "未払い"
+          }
+        />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">

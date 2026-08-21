@@ -95,13 +95,16 @@ export async function submitOrder(
     scaledModelUrl: null,
     scaledBoundingBoxMm: null,
     maxDimensionMm: null,
-    status: "pending",
+    status: "awaiting_payment",
     batchId: null,
     gridId: null,
     finishedModelUrl: null,
     wallThicknessMm: null,
     hasVentHole: false,
     ventHoleSource: null,
+    paymentStatus: "unpaid",
+    paidAt: null,
+    stripeCheckoutSessionId: null,
   };
 
   const docRef = await addDoc(collection(db, "orders"), order);

@@ -22,7 +22,13 @@ export const DELIVERY_TIME_SLOT_OPTIONS = [
   "19-21",
 ] as const;
 export const SIZE_OPTIONS = ["S", "L"] as const;
-export const ORDER_STATUS_OPTIONS = ["pending", "batched", "completed"] as const;
+export const ORDER_STATUS_OPTIONS = [
+  "awaiting_payment",
+  "pending",
+  "batched",
+  "completed",
+] as const;
+export const PAYMENT_STATUS_OPTIONS = ["unpaid", "paid"] as const;
 
 export type Pose = (typeof POSE_OPTIONS)[number];
 export type MagicColor = (typeof MAGIC_COLOR_OPTIONS)[number];
@@ -44,6 +50,7 @@ export type HolePoint = {
 };
 export type SizeOption = (typeof SIZE_OPTIONS)[number];
 export type OrderStatus = (typeof ORDER_STATUS_OPTIONS)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUS_OPTIONS)[number];
 export type BoundingBoxMm = { x: number; y: number; z: number };
 
 export const SIZE_TARGET_MM: Record<SizeOption, number> = { S: 28, L: 50 };
@@ -56,6 +63,7 @@ export const SIZE_LABELS: Record<SizeOption, string> = {
   L: "Lサイズ（最大辺50mm・宅急便コンパクト配送）",
 };
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  awaiting_payment: "支払い待ち",
   pending: "未処理",
   batched: "バッチ割当済み",
   completed: "完了",
@@ -188,4 +196,7 @@ export type OrderRecord = {
   wallThicknessMm: number | null;
   hasVentHole: boolean;
   ventHoleSource: "auto" | "customer" | null;
+  paymentStatus: PaymentStatus;
+  paidAt: unknown;
+  stripeCheckoutSessionId: string | null;
 };

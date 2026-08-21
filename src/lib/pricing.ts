@@ -22,7 +22,7 @@ export const POSE_LABELS: Record<Pose, string> = {
 
 export const MAGIC_COLOR_LABELS: Record<MagicColor, string> = {
   starryBlue: "星空ブルー（青＋銀ラメ）",
-  galaxyGreen: "ギャラクシーグリーン（蓄光緑）",
+  galaxyGreen: "ギャラクシーグリーン（暗闇で光る・蓄光ラメ）",
   clearAurora: "クリアオーロラ",
 };
 

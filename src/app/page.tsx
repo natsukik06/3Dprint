@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { Moon, Smartphone, Sparkles } from "lucide-react";
 
 const EXAMPLES: {
   imageUrl: string | null;
@@ -73,6 +73,25 @@ export default function Home() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="relative mt-10 overflow-hidden rounded-2xl bg-slate-900 px-6 py-8 text-center">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/40 blur-3xl"
+          />
+          <Moon className="relative mx-auto h-7 w-7 text-emerald-300" />
+          <h2 className="relative mt-3 text-lg font-bold text-white">
+            暗闇でそっと光る、あなただけのお守り
+          </h2>
+          <p className="relative mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-300">
+            ギャラクシーグリーンは蓄光ラメ入り。電気を消すと、青白い光がふわりと浮かび上がります。
+            眠る前や、少し心細い夜に寄り添う存在に。
+          </p>
+          <p className="relative mx-auto mt-3 flex max-w-xs items-center justify-center gap-1.5 text-xs text-slate-400">
+            <Smartphone className="h-3.5 w-3.5 shrink-0" />
+            光が弱くなったら、スマホのライトを当てるだけで再チャージできます
+          </p>
         </section>
 
         <div className="mt-10 text-center">

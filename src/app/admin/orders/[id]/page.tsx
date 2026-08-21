@@ -36,6 +36,7 @@ type OrderDetail = {
   deliveryDate: string | null;
   deliveryTimeSlot: DeliveryTimeSlot;
   requestNote: string;
+  agreeShowcase: boolean;
   createdAt: { toDate: () => Date } | null;
   paymentStatus: PaymentStatus;
   paidAt: { toDate: () => Date } | null;
@@ -375,6 +376,7 @@ function AdminOrderDetail({ id }: { id: string }) {
           deliveryDate: data.deliveryDate ?? null,
           deliveryTimeSlot: data.deliveryTimeSlot ?? "none",
           requestNote: data.requestNote ?? "",
+          agreeShowcase: data.agreeShowcase ?? false,
           createdAt: data.createdAt ?? null,
           paymentStatus: data.paymentStatus ?? "unpaid",
           paidAt: data.paidAt ?? null,
@@ -421,6 +423,10 @@ function AdminOrderDetail({ id }: { id: string }) {
         )}
         <InfoRow label="合計金額" value={formatYen(order.estimatedPriceYen)} />
         <InfoRow label="配送方法" value={order.shippingMethod ?? "未処理（支払い後に自動判定）"} />
+        <InfoRow
+          label="実績紹介への使用許可"
+          value={order.agreeShowcase ? "許可あり" : "許可なし"}
+        />
         <InfoRow
           label="支払い状況"
           value={

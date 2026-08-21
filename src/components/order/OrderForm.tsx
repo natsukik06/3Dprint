@@ -106,6 +106,7 @@ export function OrderForm() {
       requestNote: "",
       agreeCopyright: undefined,
       agreeRisk: undefined,
+      agreeShowcase: false,
       generationCreditsUsed: 0,
     },
   });

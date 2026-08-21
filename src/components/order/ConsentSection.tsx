@@ -42,6 +42,17 @@ export function ConsentSection() {
         <p className="text-sm text-red-600">{errors.agreeRisk.message}</p>
       )}
 
+      <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
+        <input
+          type="checkbox"
+          {...register("agreeShowcase")}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-slate-800"
+        />
+        <span className="text-sm text-slate-700">
+          完成した3Dモデルや写真を、当店の実績紹介（サイト・SNS等）に匿名で使用することに同意します（任意・チェックしなくても注文できます）
+        </span>
+      </label>
+
       <p className="text-xs text-slate-500">
         ご注文にあたっては
         <Link href="/legal/tokushoho" className="underline hover:text-slate-700" target="_blank">

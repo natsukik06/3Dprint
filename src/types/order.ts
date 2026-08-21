@@ -225,6 +225,10 @@ export const orderFormSchema = z.object({
     .optional(),
   agreeCopyright: z.literal(true, "著作権に関する同意が必要です"),
   agreeRisk: z.literal(true, "造形リスクに関する同意が必要です"),
+  // Optional -- does not block ordering. Lets the customer allow (or refuse) their generated
+  // model/photos being used in the shop's own showcase (site gallery, SNS), separate from the
+  // required legal consents above.
+  agreeShowcase: z.boolean(),
 });
 
 export type OrderFormValues = z.infer<typeof orderFormSchema>;
@@ -247,6 +251,7 @@ export type OrderRecord = {
   deliveryDate: string | null;
   deliveryTimeSlot: DeliveryTimeSlot;
   requestNote: string;
+  agreeShowcase: boolean;
   createdAt: unknown;
   paymentStatus: PaymentStatus;
   paidAt: unknown;

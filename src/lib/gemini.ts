@@ -79,9 +79,20 @@ function figureGridPrompt(subject: string, pose: Pose): string {
     "A single image containing a precise 2x2 grid of four photos of the same small figurine of " +
     `${subject}, in ${POSE_PHRASES[pose]}. The grid has exactly four equal-sized quadrants with no ` +
     "border, no divider lines, and no grid lines drawn — just four separate photos placed edge to " +
-    "edge on a shared plain white background. Top-left quadrant: front view. Top-right quadrant: " +
-    "left side view. Bottom-left quadrant: back view (rear). Bottom-right quadrant: right side " +
-    "view. All four photos show the exact same turntable photography setup: identical camera " +
+    "edge on a shared plain white background, each one a different rotation of the same turntable " +
+    "sequence around the subject: " +
+    "Top-left quadrant: front view (真正面) — camera directly facing the subject head-on, its face " +
+    "pointing straight at the camera. " +
+    "Top-right quadrant: left side view (真左側面) — camera rotated 90 degrees counterclockwise " +
+    "from the front view, so the subject's head/nose points toward the LEFT edge of this quadrant. " +
+    "Bottom-left quadrant: back view (真背面) — camera rotated a further 90 degrees to be directly " +
+    "behind the subject, 180 degrees opposite the front view. " +
+    "Bottom-right quadrant: right side view (真右側面) — camera rotated 90 degrees clockwise from " +
+    "the front view, so the subject's head/nose points toward the RIGHT edge of this quadrant. " +
+    "The left side view and right side view MUST be true mirror opposites of each other, showing " +
+    "opposite flanks of the body with the head facing opposite directions — they must never end up " +
+    "looking like the same side repeated twice. " +
+    "All four photos show the exact same turntable photography setup: identical camera " +
     "height, identical camera distance, identical scale, identical pose — only the turntable " +
     "rotation differs between quadrants. Leave generous plain white margin around the figurine " +
     "within each quadrant so no part of it comes close to the quadrant boundary. Render the " +

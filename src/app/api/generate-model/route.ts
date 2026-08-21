@@ -64,22 +64,29 @@ export async function POST(request: NextRequest) {
       uploadReferencePhotos(photoFiles),
     ]);
 
-    const viewTokens = await Promise.all(
-      VIEWS.map((view) => {
+    // Keyed by view name (not array position) so the Gemini view -> Tripo slot mapping can never
+    // drift out of sync even if VIEWS' declared order changes later.
+    const viewTokenEntries = await Promise.all(
+      VIEWS.map(async (view) => {
         const image = whiteClayViews[view];
-        return uploadImageToTripo(
+        const token = await uploadImageToTripo(
           Buffer.from(image.data, "base64"),
           `${view}.png`,
           image.mimeType
         );
+        return [view, token] as const;
       })
     );
+    const viewTokens = Object.fromEntries(viewTokenEntries) as Record<
+      (typeof VIEWS)[number],
+      string
+    >;
 
     const taskId = await createMultiviewTask({
-      front: viewTokens[0],
-      left: viewTokens[1],
-      back: viewTokens[2],
-      right: viewTokens[3],
+      front: viewTokens.front,
+      left: viewTokens.left,
+      back: viewTokens.back,
+      right: viewTokens.right,
     });
 
     return NextResponse.json({ taskId, referenceImageUrls });

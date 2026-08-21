@@ -11,6 +11,7 @@ import {
   getTotalQuantity,
 } from "@/lib/pricing";
 import {
+  AVAILABLE_SIZE_OPTIONS,
   MAGIC_COLOR_OPTIONS,
   MAX_TOTAL_QUANTITY,
   POSE_OPTIONS,
@@ -80,10 +81,31 @@ export function SpecOptions() {
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-slate-700">サイズ</legend>
-        <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          {SIZE_LABELS.S}
-        </p>
-        <input type="hidden" {...register("sizeOption")} />
+        <Controller
+          name="sizeOption"
+          control={control}
+          render={({ field, fieldState }) => (
+            <div className="space-y-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {AVAILABLE_SIZE_OPTIONS.map((option) => (
+                  <RadioCard
+                    key={option}
+                    name={field.name}
+                    value={option}
+                    checked={field.value === option}
+                    onChange={field.onChange}
+                    label={SIZE_LABELS[option]}
+                  />
+                ))}
+              </div>
+              {fieldState.error && (
+                <p className="text-sm text-red-600">
+                  {fieldState.error.message}
+                </p>
+              )}
+            </div>
+          )}
+        />
       </fieldset>
 
       <fieldset className="space-y-2">

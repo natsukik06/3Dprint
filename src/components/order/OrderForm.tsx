@@ -27,7 +27,12 @@ export function OrderForm() {
       subject: "",
       pose: "auto",
       sizeOption: "S",
-      colorQuantities: { starryBlue: 1, galaxyGreen: 0, clearAurora: 0 },
+      colorQuantities: {
+        starryBlue: 1,
+        galaxyGreen: 0,
+        clearAurora: 0,
+        furCavity: 0,
+      },
       customerName: "",
       customerEmail: "",
       postalCode: "",

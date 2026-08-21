@@ -25,6 +25,7 @@ const MAGIC_COLOR_PHRASES: Record<MagicColor, string> = {
   starryBlue: "deep blue liquid mixed with glowing silver glitter",
   galaxyGreen: "glowing phosphorescent green liquid mixed with sparkling stardust",
   clearAurora: "iridescent, clear aurora-like swirls with soft rainbow glitter",
+  furCavity: "",
 };
 
 export type ImagePayload = { data: string; mimeType: string };
@@ -110,11 +111,17 @@ export async function generateFinishedPreview(
   magicColor: MagicColor
 ): Promise<ImagePayload> {
   const client = getClient();
+  const interiorPhrase =
+    magicColor === "furCavity"
+      ? "The inside is left completely empty and hollow, ready for the owner to add " +
+        "their own keepsake later. A small round cork stopper is visible on the " +
+        "underside where it can be opened and resealed."
+      : `The inside is filled with ${MAGIC_COLOR_PHRASES[magicColor]}. Sealed with a ` +
+        "rustic wooden cork at the bottom.";
   const prompt =
     `A highly detailed, photorealistic macro photography of ${subject} figurine, in ` +
     `${POSE_PHRASES[pose]}. The entire body is made of ultra-clear glass-like resin. ` +
-    `The inside is filled with ${MAGIC_COLOR_PHRASES[magicColor]}. Sealed with a rustic ` +
-    "wooden cork at the bottom. Cinematic lighting, centered composition, no text or " +
+    `${interiorPhrase} Cinematic lighting, centered composition, no text or ` +
     "watermark. Use the attached reference photos to match the subject's shape, " +
     "features, and identity.";
 

@@ -24,6 +24,7 @@ export const MAGIC_COLOR_LABELS: Record<MagicColor, string> = {
   starryBlue: "星空ブルー（青＋銀ラメ）",
   galaxyGreen: "ギャラクシーグリーン（暗闇で光る・蓄光ラメ）",
   clearAurora: "クリアオーロラ",
+  furCavity: "毛入れ用（空洞・コルク栓付き）",
 };
 
 export const DELIVERY_TIME_SLOT_LABELS: Record<DeliveryTimeSlot, string> = {

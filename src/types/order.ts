@@ -11,6 +11,7 @@ export const MAGIC_COLOR_OPTIONS = [
   "starryBlue",
   "galaxyGreen",
   "clearAurora",
+  "furCavity",
 ] as const;
 export const DELIVERY_TIME_SLOT_OPTIONS = [
   "none",
@@ -21,11 +22,8 @@ export const DELIVERY_TIME_SLOT_OPTIONS = [
   "18-20",
   "19-21",
 ] as const;
-export const SIZE_OPTIONS = ["S", "L"] as const;
-// Launch is S-only (3cm keychain size) to keep production simple. L stays
-// fully wired up server-side (scaling/shipping/pricing) for when it's
-// reintroduced — only the customer-facing size picker is restricted.
-export const AVAILABLE_SIZE_OPTIONS = ["S"] as const satisfies readonly (typeof SIZE_OPTIONS)[number][];
+export const SIZE_OPTIONS = ["S", "M", "L"] as const;
+export const AVAILABLE_SIZE_OPTIONS = ["S", "M", "L"] as const satisfies readonly (typeof SIZE_OPTIONS)[number][];
 export const ORDER_STATUS_OPTIONS = [
   "awaiting_payment",
   "pending",
@@ -57,14 +55,16 @@ export type OrderStatus = (typeof ORDER_STATUS_OPTIONS)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUS_OPTIONS)[number];
 export type BoundingBoxMm = { x: number; y: number; z: number };
 
-export const SIZE_TARGET_MM: Record<SizeOption, number> = { S: 28, L: 50 };
+export const SIZE_TARGET_MM: Record<SizeOption, number> = { S: 28, M: 40, L: 50 };
 export const SHIPPING_METHOD_BY_SIZE: Record<SizeOption, string> = {
   S: "クリックポスト",
+  M: "クリックポスト",
   L: "宅急便コンパクト",
 };
 export const SIZE_LABELS: Record<SizeOption, string> = {
-  S: "Sサイズ（最大辺28mm・クリックポスト配送）",
-  L: "Lサイズ（最大辺50mm・宅急便コンパクト配送）",
+  S: "Sサイズ（最大辺2.8cm・クリックポスト配送）",
+  M: "Mサイズ（最大辺4cm・クリックポスト配送）",
+  L: "Lサイズ（最大辺5cm・宅急便コンパクト配送）",
 };
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   awaiting_payment: "支払い待ち",
@@ -73,7 +73,12 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   completed: "完了",
 };
 
-export const DEFAULT_BOTTOM_HOLE_DIAMETER_MM = 10;
+// Default fill-port diameter — used both for the admin's own epoxy-fill
+// syringe port and for the "furCavity" product's cork stopper (the customer
+// inserts their pet's own fur and reseals it). 8mm matches a commonly
+// available miniature-bottle cork stopper (~7-12.5mm); provisional until a
+// specific stopper product is sourced and confirmed by test-fit.
+export const DEFAULT_BOTTOM_HOLE_DIAMETER_MM = 8;
 export const MIN_BOTTOM_HOLE_DIAMETER_MM = 5;
 export const MAX_BOTTOM_HOLE_DIAMETER_MM = 25;
 // Fixed diameter for the top hardware hole (ヒートン金具用).
@@ -104,10 +109,11 @@ const colorQuantitiesSchema = z
     starryBlue: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
     galaxyGreen: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
     clearAurora: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
+    furCavity: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
   })
   .refine(
     (v) => {
-      const total = v.starryBlue + v.galaxyGreen + v.clearAurora;
+      const total = v.starryBlue + v.galaxyGreen + v.clearAurora + v.furCavity;
       return total >= 1 && total <= MAX_TOTAL_QUANTITY;
     },
     { error: `合計1〜${MAX_TOTAL_QUANTITY}個の範囲で指定してください` }

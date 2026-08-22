@@ -71,22 +71,29 @@ export type StlPlacement = {
   targetZ: number;
 };
 
-/** Merges pre-placed models into a single binary STL, sitting flat on Y=0. */
-export function buildPlateStl(placements: StlPlacement[]): Buffer {
-  const vertices: number[] = [];
+// Photon Workshop's pre-slice "scene" project format (which would let us hand the admin one
+// file with every piece already arranged) is undocumented anywhere and reportedly unstable even
+// in the official app -- writing one blind risks a corrupt file the app can't open. STL, in
+// contrast, is universally supported and Photon Workshop can import several at once. Baking each
+// item's packed plate position directly into its own STL (rather than merging all items into one
+// solid) means importing the whole set together reproduces this layout while keeping every piece
+// individually selectable/movable and support-able in the slicer -- something a merged STL can't
+// do since it becomes one solid.
+/** Translates one pre-placed model to its packed plate position and writes it as its own STL. */
+export function buildPlacedItemStl(placement: StlPlacement): Buffer {
+  const { triangles, worldMin, targetX, targetZ } = placement;
+  const dx = targetX - worldMin[0];
+  const dy = -worldMin[1];
+  const dz = targetZ - worldMin[2];
 
-  for (const { triangles, worldMin, targetX, targetZ } of placements) {
-    const dx = targetX - worldMin[0];
-    const dy = -worldMin[1];
-    const dz = targetZ - worldMin[2];
-    for (let i = 0; i + 8 < triangles.length; i += 9) {
-      for (let v = 0; v < 3; v++) {
-        vertices.push(
-          triangles[i + v * 3] + dx,
-          triangles[i + v * 3 + 1] + dy,
-          triangles[i + v * 3 + 2] + dz
-        );
-      }
+  const vertices: number[] = [];
+  for (let i = 0; i + 8 < triangles.length; i += 9) {
+    for (let v = 0; v < 3; v++) {
+      vertices.push(
+        triangles[i + v * 3] + dx,
+        triangles[i + v * 3 + 1] + dy,
+        triangles[i + v * 3 + 2] + dz
+      );
     }
   }
 

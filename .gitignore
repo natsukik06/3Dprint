@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# working notes / investigation files kept out of version control on purpose
+deepresarch.txt
+*.pwscene

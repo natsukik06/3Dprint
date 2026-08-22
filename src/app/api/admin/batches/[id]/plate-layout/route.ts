@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { adminDb, adminStorage } from "@/lib/firebaseAdmin";
 import { boundsOfTriangles, extractWorldTriangles } from "@/lib/modelScaling";
-import { buildPlateStl, packPlates, type StlPlacement } from "@/lib/plateLayout";
+import { buildPlacedItemStl, packPlates, type StlPlacement } from "@/lib/plateLayout";
 import type { PrintBatchOrderEntry } from "@/types/batch";
 
 function buildPublicUrl(bucketName: string, path: string): string {
@@ -65,28 +65,33 @@ export async function POST(
     const itemsById = new Map(items.map((item) => [item.id, item]));
     const bucket = adminStorage.bucket();
 
+    // One STL per item (not merged) with its packed plate position already baked in as an
+    // offset -- importing every item of a plate together into the slicer reproduces this exact
+    // layout while each piece stays individually selectable. See buildPlacedItemStl for why we
+    // don't target Photon Workshop's native (undocumented, reportedly unstable) scene format.
     const results = await Promise.all(
       plates.map(async (placedItems, plateIndex) => {
-        const placements: StlPlacement[] = placedItems.map((placed) => {
-          const item = itemsById.get(placed.id);
-          if (!item) throw new Error(`配置アイテムが見つかりません: ${placed.id}`);
-          return {
-            triangles: item.triangles,
-            worldMin: item.worldMin,
-            targetX: placed.x,
-            targetZ: placed.z,
-          };
-        });
-
-        const stl = buildPlateStl(placements);
-        const path = `batches/${batchId}/plate-${plateIndex + 1}.stl`;
-        await bucket.file(path).save(stl, { contentType: "model/stl" });
+        const placedFiles = await Promise.all(
+          placedItems.map(async (placed) => {
+            const item = itemsById.get(placed.id);
+            if (!item) throw new Error(`配置アイテムが見つかりません: ${placed.id}`);
+            const placement: StlPlacement = {
+              triangles: item.triangles,
+              worldMin: item.worldMin,
+              targetX: placed.x,
+              targetZ: placed.z,
+            };
+            const stl = buildPlacedItemStl(placement);
+            const path = `batches/${batchId}/plate-${plateIndex + 1}-${placed.id}.stl`;
+            await bucket.file(path).save(stl, { contentType: "model/stl" });
+            return { gridId: placed.id, url: buildPublicUrl(bucket.name, path) };
+          })
+        );
 
         return {
           index: plateIndex + 1,
-          itemCount: placedItems.length,
-          gridIds: placedItems.map((p) => p.id),
-          url: buildPublicUrl(bucket.name, path),
+          itemCount: placedFiles.length,
+          items: placedFiles,
         };
       })
     );

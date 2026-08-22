@@ -13,7 +13,11 @@ import type { PrintBatchRecord } from "@/types/batch";
 import styles from "./print.module.css";
 
 type BatchState = (PrintBatchRecord & { id: string }) | null | undefined;
-type PlateResult = { index: number; itemCount: number; gridIds: string[]; url: string };
+type PlateResult = {
+  index: number;
+  itemCount: number;
+  items: { gridId: string; url: string }[];
+};
 
 function BatchGridDashboard({ id }: { id: string }) {
   const { user } = useAuth();
@@ -125,23 +129,33 @@ function BatchGridDashboard({ id }: { id: string }) {
         <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
           {plateError && <p className="text-sm text-red-600">{plateError}</p>}
           {plateResults && (
-            <div className="space-y-1">
+            <div className="space-y-3">
               <p className="text-sm font-medium text-slate-900">
-                {PLATE_WIDTH_MM}×{PLATE_DEPTH_MM}mmプレートに自動配置しました（{plateResults.length}枚に分割）
+                {PLATE_WIDTH_MM}×{PLATE_DEPTH_MM}mmプレートに自動配置しました（{plateResults.length}枚に分割）。各アイテムは配置座標を埋め込んだ個別STLです。同じプレートのファイルをすべてスライサーに読み込むと、この配置が再現されます。
               </p>
               {plateResults.map((plate) => (
-                <div key={plate.index} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600">
-                    プレート{plate.index}（{plate.itemCount}個: {plate.gridIds.join(", ")}）
-                  </span>
-                  <a
-                    href={plate.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-slate-800 underline underline-offset-2"
-                  >
-                    STLダウンロード
-                  </a>
+                <div key={plate.index}>
+                  <p className="mb-1 text-xs font-semibold text-slate-500">
+                    プレート{plate.index}（{plate.itemCount}個）
+                  </p>
+                  <div className="space-y-1">
+                    {plate.items.map((item) => (
+                      <div
+                        key={item.gridId}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="text-slate-600">{item.gridId}</span>
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-slate-800 underline underline-offset-2"
+                        >
+                          STLダウンロード
+                        </a>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

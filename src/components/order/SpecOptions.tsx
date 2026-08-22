@@ -3,6 +3,7 @@
 import { Minus, Plus } from "lucide-react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { PetDetailsFields } from "@/components/order/PetDetailsFields";
+import { InfoModalButton } from "@/components/ui/InfoModalButton";
 import { RadioCard } from "@/components/ui/RadioCard";
 import {
   ADDITIONAL_UNIT_PRICE_YEN,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/pricing";
 import {
   AVAILABLE_SIZE_OPTIONS,
+  DEFAULT_BOTTOM_HOLE_DIAMETER_MM,
   MAGIC_COLOR_OPTIONS,
   MAX_TOTAL_QUANTITY,
   POSE_OPTIONS,
@@ -137,8 +139,24 @@ export function SpecOptions() {
                       key={color}
                       className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
                     >
-                      <span className="text-sm font-medium text-slate-900">
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-slate-900">
                         {MAGIC_COLOR_LABELS[color]}
+                        {color === "furCavity" && (
+                          <InfoModalButton
+                            label="毛入れ用フィギュアの使い方を見る"
+                            title="毛入れ用フィギュアの使い方"
+                            imageSrc="/guide/fur-cavity-howto.jpg"
+                            imageAlt="コルク栓と穴にピンセットで毛を詰める様子のイメージ"
+                          >
+                            <p>
+                              底面に直径{DEFAULT_BOTTOM_HOLE_DIAMETER_MM}
+                              mmの穴が空いた状態でお届けします。ピンセットなどで愛犬・愛猫の毛を少しずつ詰めていただき、最後にコルク栓で蓋をしてください。
+                            </p>
+                            <p className="mt-1 text-[10px] text-slate-400">
+                              ※画像はイメージを伝えるためのAI生成イラストです（実際の商品写真ではありません）
+                            </p>
+                          </InfoModalButton>
+                        )}
                       </span>
                       <div className="flex shrink-0 items-center gap-2">
                         <button

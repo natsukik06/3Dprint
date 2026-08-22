@@ -103,7 +103,13 @@ export default function Home() {
           </Link>
         </div>
 
-        <footer className="mt-12 flex justify-center gap-4 text-xs text-slate-400">
+        <footer className="mt-12 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-400">
+          <Link href="/guide/faq" className="hover:text-slate-600">
+            よくある質問
+          </Link>
+          <Link href="/legal/returns" className="hover:text-slate-600">
+            返品・キャンセルについて
+          </Link>
           <Link href="/legal/tokushoho" className="hover:text-slate-600">
             特定商取引法に基づく表記
           </Link>

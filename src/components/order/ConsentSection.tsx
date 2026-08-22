@@ -69,6 +69,10 @@ export function ConsentSection() {
         <Link href="/legal/tokushoho" className="underline hover:text-slate-700" target="_blank">
           特定商取引法に基づく表記
         </Link>
+        、
+        <Link href="/legal/returns" className="underline hover:text-slate-700" target="_blank">
+          返品・キャンセルについて
+        </Link>
         および
         <Link href="/legal/privacy" className="underline hover:text-slate-700" target="_blank">
           プライバシーポリシー

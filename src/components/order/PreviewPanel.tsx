@@ -33,6 +33,35 @@ import type { ModelViewerElement } from "@google/model-viewer";
 
 type FinishedPreviewUrls = Partial<Record<MagicColor, string>>;
 
+// Displaying the AI's (simulated) intermediate steps during generation measurably raises
+// perceived value and wait tolerance versus a bare spinner, even though it doesn't change actual
+// wait time -- the "labor illusion" effect (Buell & Norton 2011).
+const MODEL_GENERATION_STATUS_MESSAGES = [
+  "輪郭を解析中...",
+  "被毛のテクスチャを解析中...",
+  "3Dメッシュを構築中...",
+  "細部の形状を最適化中...",
+  "陰影と質感を計算中...",
+];
+const PREVIEW_GENERATION_STATUS_MESSAGES = [
+  "色味を調整中...",
+  "レジンの質感を計算中...",
+  "光の反射を計算中...",
+];
+const STATUS_MESSAGE_INTERVAL_MS = 1800;
+
+function useCyclingMessage(active: boolean, messages: string[]): string {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => {
+      setIndex((i) => (i + 1) % messages.length);
+    }, STATUS_MESSAGE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [active, messages]);
+  return messages[active ? index : 0];
+}
+
 type GeneratedResult = {
   modelUrl: string;
   finishedPreviewUrls: FinishedPreviewUrls;
@@ -209,6 +238,15 @@ export function PreviewPanel({
   const activePreview = previewsByColor[activeColor] ?? { phase: "idle" };
   const hasAnySuccessfulPreview = Object.values(previewsByColor).some(
     (p) => p?.phase === "success"
+  );
+
+  const modelGenerationStatus = useCyclingMessage(
+    modelState.phase === "starting" || modelState.phase === "polling",
+    MODEL_GENERATION_STATUS_MESSAGES
+  );
+  const previewGenerationStatus = useCyclingMessage(
+    activePreview.phase === "generating",
+    PREVIEW_GENERATION_STATUS_MESSAGES
   );
 
   const currentModelUrl =
@@ -684,6 +722,7 @@ export function PreviewPanel({
                   ? "生成を開始しています..."
                   : `形状を生成中... ${modelState.progress}%`}
               </p>
+              <p className="text-[10px] text-slate-400">{modelGenerationStatus}</p>
             </>
           )}
           {modelState.phase === "success" && (
@@ -758,6 +797,7 @@ export function PreviewPanel({
             <>
               <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
               <p className="text-xs text-slate-500">生成中...</p>
+              <p className="text-[10px] text-slate-400">{previewGenerationStatus}</p>
             </>
           )}
           {activePreview.phase === "success" && (

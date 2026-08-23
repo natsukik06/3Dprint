@@ -74,6 +74,7 @@ async function scaleOneItem(
     gridId: null,
     finishedModelUrl: null,
     wallThicknessMm: null,
+    sphereSegments: null,
     hasVentHole: false,
     ventHoleSource: null,
     createdAt: FieldValue.serverTimestamp(),

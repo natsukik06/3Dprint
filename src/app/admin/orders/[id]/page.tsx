@@ -46,6 +46,16 @@ type OrderDetail = {
 // succeeds and processOrder fans the order out into order_items docs.
 type ItemProduction = OrderItemRecord & { id: string };
 
+// Matches DEFAULT_WALL_THICKNESS_MM in the finish-mesh API route.
+const DEFAULT_WALL_THICKNESS_MM = 0.8;
+// Matches hollowMesh's own default in meshBoolean.ts.
+const DEFAULT_SPHERE_SEGMENTS = 32;
+const ACCURACY_PRESETS = [
+  { segments: 16, label: "粗い（高速）" },
+  { segments: 32, label: "標準（推奨）" },
+  { segments: 48, label: "高精度（低速）" },
+] as const;
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4 py-1.5 text-sm">
@@ -71,6 +81,8 @@ function ItemCard({
   const [reprocessError, setReprocessError] = useState<string | null>(null);
   const [finishingMesh, setFinishingMesh] = useState(false);
   const [finishMeshError, setFinishMeshError] = useState<string | null>(null);
+  const [wallThicknessMm, setWallThicknessMm] = useState(DEFAULT_WALL_THICKNESS_MM);
+  const [sphereSegments, setSphereSegments] = useState<number>(DEFAULT_SPHERE_SEGMENTS);
 
   useEffect(() => {
     import("@google/model-viewer");
@@ -120,7 +132,7 @@ function ItemCard({
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ wallThicknessMm, sphereSegments }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "処理に失敗しました");
@@ -319,6 +331,37 @@ function ItemCard({
                   </a>
                 </>
               )}
+              <div className="mt-2 flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
+                  壁厚
+                  <span className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0.1}
+                      max={10}
+                      step={0.1}
+                      value={wallThicknessMm}
+                      onChange={(e) => setWallThicknessMm(Number(e.target.value))}
+                      className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+                    />
+                    mm
+                  </span>
+                </label>
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
+                  精度
+                  <select
+                    value={sphereSegments}
+                    onChange={(e) => setSphereSegments(Number(e.target.value))}
+                    className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+                  >
+                    {ACCURACY_PRESETS.map((preset) => (
+                      <option key={preset.segments} value={preset.segments}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <div className="pt-2">
                 <button
                   type="button"

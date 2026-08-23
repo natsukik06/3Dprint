@@ -277,6 +277,7 @@ export type OrderItemRecord = OrderItemDraft & {
   gridId: string | null;
   finishedModelUrl: string | null;
   wallThicknessMm: number | null;
+  sphereSegments: number | null;
   hasVentHole: boolean;
   ventHoleSource: "auto" | "customer" | null;
   createdAt: unknown;

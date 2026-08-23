@@ -14,6 +14,12 @@ import {
 // Matches the real production process: 0.8mm shell, later filled with
 // clear epoxy + glitter through the cork hole (see production workflow).
 const DEFAULT_WALL_THICKNESS_MM = 0.8;
+// How finely the erosion sphere used for hollowing is approximated (see hollowMesh in
+// meshBoolean.ts) -- more segments means a smoother inner wall at the cost of more triangles
+// and slower boolean ops. Clamped to a sane range since this comes from the admin UI.
+const DEFAULT_SPHERE_SEGMENTS = 32;
+const MIN_SPHERE_SEGMENTS = 8;
+const MAX_SPHERE_SEGMENTS = 64;
 
 function buildPublicUrl(bucketName: string, path: string): string {
   return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
@@ -46,13 +52,20 @@ export async function POST(
 
   const { id: itemId } = await params;
   let wallThicknessMm = DEFAULT_WALL_THICKNESS_MM;
+  let sphereSegments = DEFAULT_SPHERE_SEGMENTS;
   try {
     const body = await request.json();
     if (typeof body?.wallThicknessMm === "number" && body.wallThicknessMm > 0) {
       wallThicknessMm = body.wallThicknessMm;
     }
+    if (typeof body?.sphereSegments === "number") {
+      sphereSegments = Math.min(
+        MAX_SPHERE_SEGMENTS,
+        Math.max(MIN_SPHERE_SEGMENTS, Math.round(body.sphereSegments))
+      );
+    }
   } catch {
-    // no body / invalid JSON — use default wall thickness
+    // no body / invalid JSON — use defaults
   }
 
   try {
@@ -87,7 +100,7 @@ export async function POST(
     const buffer = Buffer.from(await modelRes.arrayBuffer());
     const originalTriangles = extractWorldTriangles(buffer);
 
-    const hollowed = await hollowMesh(originalTriangles, wallThicknessMm);
+    const hollowed = await hollowMesh(originalTriangles, wallThicknessMm, sphereSegments);
 
     const holes: HoleSpec[] = [];
     if (item.wantsHardware && item.holePosition) {
@@ -138,6 +151,7 @@ export async function POST(
     await itemRef.update({
       finishedModelUrl,
       wallThicknessMm,
+      sphereSegments,
       hasVentHole: true,
       ventHoleSource,
     });
@@ -145,6 +159,7 @@ export async function POST(
     return NextResponse.json({
       finishedModelUrl,
       wallThicknessMm,
+      sphereSegments,
       holesCut: holes.length,
       hasVentHole: true,
       ventHoleSource,

@@ -11,17 +11,17 @@ const COMING_SOON = [
 export default function Home() {
   return (
     <div className="min-h-full bg-[#f4ecdc] text-[#3f3424] dark:bg-[#0a0a0c] dark:text-[#eef2f1]">
-      <div className="mx-auto w-full max-w-xl px-4 sm:px-6">
-        <nav className="flex items-center justify-between py-5">
+      <div className="mx-auto w-full max-w-xl px-4 sm:px-6 md:max-w-2xl lg:max-w-4xl lg:px-8">
+        <nav className="flex items-center justify-between py-5 lg:py-7">
           <Image
             src="/logo-full.png"
             alt="LUMINA CHARO"
             width={1569}
             height={1034}
             priority
-            className="h-7 w-auto dark:invert"
+            className="h-7 w-auto dark:invert lg:h-8"
           />
-          <div className="flex items-center gap-4 text-xs font-medium text-[#6b5c40] dark:text-[#9fb0ae]">
+          <div className="flex items-center gap-4 text-xs font-medium text-[#6b5c40] dark:text-[#9fb0ae] lg:gap-6 lg:text-sm">
             <Link
               href="/guide/faq"
               className="hover:text-[#3f3424] dark:hover:text-white"
@@ -30,7 +30,7 @@ export default function Home() {
             </Link>
             <Link
               href="/order"
-              className="rounded-full bg-[#0f766e] px-4 py-2 text-white transition-colors hover:bg-[#0b5b54] dark:bg-[#7fd8cb] dark:text-[#0a0a0c] dark:hover:bg-[#9fe6da]"
+              className="rounded-full bg-[#0f766e] px-4 py-2 text-white transition-colors hover:bg-[#0b5b54] dark:bg-[#7fd8cb] dark:text-[#0a0a0c] dark:hover:bg-[#9fe6da] lg:px-5 lg:py-2.5"
             >
               注文する
             </Link>
@@ -38,8 +38,8 @@ export default function Home() {
         </nav>
 
         <main className="pb-10">
-          <header className="mb-12 pt-4 text-center">
-            <div className="relative mx-auto mb-6 aspect-square w-44 overflow-hidden rounded-2xl shadow-lg sm:w-52">
+          <header className="mb-12 pt-4 text-center lg:flex lg:items-center lg:gap-12 lg:pt-10 lg:text-left">
+            <div className="relative mx-auto mb-6 aspect-square w-44 shrink-0 overflow-hidden rounded-2xl shadow-lg sm:w-52 lg:mb-0 lg:w-72">
               <video
                 src="/hero-video.mp4"
                 autoPlay
@@ -49,20 +49,22 @@ export default function Home() {
                 className="h-full w-full object-cover"
               />
             </div>
-            <h1 className="text-2xl font-bold sm:text-3xl">
-              暗闇でそっと光る、
-              <br />
-              あなただけのお守り。
-            </h1>
-            <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[#6b5c40] dark:text-[#a9b3b1]">
-              愛犬・愛猫の写真から、世界に一つのクリスタルキーホルダーをお作りします。
-            </p>
-            <Link
-              href="/order"
-              className="mt-6 inline-block rounded-full bg-[#0f766e] px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0b5b54] dark:bg-[#7fd8cb] dark:text-[#0a0a0c] dark:hover:bg-[#9fe6da]"
-            >
-              注文する
-            </Link>
+            <div className="lg:flex-1">
+              <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">
+                暗闇でそっと光る、
+                <br />
+                あなただけのお守り。
+              </h1>
+              <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[#6b5c40] dark:text-[#a9b3b1] lg:mx-0 lg:max-w-sm lg:text-base">
+                愛犬・愛猫の写真から、世界に一つのクリスタルキーホルダーをお作りします。
+              </p>
+              <Link
+                href="/order"
+                className="mt-6 inline-block rounded-full bg-[#0f766e] px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0b5b54] dark:bg-[#7fd8cb] dark:text-[#0a0a0c] dark:hover:bg-[#9fe6da]"
+              >
+                注文する
+              </Link>
+            </div>
           </header>
 
           <section className="mb-12">
@@ -74,7 +76,7 @@ export default function Home() {
                 全{COMING_SOON.length + 1}種（うち1種 販売中）
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3 lg:gap-5">
               <div className="overflow-hidden rounded-xl border border-[#d9cbb0] bg-white dark:border-[#232726] dark:bg-[#121415]">
                 <div className="relative aspect-square">
                   <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-[#0f766e] px-2 py-0.5 text-[9px] font-bold text-white dark:bg-[#7fd8cb]/20 dark:text-[#a9ece2] dark:ring-1 dark:ring-[#7fd8cb]/40">
@@ -121,7 +123,7 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="mb-12 rounded-2xl border border-[#e0d3b8] bg-white/60 px-6 py-7 text-center dark:border-[#1d211f] dark:bg-transparent">
+          <section className="mx-auto mb-12 max-w-xl rounded-2xl border border-[#e0d3b8] bg-white/60 px-6 py-7 text-center dark:border-[#1d211f] dark:bg-transparent">
             <span className="text-base text-[#0f766e] dark:text-[#6fc9bd]">
               ✦
             </span>
@@ -132,7 +134,7 @@ export default function Home() {
             </p>
           </section>
 
-          <section className="relative overflow-hidden rounded-2xl bg-slate-900 px-6 py-8 text-center">
+          <section className="relative mx-auto max-w-xl overflow-hidden rounded-2xl bg-slate-900 px-6 py-8 text-center">
             <div
               aria-hidden
               className="pointer-events-none absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/40 blur-3xl"

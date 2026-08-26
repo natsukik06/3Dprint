@@ -9,7 +9,7 @@ import { OrderForm } from "@/components/order/OrderForm";
 export default function OrderPage() {
   return (
     <div className="min-h-full bg-slate-50">
-      <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-6">
+      <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-6 md:max-w-2xl lg:max-w-3xl lg:px-8">
         <div className="mb-4 flex items-center justify-between gap-2">
           <Link
             href="/"

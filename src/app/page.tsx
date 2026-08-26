@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Moon, Smartphone, Sparkles } from "lucide-react";
 
 const EXAMPLES: {
@@ -28,8 +29,15 @@ export default function Home() {
     <div className="min-h-full bg-slate-50">
       <main className="mx-auto w-full max-w-xl px-4 py-10 sm:px-6">
         <header className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
-            魔法のクリスタルフィギュア
+          <h1 className="mx-auto">
+            <Image
+              src="/logo-full.png"
+              alt="LUMINA CHARO"
+              width={1569}
+              height={1034}
+              priority
+              className="mx-auto h-auto w-64 sm:w-72"
+            />
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-600">
             ペットや大切なものの写真から、魔法のカラーで輝くクリスタルフィギュアを作成・注文できます。

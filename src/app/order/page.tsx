@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
 import { CreditPurchase } from "@/components/auth/CreditPurchase";
@@ -23,8 +24,15 @@ export default function OrderPage() {
           </div>
         </div>
         <header className="mb-6 text-center">
-          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">
-            魔法のクリスタルフィギュア
+          <h1 className="mx-auto">
+            <Image
+              src="/logo-full.png"
+              alt="LUMINA CHARO"
+              width={1569}
+              height={1034}
+              priority
+              className="mx-auto h-auto w-44 sm:w-52"
+            />
           </h1>
           <p className="mt-2 text-sm text-slate-600">
             ペットや大切なものの写真から、魔法のカラーで輝くクリスタルフィギュアを作成・注文できます。

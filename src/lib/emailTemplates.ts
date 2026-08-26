@@ -14,7 +14,7 @@ function wrapEmail(bodyHtml: string): string {
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1e293b;">
       ${bodyHtml}
-      <p style="margin-top:32px;font-size:12px;color:#94a3b8;">魔法のクリスタルフィギュア</p>
+      <p style="margin-top:32px;font-size:12px;color:#94a3b8;">LUMINA CHARO</p>
     </div>
   `;
 }

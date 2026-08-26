@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "魔法のクリスタルフィギュア",
+  title: "LUMINA CHARO",
   description: "写真から魔法のカラーで輝くクリスタルフィギュアを作成・注文できるサービス",
 };
 

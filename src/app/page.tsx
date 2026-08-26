@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Zen_Old_Mincho, Zen_Kaku_Gothic_New } from "next/font/google";
 import { Gem, Moon, Smartphone } from "lucide-react";
 import { FIGURE_PRICE_YEN } from "@/lib/pricing";
+import { IntroSplash } from "@/components/home/IntroSplash";
 
 const zenMincho = Zen_Old_Mincho({
   weight: ["400", "600"],
@@ -47,6 +48,8 @@ export default function Home() {
       className={`${zenGothic.variable} ${zenMincho.variable} min-h-full bg-[#f4ecdc] text-[#3f3424] dark:bg-[#0a0a0c] dark:text-[#eef2f1]`}
       style={{ fontFamily: "var(--font-zen-gothic), sans-serif" }}
     >
+      <IntroSplash />
+
       {/* HERO */}
       <header className="relative flex h-[100svh] min-h-[560px] items-center justify-center overflow-hidden text-center text-[#f3ece0]">
         <video

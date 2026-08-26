@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useRef } from "react";
 import { Zen_Old_Mincho, Zen_Kaku_Gothic_New } from "next/font/google";
 import { Gem, Moon, Smartphone } from "lucide-react";
 import { FIGURE_PRICE_YEN } from "@/lib/pricing";
@@ -43,12 +46,14 @@ const STORY_STEPS = [
 ];
 
 export default function Home() {
+  const navLogoRef = useRef<HTMLImageElement>(null);
+
   return (
     <div
       className={`${zenGothic.variable} ${zenMincho.variable} min-h-full bg-[#f4ecdc] text-[#3f3424] dark:bg-[#0a0a0c] dark:text-[#eef2f1]`}
       style={{ fontFamily: "var(--font-zen-gothic), sans-serif" }}
     >
-      <IntroSplash />
+      <IntroSplash targetRef={navLogoRef} />
 
       {/* HERO */}
       <header className="relative flex h-[100svh] min-h-[560px] items-center justify-center overflow-hidden text-center text-[#f3ece0]">
@@ -71,6 +76,7 @@ export default function Home() {
 
         <nav className="absolute inset-x-0 top-0 z-20 mx-auto flex w-full max-w-xl items-center justify-between px-4 py-5 sm:px-6 md:max-w-2xl lg:max-w-4xl lg:px-8 lg:py-7">
           <Image
+            ref={navLogoRef}
             src="/logo-full.png"
             alt="LUMINA CHARO"
             width={1569}

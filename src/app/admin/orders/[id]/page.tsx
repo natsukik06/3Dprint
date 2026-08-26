@@ -4,7 +4,6 @@ import { collection, doc, getDoc, getDocs, query, where } from "firebase/firesto
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AdminGate } from "@/components/admin/AdminGate";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { db } from "@/lib/firebase";
 import {
@@ -525,19 +524,15 @@ export default function AdminOrderDetailPage() {
   const params = useParams<{ id: string }>();
 
   return (
-    <AdminGate>
-      <div className="min-h-full bg-slate-50">
-        <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-6">
-          <Link
-            href="/admin"
-            className="mb-4 inline-block text-sm text-slate-600 underline underline-offset-2"
-          >
-            ← 注文一覧に戻る
-          </Link>
-          <h1 className="mb-6 text-xl font-bold text-slate-900">注文詳細</h1>
-          <AdminOrderDetail id={params.id} />
-        </main>
-      </div>
-    </AdminGate>
+    <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-6">
+      <Link
+        href="/admin"
+        className="mb-4 inline-block text-sm text-slate-600 underline underline-offset-2"
+      >
+        ← 注文一覧に戻る
+      </Link>
+      <h1 className="mb-6 text-xl font-bold text-slate-900">注文詳細</h1>
+      <AdminOrderDetail id={params.id} />
+    </main>
   );
 }

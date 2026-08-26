@@ -3,7 +3,6 @@
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AdminGate } from "@/components/admin/AdminGate";
 import { db } from "@/lib/firebase";
 import { formatYen, getTotalQuantity } from "@/lib/pricing";
 import type { OrderItemDraft, PaymentStatus } from "@/types/order";
@@ -126,35 +125,31 @@ function AdminOrderList() {
 
 export default function AdminPage() {
   return (
-    <AdminGate>
-      <div className="min-h-full bg-slate-50">
-        <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
-          <div className="mb-6 flex items-center justify-between gap-3">
-            <h1 className="text-xl font-bold text-slate-900">注文一覧</h1>
-            <div className="flex gap-3 text-sm">
-              <Link
-                href="/admin/batches"
-                className="text-slate-600 underline underline-offset-2"
-              >
-                印刷バッチ
-              </Link>
-              <Link
-                href="/admin/shipping"
-                className="text-slate-600 underline underline-offset-2"
-              >
-                発送CSV
-              </Link>
-              <Link
-                href="/admin/marketing"
-                className="text-slate-600 underline underline-offset-2"
-              >
-                お知らせメール
-              </Link>
-            </div>
-          </div>
-          <AdminOrderList />
-        </main>
+    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-slate-900">注文一覧</h1>
+        <div className="flex gap-3 text-sm">
+          <Link
+            href="/admin/batches"
+            className="text-slate-600 underline underline-offset-2"
+          >
+            印刷バッチ
+          </Link>
+          <Link
+            href="/admin/shipping"
+            className="text-slate-600 underline underline-offset-2"
+          >
+            発送CSV
+          </Link>
+          <Link
+            href="/admin/marketing"
+            className="text-slate-600 underline underline-offset-2"
+          >
+            お知らせメール
+          </Link>
+        </div>
       </div>
-    </AdminGate>
+      <AdminOrderList />
+    </main>
   );
 }

@@ -3,7 +3,6 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import Link from "next/link";
 import { useState } from "react";
-import { AdminGate } from "@/components/admin/AdminGate";
 import { db } from "@/lib/firebase";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { DELIVERY_TIME_SLOT_LABELS } from "@/lib/pricing";
@@ -81,23 +80,19 @@ function ShippingExportButton({ method }: { method: string }) {
 
 export default function AdminShippingPage() {
   return (
-    <AdminGate>
-      <div className="min-h-full bg-slate-50">
-        <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
-          <Link
-            href="/admin"
-            className="mb-4 inline-block text-sm text-slate-600 underline underline-offset-2"
-          >
-            ← 注文一覧に戻る
-          </Link>
-          <h1 className="mb-6 text-xl font-bold text-slate-900">発送CSV</h1>
-          <div className="space-y-3">
-            {SHIPPING_METHODS.map((method) => (
-              <ShippingExportButton key={method} method={method} />
-            ))}
-          </div>
-        </main>
+    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
+      <Link
+        href="/admin"
+        className="mb-4 inline-block text-sm text-slate-600 underline underline-offset-2"
+      >
+        ← 注文一覧に戻る
+      </Link>
+      <h1 className="mb-6 text-xl font-bold text-slate-900">発送CSV</h1>
+      <div className="space-y-3">
+        {SHIPPING_METHODS.map((method) => (
+          <ShippingExportButton key={method} method={method} />
+        ))}
       </div>
-    </AdminGate>
+    </main>
   );
 }

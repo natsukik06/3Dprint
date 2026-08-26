@@ -3,7 +3,6 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AdminGate } from "@/components/admin/AdminGate";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { db } from "@/lib/firebase";
 
@@ -123,21 +122,17 @@ function MarketingComposer() {
 
 export default function AdminMarketingPage() {
   return (
-    <AdminGate>
-      <div className="min-h-full bg-slate-50">
-        <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
-          <Link
-            href="/admin"
-            className="mb-4 inline-block text-sm text-slate-600 underline underline-offset-2"
-          >
-            ← 注文一覧に戻る
-          </Link>
-          <h1 className="mb-6 text-xl font-bold text-slate-900">お知らせメール配信</h1>
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <MarketingComposer />
-          </div>
-        </main>
+    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
+      <Link
+        href="/admin"
+        className="mb-4 inline-block text-sm text-slate-600 underline underline-offset-2"
+      >
+        ← 注文一覧に戻る
+      </Link>
+      <h1 className="mb-6 text-xl font-bold text-slate-900">お知らせメール配信</h1>
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <MarketingComposer />
       </div>
-    </AdminGate>
+    </main>
   );
 }

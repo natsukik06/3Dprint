@@ -3,7 +3,6 @@
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AdminGate } from "@/components/admin/AdminGate";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { db } from "@/lib/firebase";
 
@@ -110,29 +109,25 @@ function BatchList() {
 
 export default function AdminBatchesPage() {
   return (
-    <AdminGate>
-      <div className="min-h-full bg-slate-50">
-        <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
-          <div className="mb-6 flex items-center justify-between gap-3">
-            <div>
-              <Link
-                href="/admin"
-                className="mb-1 inline-block text-sm text-slate-600 underline underline-offset-2"
-              >
-                ← 注文一覧に戻る
-              </Link>
-              <h1 className="text-xl font-bold text-slate-900">印刷バッチ</h1>
-            </div>
-            <Link
-              href="/admin/shipping"
-              className="text-sm text-slate-600 underline underline-offset-2"
-            >
-              発送CSV
-            </Link>
-          </div>
-          <BatchList />
-        </main>
+    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div>
+          <Link
+            href="/admin"
+            className="mb-1 inline-block text-sm text-slate-600 underline underline-offset-2"
+          >
+            ← 注文一覧に戻る
+          </Link>
+          <h1 className="text-xl font-bold text-slate-900">印刷バッチ</h1>
+        </div>
+        <Link
+          href="/admin/shipping"
+          className="text-sm text-slate-600 underline underline-offset-2"
+        >
+          発送CSV
+        </Link>
       </div>
-    </AdminGate>
+      <BatchList />
+    </main>
   );
 }

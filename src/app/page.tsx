@@ -82,7 +82,7 @@ export default function Home() {
             width={1569}
             height={1034}
             priority
-            className="h-7 w-auto invert lg:h-8"
+            className="h-10 w-auto invert sm:h-11 lg:h-14"
           />
           <div className="flex items-center gap-4 text-xs font-medium text-[#f3ece0]/90 lg:gap-6 lg:text-sm">
             <Link href="/guide/faq" className="hover:text-white">

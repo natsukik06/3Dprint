@@ -52,7 +52,7 @@ export function BgmPlayer() {
         type="button"
         onClick={toggle}
         aria-label={playing ? "BGMを止める" : "BGMを再生する"}
-        className="fixed bottom-5 left-5 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#3f3424] shadow-md backdrop-blur transition-colors hover:bg-white dark:border-white/10 dark:bg-black/60 dark:text-[#eef2f1] dark:hover:bg-black/80"
+        className="fixed bottom-5 right-5 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#3f3424] shadow-md backdrop-blur transition-colors hover:bg-white dark:border-white/10 dark:bg-black/60 dark:text-[#eef2f1] dark:hover:bg-black/80"
       >
         {playing ? (
           <Volume2 className="h-5 w-5" />

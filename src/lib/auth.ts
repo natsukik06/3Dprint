@@ -1,6 +1,6 @@
 import {
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
   signOut as firebaseSignOut,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -8,7 +8,7 @@ import { auth } from "@/lib/firebase";
 const googleProvider = new GoogleAuthProvider();
 
 export async function signInWithGoogle(): Promise<void> {
-  await signInWithPopup(auth, googleProvider);
+  await signInWithRedirect(auth, googleProvider);
 }
 
 export async function signOut(): Promise<void> {

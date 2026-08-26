@@ -31,7 +31,7 @@ export default function OrderPage() {
               width={1569}
               height={1034}
               priority
-              className="mx-auto h-auto w-44 sm:w-52"
+              className="mx-auto h-auto w-56 sm:w-64 lg:w-72"
             />
           </h1>
           <p className="mt-2 text-sm text-slate-600">

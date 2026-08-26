@@ -40,12 +40,13 @@ export default function Home() {
         <main className="pb-10">
           <header className="mb-12 pt-4 text-center">
             <div className="relative mx-auto mb-6 aspect-square w-44 overflow-hidden rounded-2xl shadow-lg sm:w-52">
-              <Image
-                src="/hero-product.jpg"
-                alt="LUMINA CHAROのキーホルダー"
-                fill
-                priority
-                className="object-cover"
+              <video
+                src="/hero-video.mp4"
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="h-full w-full object-cover"
               />
             </div>
             <h1 className="text-2xl font-bold sm:text-3xl">

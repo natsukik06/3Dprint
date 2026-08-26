@@ -81,8 +81,8 @@ export default function Home() {
                     販売中
                   </span>
                   <Image
-                    src="/hero-product.jpg"
-                    alt="オーダーメイドキーホルダー（S）"
+                    src="/product-lineup.jpg"
+                    alt="オーダーメイドキーホルダー（S）・カラーバリエーション"
                     fill
                     className="object-cover"
                   />

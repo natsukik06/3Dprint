@@ -39,6 +39,17 @@ import {
   type Pose,
 } from "@/types/order";
 import type { ModelViewerElement } from "@google/model-viewer";
+import type { ImagePayload, View } from "@/lib/gemini";
+
+// Mirrors gemini.ts's VIEWS/View — re-declared locally (not imported) so this client component
+// never pulls in gemini.ts's server-only deps (@google/genai, sharp) into the browser bundle.
+const VIEWS: View[] = ["front", "left", "back", "right"];
+const VIEW_LABELS: Record<View, string> = {
+  front: "正面",
+  left: "左側面",
+  back: "背面",
+  right: "右側面",
+};
 
 type FinishedPreviewUrls = Partial<Record<MagicColor, string>>;
 
@@ -161,6 +172,13 @@ type ColorPreviewState =
 type ModelState =
   | { phase: "idle" }
   | { phase: "starting" }
+  | {
+      phase: "reviewingViews";
+      views: Record<View, ImagePayload>;
+      referenceImageUrls: string[];
+      finishedPreviewUrls: FinishedPreviewUrls;
+      confirming: boolean;
+    }
   | { phase: "polling"; progress: number }
   | { phase: "success"; modelUrl: string }
   | { phase: "error"; message: string };
@@ -619,12 +637,41 @@ export function PreviewPanel({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "生成開始に失敗しました");
 
-      setModelState({ phase: "polling", progress: 0 });
-      pollStatus(
-        json.taskId as string,
+      setModelState({
+        phase: "reviewingViews",
+        views: json.views as Record<View, ImagePayload>,
+        referenceImageUrls: (json.referenceImageUrls as string[]) ?? [],
         finishedPreviewUrls,
-        (json.referenceImageUrls as string[]) ?? []
-      );
+        confirming: false,
+      });
+    } catch (err) {
+      setModelState({
+        phase: "error",
+        message: err instanceof Error ? err.message : "生成開始に失敗しました",
+      });
+    }
+  }
+
+  async function handleConfirmViews() {
+    if (modelState.phase !== "reviewingViews" || !user) return;
+    const { views, referenceImageUrls, finishedPreviewUrls } = modelState;
+    setModelState({ ...modelState, confirming: true });
+
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/generate-model/confirm", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ views }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "生成開始に失敗しました");
+
+      setModelState({ phase: "polling", progress: 0 });
+      pollStatus(json.taskId as string, finishedPreviewUrls, referenceImageUrls);
     } catch (err) {
       setModelState({
         phase: "error",
@@ -792,6 +839,19 @@ export function PreviewPanel({
               <p className="text-[10px] text-slate-400">{modelGenerationStatus}</p>
             </>
           )}
+          {modelState.phase === "reviewingViews" && (
+            <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5">
+              {VIEWS.map((view) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={view}
+                  src={`data:${modelState.views[view].mimeType};base64,${modelState.views[view].data}`}
+                  alt={VIEW_LABELS[view]}
+                  className="h-full w-full object-cover"
+                />
+              ))}
+            </div>
+          )}
           {modelState.phase === "success" && (
             <model-viewer
               ref={modelViewerRef}
@@ -919,7 +979,7 @@ export function PreviewPanel({
         </button>
       )}
 
-      {hasAnySuccessfulPreview && (
+      {hasAnySuccessfulPreview && modelState.phase !== "reviewingViews" && (
         <button
           type="button"
           onClick={handleGenerateModelClick}
@@ -931,9 +991,52 @@ export function PreviewPanel({
           className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {modelState.phase === "success" || modelState.phase === "error"
-            ? "この形状でもう一度3Dプレビューを作る（1クレジット）"
-            : "この形状で3Dプレビューを作る（1クレジット）"}
+            ? "この形状でもう一度3D化する（1クレジット）"
+            : "この形状を3D化する（1クレジット）"}
         </button>
+      )}
+
+      {modelState.phase === "reviewingViews" && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-medium text-slate-700">
+            4方向の形状を確認してください
+          </p>
+          <div className="mt-2 grid grid-cols-4 gap-1.5">
+            {VIEWS.map((view) => (
+              <div key={view} className="space-y-1">
+                <div className="aspect-square overflow-hidden rounded-md border border-slate-200 bg-white">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`data:${modelState.views[view].mimeType};base64,${modelState.views[view].data}`}
+                    alt={VIEW_LABELS[view]}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <p className="text-center text-[10px] text-slate-500">
+                  {VIEW_LABELS[view]}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={handleGenerateModelClick}
+              disabled={!hasCredits || modelState.confirming}
+              className="flex-1 rounded-lg border border-slate-300 bg-white py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              作り直す（1クレジット）
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmViews}
+              disabled={modelState.confirming}
+              className="flex-1 rounded-lg bg-slate-800 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {modelState.confirming ? "作成中..." : "この形状でOK・3Dモデルを作成"}
+            </button>
+          </div>
+        </div>
       )}
 
       {modelState.phase === "success" && (

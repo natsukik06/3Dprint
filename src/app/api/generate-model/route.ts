@@ -1,12 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { consumeCredit, refundCredit } from "@/lib/credits";
-import {
-  generateWhiteClayViews,
-  VIEWS,
-  type ImagePayload,
-} from "@/lib/gemini";
+import { generateWhiteClayViews, type ImagePayload } from "@/lib/gemini";
 import { uploadReferencePhotos } from "@/lib/orders";
-import { createMultiviewTask, uploadImageToTripo } from "@/lib/tripo";
 import { readPetDetails } from "@/lib/petDetails";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 import { POSE_OPTIONS, type Pose } from "@/types/order";
@@ -66,32 +61,10 @@ export async function POST(request: NextRequest) {
       uploadReferencePhotos(photoFiles),
     ]);
 
-    // Keyed by view name (not array position) so the Gemini view -> Tripo slot mapping can never
-    // drift out of sync even if VIEWS' declared order changes later.
-    const viewTokenEntries = await Promise.all(
-      VIEWS.map(async (view) => {
-        const image = whiteClayViews[view];
-        const token = await uploadImageToTripo(
-          Buffer.from(image.data, "base64"),
-          `${view}.png`,
-          image.mimeType
-        );
-        return [view, token] as const;
-      })
-    );
-    const viewTokens = Object.fromEntries(viewTokenEntries) as Record<
-      (typeof VIEWS)[number],
-      string
-    >;
-
-    const taskId = await createMultiviewTask({
-      front: viewTokens.front,
-      left: viewTokens.left,
-      back: viewTokens.back,
-      right: viewTokens.right,
-    });
-
-    return NextResponse.json({ taskId, referenceImageUrls });
+    // The credit is spent here, on the Gemini call -- the Tripo reconstruction itself happens
+    // later from /api/generate-model/confirm, once the customer has reviewed these four views and
+    // approved the shape, so a bad turnaround doesn't waste a paid Tripo run.
+    return NextResponse.json({ views: whiteClayViews, referenceImageUrls });
   } catch (error) {
     console.error("generate-model failed", error);
     await refundCredit(user.uid);

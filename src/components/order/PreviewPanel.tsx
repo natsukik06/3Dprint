@@ -9,7 +9,16 @@ import {
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { Box, Download, Loader2, MapPin, Maximize2, Sparkles, X } from "lucide-react";
+import {
+  Box,
+  Crosshair,
+  Download,
+  Loader2,
+  MapPin,
+  Maximize2,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -206,9 +215,14 @@ export function PreviewPanel({
   const modelViewerRef = useRef<ModelViewerElement | null>(null);
   const modalModelViewerRef = useRef<ModelViewerElement | null>(null);
   const suppressResetRef = useRef(false);
-  const pointerDownInfoRef = useRef<{ x: number; y: number; time: number } | null>(
-    null
-  );
+  const [crosshairPoint, setCrosshairPoint] = useState<{
+    x: number;
+    y: number;
+    z: number;
+    nx: number;
+    ny: number;
+    nz: number;
+  } | null>(null);
   const modelBufferCacheRef = useRef<{ url: string; buffer: ArrayBuffer } | null>(
     null
   );
@@ -615,67 +629,60 @@ export function PreviewPanel({
     });
   }
 
-  function updatePlacementPoint(
-    viewer: ModelViewerElement,
-    event: React.PointerEvent<HTMLElement>
-  ) {
+  // Placement uses a fixed center "crosshair" instead of tap-to-place: tapping a precise
+  // point directly is unreliable on touch (finger occludes the target, small hitboxes on a
+  // rotating model), so instead the user freely rotates/pans the model with model-viewer's
+  // own camera-controls (never competing with a placement gesture) until the desired spot
+  // lines up with the on-screen crosshair, then confirms. This tracks the point currently
+  // under the crosshair in real time so the live preview hotspot follows the model as it turns.
+  function recomputeCrosshairPoint(viewer: ModelViewerElement | null) {
+    if (!viewer) return;
     const rect = viewer.getBoundingClientRect();
-    const hit = viewer.positionAndNormalFromPoint(
-      event.clientX - rect.left,
-      event.clientY - rect.top
-    );
-    if (!hit) return;
-
-    const point = {
+    const hit = viewer.positionAndNormalFromPoint(rect.width / 2, rect.height / 2);
+    if (!hit) {
+      setCrosshairPoint(null);
+      return;
+    }
+    setCrosshairPoint({
       x: hit.position.x,
       y: hit.position.y,
       z: hit.position.z,
       nx: hit.normal.x,
       ny: hit.normal.y,
       nz: hit.normal.z,
+    });
+  }
+
+  useEffect(() => {
+    if (!placingHoleTarget || expandedView !== "model") {
+      setCrosshairPoint(null);
+      return;
+    }
+    const viewer = modalModelViewerRef.current;
+    if (!viewer) return;
+    const handle = () => recomputeCrosshairPoint(viewer);
+    handle();
+    viewer.addEventListener("camera-change", handle);
+    viewer.addEventListener("load", handle);
+    return () => {
+      viewer.removeEventListener("camera-change", handle);
+      viewer.removeEventListener("load", handle);
     };
+  }, [placingHoleTarget, expandedView]);
+
+  function confirmPlacement() {
+    if (!crosshairPoint || !placingHoleTarget) return;
     if (placingHoleTarget === "top") {
-      setValue("holePosition", point);
-    } else if (placingHoleTarget === "bottom") {
-      setValue("bottomHolePosition", point);
+      setValue("holePosition", crosshairPoint);
+    } else {
+      setValue("bottomHolePosition", crosshairPoint);
     }
+    setPlacingHoleTarget(null);
   }
 
-  // Camera rotation (model-viewer's own camera-controls) is left fully enabled
-  // at all times, even while placing a hole. A "tap" (small movement, short
-  // duration) places/moves the point; anything bigger is treated as a drag to
-  // orbit the camera and is left alone, so users can freely rotate to see the
-  // underside of the model before tapping where they want the hole.
-  const TAP_MAX_DISTANCE_PX = 8;
-  const TAP_MAX_DURATION_MS = 400;
-
-  function handlePlacementPointerDown(
-    viewer: ModelViewerElement | null,
-    event: React.PointerEvent<HTMLElement>
-  ) {
-    if (!placingHoleTarget || !viewer) return;
-    pointerDownInfoRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-      time: Date.now(),
-    };
-  }
-
-  function handlePlacementPointerUp(
-    viewer: ModelViewerElement | null,
-    event: React.PointerEvent<HTMLElement>
-  ) {
-    if (!placingHoleTarget || !viewer) return;
-    const start = pointerDownInfoRef.current;
-    pointerDownInfoRef.current = null;
-    if (!start) return;
-
-    const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-    const duration = Date.now() - start.time;
-    if (distance > TAP_MAX_DISTANCE_PX || duration > TAP_MAX_DURATION_MS) {
-      return; // was a drag to orbit the camera, not a tap to place the hole
-    }
-    updatePlacementPoint(viewer, event);
+  function closeExpandedView() {
+    setExpandedView(null);
+    setPlacingHoleTarget(null);
   }
 
   function normalAttr(
@@ -733,17 +740,7 @@ export function PreviewPanel({
               camera-controls
               auto-rotate={!placingHoleTarget}
               shadow-intensity="1"
-              style={{
-                width: "100%",
-                height: "100%",
-                cursor: placingHoleTarget ? "crosshair" : undefined,
-              }}
-              onPointerDown={(event) =>
-                handlePlacementPointerDown(modelViewerRef.current, event)
-              }
-              onPointerUp={(event) =>
-                handlePlacementPointerUp(modelViewerRef.current, event)
-              }
+              style={{ width: "100%", height: "100%" }}
             >
               {holePosition && (
                 <button
@@ -909,7 +906,7 @@ export function PreviewPanel({
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-slate-600">
             <span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-500 align-middle" />
-            上の穴（金具用）を開ける位置をモデル上で指定できます（回転させてタップするだけ）
+            上の穴（金具用）を開ける位置をモデル上で指定できます（回転させて照準を合わせるだけ）
           </p>
           <button
             type="button"
@@ -1026,11 +1023,11 @@ export function PreviewPanel({
       {expandedView && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setExpandedView(null)}
+          onClick={closeExpandedView}
         >
           <button
             type="button"
-            onClick={() => setExpandedView(null)}
+            onClick={closeExpandedView}
             aria-label="閉じる"
             className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-slate-700 shadow hover:bg-white"
           >
@@ -1048,17 +1045,7 @@ export function PreviewPanel({
                 camera-controls
                 auto-rotate={!placingHoleTarget}
                 shadow-intensity="1"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  cursor: placingHoleTarget ? "crosshair" : undefined,
-                }}
-                onPointerDown={(event) =>
-                  handlePlacementPointerDown(modalModelViewerRef.current, event)
-                }
-                onPointerUp={(event) =>
-                  handlePlacementPointerUp(modalModelViewerRef.current, event)
-                }
+                style={{ width: "100%", height: "100%" }}
               >
                 {holePosition && (
                   <button
@@ -1084,25 +1071,59 @@ export function PreviewPanel({
                     aria-label="下の穴（コルク用）の位置"
                   />
                 )}
+                {placingHoleTarget && crosshairPoint && (
+                  <button
+                    type="button"
+                    slot="hotspot-crosshair-preview"
+                    data-position={`${crosshairPoint.x}m ${crosshairPoint.y}m ${crosshairPoint.z}m`}
+                    data-normal={normalAttr(
+                      crosshairPoint,
+                      placingHoleTarget === "top" ? [0, 1, 0] : [0, -1, 0]
+                    )}
+                    className={`pointer-events-none flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white shadow ${
+                      placingHoleTarget === "top" ? "bg-red-500/60" : "bg-amber-500/60"
+                    }`}
+                    aria-hidden="true"
+                  />
+                )}
               </model-viewer>
             )}
             {expandedView === "model" && placingHoleTarget && (
               <>
-                <p className="pointer-events-none absolute inset-x-0 top-4 z-10 text-center text-sm font-medium text-white">
-                  モデルを回転・拡大できます。
-                  {placingHoleTarget === "top" ? "上の穴" : "下の穴"}
-                  を開けたい場所を軽くタップしてください
-                </p>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setPlacingHoleTarget(null);
-                  }}
-                  className="absolute inset-x-0 bottom-4 z-10 mx-auto w-fit rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 shadow hover:bg-slate-100"
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow"
                 >
-                  完了
-                </button>
+                  <Crosshair className="h-8 w-8" strokeWidth={1.5} />
+                </div>
+                <p className="pointer-events-none absolute inset-x-0 top-4 z-10 text-center text-sm font-medium text-white">
+                  モデルを回転させて、
+                  {placingHoleTarget === "top" ? "上の穴" : "下の穴"}
+                  を開けたい場所を中央の照準に合わせてください
+                </p>
+                <div className="absolute inset-x-0 bottom-4 z-10 flex justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setPlacingHoleTarget(null);
+                    }}
+                    className="rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow hover:bg-white"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!crosshairPoint}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      confirmPlacement();
+                    }}
+                    className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 shadow hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    ここに指定する
+                  </button>
+                </div>
               </>
             )}
             {expandedView === "preview" && activePreview.phase === "success" && (

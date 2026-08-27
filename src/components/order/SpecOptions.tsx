@@ -1,6 +1,7 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { Gem, Minus, Plus } from "lucide-react";
+import Image from "next/image";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { PetDetailsFields } from "@/components/order/PetDetailsFields";
 import { InfoModalButton } from "@/components/ui/InfoModalButton";
@@ -19,8 +20,16 @@ import {
   MAX_TOTAL_QUANTITY,
   POSE_OPTIONS,
   SIZE_LABELS,
+  type MagicColor,
   type OrderFormValues,
 } from "@/types/order";
+
+const COLOR_IMAGE_SRC: Record<MagicColor, string | null> = {
+  starryBlue: "/colors/starryBlue.jpg",
+  galaxyGreen: "/colors/galaxyGreen.jpg",
+  clearAurora: "/colors/clearAurora.jpg",
+  furCavity: null,
+};
 
 export function SpecOptions() {
   const {
@@ -131,68 +140,88 @@ export function SpecOptions() {
           control={control}
           render={({ field, fieldState }) => (
             <div className="space-y-2">
-              <div className="grid gap-2">
+              <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2">
                 {MAGIC_COLOR_OPTIONS.map((color) => {
                   const value = field.value[color];
+                  const imageSrc = COLOR_IMAGE_SRC[color];
                   return (
                     <div
                       key={color}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
+                      className="w-32 shrink-0 snap-start overflow-hidden rounded-xl border border-slate-200 bg-white"
                     >
-                      <span className="flex items-center gap-1.5 text-sm font-medium text-slate-900">
-                        {MAGIC_COLOR_LABELS[color]}
-                        {color === "furCavity" && (
-                          <InfoModalButton
-                            label="毛入れ用フィギュアの使い方を見る"
-                            title="毛入れ用フィギュアの使い方"
-                            imageSrc="/guide/fur-cavity-howto.jpg"
-                            imageAlt="コルク栓と穴にピンセットで毛を詰める様子のイメージ"
-                          >
-                            <p>
-                              底面に直径{DEFAULT_BOTTOM_HOLE_DIAMETER_MM}
-                              mmの穴が空いた状態でお届けします。ピンセットなどで愛犬・愛猫の毛を少しずつ詰めていただき、最後にコルク栓で蓋をしてください。
-                            </p>
-                            <p className="mt-1 text-[10px] text-slate-400">
-                              ※画像はイメージを伝えるためのAI生成イラストです（実際の商品写真ではありません）
-                            </p>
-                          </InfoModalButton>
+                      <div className="relative aspect-square bg-slate-100">
+                        {imageSrc ? (
+                          <Image
+                            src={imageSrc}
+                            alt={MAGIC_COLOR_LABELS[color]}
+                            fill
+                            sizes="128px"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Gem className="h-8 w-8 text-slate-300" />
+                          </div>
                         )}
-                      </span>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            field.onChange({
-                              ...field.value,
-                              [color]: Math.max(0, value - 1),
-                            })
-                          }
-                          disabled={value <= 0}
-                          aria-label={`${MAGIC_COLOR_LABELS[color]}を減らす`}
-                          className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
-                        >
-                          <Minus className="h-3.5 w-3.5" />
-                        </button>
-                        <span className="w-5 text-center text-sm tabular-nums text-slate-900">
-                          {value}
+                      </div>
+                      <div className="space-y-1.5 p-2">
+                        <span className="flex min-h-[2rem] items-start gap-1 text-xs font-medium leading-tight text-slate-900">
+                          <span className="line-clamp-2">
+                            {MAGIC_COLOR_LABELS[color]}
+                          </span>
+                          {color === "furCavity" && (
+                            <InfoModalButton
+                              label="毛入れ用フィギュアの使い方を見る"
+                              title="毛入れ用フィギュアの使い方"
+                              imageSrc="/guide/fur-cavity-howto.jpg"
+                              imageAlt="コルク栓と穴にピンセットで毛を詰める様子のイメージ"
+                            >
+                              <p>
+                                底面に直径{DEFAULT_BOTTOM_HOLE_DIAMETER_MM}
+                                mmの穴が空いた状態でお届けします。ピンセットなどで愛犬・愛猫の毛を少しずつ詰めていただき、最後にコルク栓で蓋をしてください。
+                              </p>
+                              <p className="mt-1 text-[10px] text-slate-400">
+                                ※画像はイメージを伝えるためのAI生成イラストです（実際の商品写真ではありません）
+                              </p>
+                            </InfoModalButton>
+                          )}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            field.onChange({
-                              ...field.value,
-                              [color]: Math.min(
-                                MAX_TOTAL_QUANTITY,
-                                value + 1
-                              ),
-                            })
-                          }
-                          disabled={totalQuantity >= MAX_TOTAL_QUANTITY}
-                          aria-label={`${MAGIC_COLOR_LABELS[color]}を増やす`}
-                          className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex shrink-0 items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              field.onChange({
+                                ...field.value,
+                                [color]: Math.max(0, value - 1),
+                              })
+                            }
+                            disabled={value <= 0}
+                            aria-label={`${MAGIC_COLOR_LABELS[color]}を減らす`}
+                            className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="w-5 text-center text-sm tabular-nums text-slate-900">
+                            {value}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              field.onChange({
+                                ...field.value,
+                                [color]: Math.min(
+                                  MAX_TOTAL_QUANTITY,
+                                  value + 1
+                                ),
+                              })
+                            }
+                            disabled={totalQuantity >= MAX_TOTAL_QUANTITY}
+                            aria-label={`${MAGIC_COLOR_LABELS[color]}を増やす`}
+                            className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

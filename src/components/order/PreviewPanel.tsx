@@ -104,6 +104,54 @@ type GeneratedModel = {
   pose: Pose;
 };
 
+type Vec3 = [number, number, number];
+
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+function dot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+function normalizeVec(v: Vec3): Vec3 {
+  const len = Math.hypot(v[0], v[1], v[2]);
+  return len > 1e-6 ? [v[0] / len, v[1] / len, v[2] / len] : [0, 0, 0];
+}
+
+/**
+ * Projects a world-space surface normal onto the current camera's screen plane, so a flat
+ * 2D marker can show which way the surface actually faces (and how face-on vs. edge-on it
+ * is to the current view) without needing access to model-viewer's internal Three.js scene.
+ * Derived purely from the public camera-orbit spherical angles (model-viewer's own
+ * theta/phi convention: phi from the +Y pole, theta around Y from +Z).
+ */
+function computeNormalScreenArrow(
+  normal: Vec3,
+  orbit: { theta: number; phi: number }
+): { angleDeg: number; magnitude: number } {
+  const towardCamera: Vec3 = [
+    Math.sin(orbit.phi) * Math.sin(orbit.theta),
+    Math.cos(orbit.phi),
+    Math.sin(orbit.phi) * Math.cos(orbit.theta),
+  ];
+  const forward: Vec3 = [-towardCamera[0], -towardCamera[1], -towardCamera[2]];
+  const worldUp: Vec3 = [0, 1, 0];
+  let right = normalizeVec(cross(forward, worldUp));
+  if (right[0] === 0 && right[1] === 0 && right[2] === 0) {
+    right = [1, 0, 0]; // camera looking straight up/down the Y axis; arbitrary but stable fallback
+  }
+  const camUp = normalizeVec(cross(right, forward));
+
+  const dx = dot(normal, right);
+  const dy = -dot(normal, camUp); // screen Y grows downward, world/camera "up" grows upward
+  const magnitude = Math.max(0.15, Math.min(1, Math.hypot(dx, dy)));
+  const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return { angleDeg, magnitude };
+}
+
 type ColorPreviewState =
   | { phase: "idle" }
   | { phase: "generating" }
@@ -222,6 +270,10 @@ export function PreviewPanel({
     nx: number;
     ny: number;
     nz: number;
+  } | null>(null);
+  const [crosshairArrow, setCrosshairArrow] = useState<{
+    angleDeg: number;
+    magnitude: number;
   } | null>(null);
   const modelBufferCacheRef = useRef<{ url: string; buffer: ArrayBuffer } | null>(
     null
@@ -641,6 +693,7 @@ export function PreviewPanel({
     const hit = viewer.positionAndNormalFromPoint(rect.width / 2, rect.height / 2);
     if (!hit) {
       setCrosshairPoint(null);
+      setCrosshairArrow(null);
       return;
     }
     setCrosshairPoint({
@@ -651,11 +704,18 @@ export function PreviewPanel({
       ny: hit.normal.y,
       nz: hit.normal.z,
     });
+    setCrosshairArrow(
+      computeNormalScreenArrow(
+        [hit.normal.x, hit.normal.y, hit.normal.z],
+        viewer.getCameraOrbit()
+      )
+    );
   }
 
   useEffect(() => {
     if (!placingHoleTarget || expandedView !== "model") {
       setCrosshairPoint(null);
+      setCrosshairArrow(null);
       return;
     }
     const viewer = modalModelViewerRef.current;
@@ -1080,11 +1140,62 @@ export function PreviewPanel({
                       crosshairPoint,
                       placingHoleTarget === "top" ? [0, 1, 0] : [0, -1, 0]
                     )}
-                    className={`pointer-events-none flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white shadow ${
-                      placingHoleTarget === "top" ? "bg-red-500/60" : "bg-amber-500/60"
-                    }`}
+                    className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
                     aria-hidden="true"
-                  />
+                  >
+                    {/* Surface indicator: the short perpendicular line is the tangent
+                        plane seen edge-on, the arrow is the outward normal, both
+                        projected into current screen space from computeNormalScreenArrow
+                        (see its comment for why this can't just use the real 3D normal). */}
+                    <svg
+                      width="44"
+                      height="44"
+                      viewBox="0 0 44 44"
+                      style={{
+                        transform: `rotate(${crosshairArrow?.angleDeg ?? 0}deg)`,
+                      }}
+                    >
+                      <g
+                        stroke={placingHoleTarget === "top" ? "#ef4444" : "#f59e0b"}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                      >
+                        <line
+                          x1={22}
+                          y1={22 - 10}
+                          x2={22}
+                          y2={22 + 10}
+                          opacity={0.85}
+                        />
+                        <line
+                          x1={22}
+                          y1={22}
+                          x2={22 + 16 * (crosshairArrow?.magnitude ?? 0.15)}
+                          y2={22}
+                        />
+                        <line
+                          x1={22 + 16 * (crosshairArrow?.magnitude ?? 0.15) - 4}
+                          y1={22 - 4}
+                          x2={22 + 16 * (crosshairArrow?.magnitude ?? 0.15)}
+                          y2={22}
+                        />
+                        <line
+                          x1={22 + 16 * (crosshairArrow?.magnitude ?? 0.15) - 4}
+                          y1={22 + 4}
+                          x2={22 + 16 * (crosshairArrow?.magnitude ?? 0.15)}
+                          y2={22}
+                        />
+                      </g>
+                      <circle
+                        cx={22}
+                        cy={22}
+                        r={4}
+                        fill={placingHoleTarget === "top" ? "#ef4444" : "#f59e0b"}
+                        stroke="white"
+                        strokeWidth={1.5}
+                      />
+                    </svg>
+                  </button>
                 )}
               </model-viewer>
             )}

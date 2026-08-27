@@ -1,6 +1,7 @@
 "use client";
 
 import { arrayRemove, arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
+import JSZip from "jszip";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -26,6 +27,7 @@ function BatchGridDashboard({ id }: { id: string }) {
   const [plateResults, setPlateResults] = useState<PlateResult[] | null>(null);
   const [plateGenerating, setPlateGenerating] = useState(false);
   const [plateError, setPlateError] = useState<string | null>(null);
+  const [zippingPlate, setZippingPlate] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +89,28 @@ function BatchGridDashboard({ id }: { id: string }) {
     }
   }
 
+  async function handleDownloadPlateZip(plate: PlateResult) {
+    setZippingPlate(plate.index);
+    try {
+      const zip = new JSZip();
+      await Promise.all(
+        plate.items.map(async (item) => {
+          const res = await fetch(item.url);
+          zip.file(`${item.gridId}.stl`, await res.arrayBuffer());
+        })
+      );
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${batch?.id ?? "batch"}-plate${plate.index}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setZippingPlate(null);
+    }
+  }
+
   if (batch === undefined) {
     return <p className="text-sm text-slate-500">読み込み中...</p>;
   }
@@ -134,9 +158,21 @@ function BatchGridDashboard({ id }: { id: string }) {
               </p>
               {plateResults.map((plate) => (
                 <div key={plate.index}>
-                  <p className="mb-1 text-xs font-semibold text-slate-500">
-                    プレート{plate.index}（{plate.itemCount}個）
-                  </p>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-500">
+                      プレート{plate.index}（{plate.itemCount}個）
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPlateZip(plate)}
+                      disabled={zippingPlate === plate.index}
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      {zippingPlate === plate.index
+                        ? "まとめています..."
+                        : "まとめてダウンロード(ZIP)"}
+                    </button>
+                  </div>
                   <div className="space-y-1">
                     {plate.items.map((item) => (
                       <div

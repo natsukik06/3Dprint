@@ -191,17 +191,25 @@ export async function generateFinishedPreview(
   const client = getClient();
   const interiorPhrase =
     magicColor === "furCavity"
-      ? "The inside is left completely empty and hollow, ready for the owner to add " +
-        "their own keepsake later. A small round cork stopper is visible on the " +
-        "underside where it can be opened and resealed."
-      : `The inside is filled with ${MAGIC_COLOR_PHRASES[magicColor]}. Sealed with a ` +
-        "rustic wooden cork at the bottom.";
+      ? "The whole figure is carved from clear, colorless glass-like crystal, and the " +
+        "inside is left completely empty and hollow, ready for the owner to add their " +
+        "own keepsake later."
+      : `The entire figure -- every part of the body, face, and fur -- is carved from ` +
+        `ONE single uniform block of solid-colored translucent crystal resin: ` +
+        `${MAGIC_COLOR_PHRASES[magicColor]} runs evenly through the whole piece, the ` +
+        "same way it does in the attached product reference photo, not just filling " +
+        "a cavity inside a clear outer shell.";
   const prompt =
-    `A highly detailed, photorealistic macro photography of ${subject} figurine, in ` +
-    `${POSE_PHRASES[pose]}. The entire body is made of ultra-clear glass-like resin. ` +
-    `${interiorPhrase} Cinematic lighting, centered composition, no text or ` +
-    "watermark. Use the attached reference photos to match the subject's shape, " +
-    "features, and identity." +
+    `A highly detailed, photorealistic macro photography of a ${subject} figurine ` +
+    `keychain, in ${POSE_PHRASES[pose]}. ${interiorPhrase} Do not depict the subject's ` +
+    "real fur colors, markings, or facial coloring anywhere -- only the overall body " +
+    "shape and silhouette should be recognizable; the material itself must read as " +
+    "solid, three-dimensional colored glass with tiny sparkling glitter suspended " +
+    "inside, never a flat illustration and never realistically colored/textured fur. " +
+    "Do not show any cork, wooden base, keychain hardware, or other object -- just " +
+    "the bare crystal figurine by itself. Cinematic lighting, centered composition, " +
+    "no text or watermark. Use the attached reference photos only to match the " +
+    "subject's shape, pose, and identity, not its real coloring." +
     petDetailsPhrase(petDetails);
 
   return generateImage(client, referencePhotos, prompt);

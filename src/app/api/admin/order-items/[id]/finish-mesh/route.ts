@@ -1,46 +1,23 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdminRequest } from "@/lib/adminAuth";
-import { adminDb, adminStorage } from "@/lib/firebaseAdmin";
-import { cutHoles, hollowMesh, type HoleSpec } from "@/lib/meshBoolean";
-import { boundsOfTriangles, computeScaleFactor, extractWorldTriangles } from "@/lib/modelScaling";
-import { trianglesToStl } from "@/lib/stl";
-import {
-  DEFAULT_DRAIN_HOLE_DIAMETER_MM,
-  HARDWARE_HOLE_DIAMETER_MM,
-  type BoundingBoxMm,
-  type HolePoint,
-} from "@/types/order";
+import { adminDb } from "@/lib/firebaseAdmin";
 
 // Matches the real production process: 0.8mm shell, later filled with
 // clear epoxy + glitter through the cork hole (see production workflow).
 const DEFAULT_WALL_THICKNESS_MM = 0.8;
 // How finely the erosion sphere used for hollowing is approximated (see hollowMesh in
-// meshBoolean.ts) -- more segments means a smoother inner wall at the cost of more triangles
-// and slower boolean ops. Clamped to a sane range since this comes from the admin UI.
+// functions/src/lib/meshBoolean.ts) -- more segments means a smoother inner wall at the cost of
+// more triangles and slower boolean ops. Clamped to a sane range since this comes from the admin UI.
 const DEFAULT_SPHERE_SEGMENTS = 32;
 const MIN_SPHERE_SEGMENTS = 8;
 const MAX_SPHERE_SEGMENTS = 64;
 
-function buildPublicUrl(bucketName: string, path: string): string {
-  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
-    path
-  )}?alt=media`;
-}
-
-function scalePoint(p: HolePoint, factor: number): [number, number, number] {
-  return [p.x * factor, p.y * factor, p.z * factor];
-}
-
-// Direction is scale-invariant (our scaling is always uniform), so the
-// captured surface normal can be reused as-is. Falls back to vertical for
-// records saved before normal capture was added.
-function holeDirection(p: HolePoint): [number, number, number] {
-  if (typeof p.nx === "number" && typeof p.ny === "number" && typeof p.nz === "number") {
-    return [p.nx, p.ny, p.nz];
-  }
-  return [0, 1, 0];
-}
-
+// The actual hollowing/hole-cutting work (manifold-3d boolean ops) runs in a Firebase Cloud
+// Function (functions/src/index.ts, triggered by this job doc being created), not inline here --
+// it's CPU-heavy enough to risk exceeding Vercel's serverless function timeout, and Cloud
+// Functions gives it real headroom (up to 9 minutes) plus more memory. This route just enqueues
+// the job and returns immediately; the admin UI watches the job doc for progress/completion.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -69,104 +46,27 @@ export async function POST(
   }
 
   try {
-    const itemRef = adminDb.collection("order_items").doc(itemId);
-    const snap = await itemRef.get();
-    if (!snap.exists) {
+    const itemSnap = await adminDb.collection("order_items").doc(itemId).get();
+    if (!itemSnap.exists) {
       return NextResponse.json({ error: "アイテムが見つかりません" }, { status: 404 });
     }
-    const item = snap.data() as {
-      modelUrl: string | null;
-      scaledModelUrl: string | null;
-      modelBoundingBoxMm: BoundingBoxMm | null;
-      scaledBoundingBoxMm: BoundingBoxMm | null;
-      wantsHardware: boolean;
-      holePosition: HolePoint | null;
-      bottomHolePosition: HolePoint | null;
-      bottomHoleDiameterMm: number | null;
-    };
 
-    const sourceUrl = item.scaledModelUrl ?? item.modelUrl;
-    if (!sourceUrl) {
-      return NextResponse.json({ error: "3Dモデルが未生成のため処理できません" }, { status: 400 });
-    }
-    const usingScaledModel = Boolean(item.scaledModelUrl);
-    const scaleFactor =
-      usingScaledModel && item.modelBoundingBoxMm && item.scaledBoundingBoxMm
-        ? computeScaleFactor(item.modelBoundingBoxMm, item.scaledBoundingBoxMm)
-        : 1;
-
-    const modelRes = await fetch(sourceUrl);
-    if (!modelRes.ok) throw new Error(`モデルのダウンロードに失敗しました: ${modelRes.status}`);
-    const buffer = Buffer.from(await modelRes.arrayBuffer());
-    const originalTriangles = extractWorldTriangles(buffer);
-
-    const hollowed = await hollowMesh(originalTriangles, wallThicknessMm, sphereSegments);
-
-    const holes: HoleSpec[] = [];
-    if (item.wantsHardware && item.holePosition) {
-      holes.push({
-        position: scalePoint(item.holePosition, scaleFactor),
-        diameterMm: HARDWARE_HOLE_DIAMETER_MM,
-        direction: holeDirection(item.holePosition),
-      });
-    }
-    if (item.bottomHolePosition && item.bottomHoleDiameterMm) {
-      holes.push({
-        position: scalePoint(item.bottomHolePosition, scaleFactor),
-        diameterMm: item.bottomHoleDiameterMm,
-        direction: holeDirection(item.bottomHolePosition),
-      });
-    }
-    const ventHoleSource: "auto" | "customer" = holes.length > 0 ? "customer" : "auto";
-
-    // The hollowed cavity must never end up sealed: if the customer didn't
-    // request a hardware/cork hole, drill a small drain hole straight up
-    // through the model's bottom-center so it always vents automatically.
-    const { min: hollowedMin, max: hollowedMax } = boundsOfTriangles(hollowed);
-    if (holes.length === 0) {
-      holes.push({
-        position: [
-          (hollowedMin[0] + hollowedMax[0]) / 2,
-          hollowedMin[1],
-          (hollowedMin[2] + hollowedMax[2]) / 2,
-        ],
-        diameterMm: DEFAULT_DRAIN_HOLE_DIAMETER_MM,
-        direction: [0, 1, 0],
-      });
-    }
-
-    const maxDim = Math.max(
-      hollowedMax[0] - hollowedMin[0],
-      hollowedMax[1] - hollowedMin[1],
-      hollowedMax[2] - hollowedMin[2]
-    );
-    const finalTriangles = await cutHoles(hollowed, holes, maxDim * 2);
-
-    const stl = trianglesToStl(finalTriangles);
-    const bucket = adminStorage.bucket();
-    const path = `models/${itemId}-finished.stl`;
-    await bucket.file(path).save(stl, { contentType: "model/stl" });
-    const finishedModelUrl = buildPublicUrl(bucket.name, path);
-
-    await itemRef.update({
-      finishedModelUrl,
-      wallThicknessMm,
-      sphereSegments,
-      hasVentHole: true,
-      ventHoleSource,
+    const jobRef = await adminDb.collection("jobs").add({
+      type: "finish-mesh",
+      status: "queued",
+      progress: 0,
+      message: null,
+      params: { itemId, wallThicknessMm, sphereSegments },
+      result: null,
+      error: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
-    return NextResponse.json({
-      finishedModelUrl,
-      wallThicknessMm,
-      sphereSegments,
-      holesCut: holes.length,
-      hasVentHole: true,
-      ventHoleSource,
-    });
+    return NextResponse.json({ jobId: jobRef.id });
   } catch (error) {
-    console.error("finish-mesh failed", error);
-    const message = error instanceof Error ? error.message : "処理に失敗しました";
+    console.error("finish-mesh job enqueue failed", error);
+    const message = error instanceof Error ? error.message : "処理の予約に失敗しました";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

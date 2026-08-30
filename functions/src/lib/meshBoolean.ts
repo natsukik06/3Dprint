@@ -1,5 +1,12 @@
+// Mirrored from src/lib/meshBoolean.ts -- keep in sync if that file changes.
+//
+// manifold-3d is ESM-only (package.json has "type": "module", no "require" export condition),
+// which is why this whole Functions package is also built as ESM (see tsconfig.json's
+// module/moduleResolution: NodeNext + package.json's "type": "module") -- a CommonJS build's
+// `require("manifold-3d")` fails with ERR_PACKAGE_PATH_NOT_EXPORTED at Cloud Functions deploy-time
+// analysis. As real ESM, this static import resolves normally.
 import Module, { type Manifold as ManifoldInstance, type ManifoldToplevel } from "manifold-3d";
-import { buildAlignAndTranslate } from "@/lib/rotation";
+import { buildAlignAndTranslate } from "./rotation.js";
 
 let wasmPromise: Promise<ManifoldToplevel> | null = null;
 
@@ -13,15 +20,6 @@ function initManifold(): Promise<ManifoldToplevel> {
   return wasmPromise;
 }
 
-/**
- * Builds a Manifold solid from a flat triangle-soup array (as returned by
- * modelScaling.extractWorldTriangles). Triangles don't share vertex indices,
- * so we weld coincident positions via Mesh.merge() before constructing the
- * Manifold. Throws if the welded mesh isn't a valid oriented 2-manifold
- * (e.g. the source model has gaps/non-manifold geometry, which can happen
- * with AI-generated meshes) — callers should surface this as a clear error
- * rather than silently producing broken geometry.
- */
 async function trianglesToManifold(triangles: Float32Array): Promise<ManifoldInstance> {
   const wasm = await initManifold();
   const vertCount = triangles.length / 3;
@@ -62,17 +60,9 @@ function manifoldToTriangles(manifold: ManifoldInstance): Float32Array {
 }
 
 /**
- * Hollows a solid triangle-soup mesh by a uniform wall thickness using
- * morphological erosion (Manifold.minkowskiDifference against a sphere of
- * radius = wallThicknessMm), then subtracting the eroded cavity from the
- * original solid. This is robust for concave/organic shapes (unlike naive
- * vertex-normal offsetting): regions thinner than 2x wallThicknessMm simply
- * stay solid rather than self-intersecting, which is the physically correct
- * outcome.
- *
- * NOTE: the returned shell has a fully sealed interior cavity. For resin
- * printing this traps uncured resin — callers should also cut a drain/vent
- * hole (see cutHoles) before this is print-ready.
+ * Hollows a solid triangle-soup mesh by a uniform wall thickness using morphological erosion
+ * (Manifold.minkowskiDifference against a sphere of radius = wallThicknessMm), then subtracting
+ * the eroded cavity from the original solid.
  */
 export async function hollowMesh(
   triangles: Float32Array,
@@ -103,23 +93,10 @@ export async function hollowMesh(
 export type HoleSpec = {
   position: [number, number, number];
   diameterMm: number;
-  /**
-   * World-space direction the hole is drilled along (need not be normalized).
-   * Since the cylinder is centered on `position` and drilled through in both
-   * directions, the sign doesn't matter — only the axis it defines. Defaults
-   * to straight up ([0, 1, 0]) when omitted (e.g. legacy hole records saved
-   * before surface-normal capture was added).
-   */
   direction?: [number, number, number];
 };
 
-/**
- * Cuts one or more cylindrical holes through a triangle-soup mesh via a real
- * boolean difference (manifold-3d), returning the resulting triangle soup.
- * `throughLengthMm` should comfortably exceed the model's own extent along
- * the drill axis so every hole cuts all the way through regardless of local
- * wall thickness — callers should pass ~2x the model's bounding box diagonal.
- */
+/** Cuts one or more cylindrical holes through a triangle-soup mesh via a real boolean difference. */
 export async function cutHoles(
   triangles: Float32Array,
   holes: HoleSpec[],

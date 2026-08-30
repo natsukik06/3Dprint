@@ -12,6 +12,7 @@ import {
   POSE_LABELS,
   formatYen,
 } from "@/lib/pricing";
+import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
 import {
   MAGIC_COLOR_OPTIONS,
   ORDER_STATUS_LABELS,
@@ -47,7 +48,7 @@ type ItemProduction = OrderItemRecord & { id: string };
 
 // Matches DEFAULT_WALL_THICKNESS_MM in the finish-mesh API route.
 const DEFAULT_WALL_THICKNESS_MM = 0.8;
-// Matches hollowMesh's own default in meshBoolean.ts.
+// Matches hollowMesh's own default in functions/src/lib/meshBoolean.ts.
 const DEFAULT_SPHERE_SEGMENTS = 32;
 const ACCURACY_PRESETS = [
   { segments: 16, label: "粗い（高速）" },
@@ -80,6 +81,7 @@ function ItemCard({
   const [reprocessError, setReprocessError] = useState<string | null>(null);
   const [finishingMesh, setFinishingMesh] = useState(false);
   const [finishMeshError, setFinishMeshError] = useState<string | null>(null);
+  const [finishMeshProgress, setFinishMeshProgress] = useState<JobSnapshot | null>(null);
   const [wallThicknessMm, setWallThicknessMm] = useState(DEFAULT_WALL_THICKNESS_MM);
   const [sphereSegments, setSphereSegments] = useState<number>(DEFAULT_SPHERE_SEGMENTS);
 
@@ -123,6 +125,7 @@ function ItemCard({
     if (!user || !production) return;
     setFinishingMesh(true);
     setFinishMeshError(null);
+    setFinishMeshProgress(null);
     try {
       const idToken = await user.getIdToken();
       const res = await fetch(`/api/admin/order-items/${production.id}/finish-mesh`, {
@@ -134,12 +137,16 @@ function ItemCard({
         body: JSON.stringify({ wallThicknessMm, sphereSegments }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "処理に失敗しました");
+      if (!res.ok) throw new Error(json.error ?? "処理の予約に失敗しました");
+      // The Cloud Function does the actual (potentially multi-minute) work; this just watches
+      // the job doc it updates until it finishes.
+      await waitForJob(json.jobId as string, setFinishMeshProgress);
       await refetchProduction();
     } catch (err) {
       setFinishMeshError(err instanceof Error ? err.message : "処理に失敗しました");
     } finally {
       setFinishingMesh(false);
+      setFinishMeshProgress(null);
     }
   }
 
@@ -374,6 +381,19 @@ function ItemCard({
                       ? "中空化・穴あけを再実行"
                       : "中空化・穴あけ処理を実行"}
                 </button>
+                {finishingMesh && finishMeshProgress && (
+                  <div className="mt-2">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full rounded-full bg-slate-800 transition-all"
+                        style={{ width: `${finishMeshProgress.progress}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      {finishMeshProgress.message ?? "処理中..."}
+                    </p>
+                  </div>
+                )}
                 {finishMeshError && (
                   <p className="mt-1 text-xs text-red-600">{finishMeshError}</p>
                 )}

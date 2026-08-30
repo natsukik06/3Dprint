@@ -9,6 +9,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { buildGridSequence } from "@/lib/batches";
 import { db } from "@/lib/firebase";
 import { PLATE_DEPTH_MM, PLATE_WIDTH_MM } from "@/lib/plateLayout";
+import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
 import type { PrintBatchRecord } from "@/types/batch";
 import styles from "./print.module.css";
 
@@ -27,6 +28,7 @@ function BatchGridDashboard({ id }: { id: string }) {
   const [plateResults, setPlateResults] = useState<PlateResult[] | null>(null);
   const [plateGenerating, setPlateGenerating] = useState(false);
   const [plateError, setPlateError] = useState<string | null>(null);
+  const [plateProgress, setPlateProgress] = useState<JobSnapshot | null>(null);
   const [zippingPlate, setZippingPlate] = useState<number | null>(null);
 
   useEffect(() => {
@@ -73,6 +75,7 @@ function BatchGridDashboard({ id }: { id: string }) {
     if (!user) return;
     setPlateGenerating(true);
     setPlateError(null);
+    setPlateProgress(null);
     try {
       const idToken = await user.getIdToken();
       const res = await fetch(`/api/admin/batches/${id}/plate-layout`, {
@@ -80,12 +83,18 @@ function BatchGridDashboard({ id }: { id: string }) {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "プレート配置の生成に失敗しました");
-      setPlateResults(json.plates);
+      if (!res.ok) throw new Error(json.error ?? "プレート配置の予約に失敗しました");
+      // The Cloud Function downloads/packs/writes every item's STL (can take a while for a full
+      // batch); this just watches the job doc it updates until it finishes.
+      const result = (await waitForJob(json.jobId as string, setPlateProgress)) as {
+        plates: PlateResult[];
+      };
+      setPlateResults(result.plates);
     } catch (err) {
       setPlateError(err instanceof Error ? err.message : "プレート配置の生成に失敗しました");
     } finally {
       setPlateGenerating(false);
+      setPlateProgress(null);
     }
   }
 
@@ -122,14 +131,19 @@ function BatchGridDashboard({ id }: { id: string }) {
 
   return (
     <div className={styles.page}>
-      <div className={`mb-4 flex items-center justify-between gap-3 ${styles.noPrint}`}>
+      <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 ${styles.noPrint}`}>
         <Link
           href="/admin/batches"
           className="text-sm text-slate-600 underline underline-offset-2"
         >
           ← バッチ一覧に戻る
         </Link>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {plateGenerating && plateProgress && (
+            <p className="text-xs text-slate-500">
+              {plateProgress.message ?? "処理中..."}（{plateProgress.progress}%）
+            </p>
+          )}
           <button
             type="button"
             onClick={handleGeneratePlateLayout}

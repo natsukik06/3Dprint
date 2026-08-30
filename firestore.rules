@@ -24,6 +24,12 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow create, delete: if false;
     }
+    match /jobs/{jobId} {
+      // Admin UI polls these for progress; only the Admin SDK (API route + Cloud Function)
+      // creates/updates them.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;

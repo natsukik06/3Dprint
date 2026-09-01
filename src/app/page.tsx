@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRef } from "react";
 import { Zen_Old_Mincho, Zen_Kaku_Gothic_New } from "next/font/google";
-import { Gem, Moon, Smartphone } from "lucide-react";
+import { Moon, Smartphone } from "lucide-react";
 import { FIGURE_PRICE_YEN } from "@/lib/pricing";
 import { IntroSplash } from "@/components/home/IntroSplash";
 
@@ -23,8 +23,8 @@ const zenGothic = Zen_Kaku_Gothic_New({
 const display = { fontFamily: "var(--font-zen-mincho), serif" };
 
 const COMING_SOON = [
-  { name: "オーダーメイドキーホルダー（L）" },
-  { name: "毛入れ用フィギュア" },
+  { name: "オーダーメイドキーホルダー（L）", image: "/lineup-l-size.jpg" },
+  { name: "毛入れ用フィギュア", image: "/lineup-fur-cavity.jpg" },
 ];
 
 const STORY_STEPS = [
@@ -315,11 +315,16 @@ export default function Home() {
                   key={item.name}
                   className="overflow-hidden rounded-xl border border-dashed border-[#d9cbb0] dark:border-[#2c3230]"
                 >
-                  <div className="relative flex aspect-square items-center justify-center">
-                    <span className="absolute left-1.5 top-1.5 rounded-full bg-[#e8ddc6] px-2 py-0.5 text-[9px] font-bold text-[#8a7c5e] dark:bg-white/5 dark:text-[#6d7c79]">
+                  <div className="relative aspect-square">
+                    <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-[#e8ddc6] px-2 py-0.5 text-[9px] font-bold text-[#8a7c5e] dark:bg-white/5 dark:text-[#6d7c79]">
                       近日公開
                     </span>
-                    <Gem className="h-7 w-7 text-[#c9bd9f] dark:text-[#3a3f3d]" />
+                    <Image
+                      src={item.image}
+                      alt={item.name}
+                      fill
+                      className="object-cover grayscale opacity-70"
+                    />
                   </div>
                   <div className="p-2">
                     <p className="truncate text-[11px] leading-tight text-[#8a7c5e] dark:text-[#6d7c79]">

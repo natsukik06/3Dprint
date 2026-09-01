@@ -20,7 +20,10 @@ export async function POST(request: NextRequest) {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card"],
+      // No payment_method_types here on purpose -- Stripe's "dynamic payment methods" decides
+      // what to show (card, PayPay, etc.) based on what's turned on in the Dashboard
+      // (https://dashboard.stripe.com/settings/payment_methods), plus currency/amount/customer
+      // eligibility. All line items are jpy, which is required for PayPay to be offered.
       client_reference_id: user.uid,
       metadata: { uid: user.uid, credits: String(pack.credits) },
       line_items: [

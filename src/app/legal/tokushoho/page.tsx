@@ -27,7 +27,7 @@ const ROWS: Row[] = [
     label: "商品代金以外の必要料金",
     value: `送料 ${SHIPPING_FEE_YEN.toLocaleString()}円（税込）。同一注文で合計${FREE_SHIPPING_MIN_QUANTITY}個以上ご注文の場合は送料無料。決済手数料はかかりません。`,
   },
-  { label: "お支払い方法", value: "クレジットカード決済（Stripe）" },
+  { label: "お支払い方法", value: "クレジットカード決済・PayPay（Stripe）" },
   { label: "お支払い時期", value: "ご注文時に全額前払いとなります。" },
   {
     label: "引き渡し時期",

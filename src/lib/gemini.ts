@@ -17,8 +17,11 @@ const POSE_PHRASES: Record<Pose, string> = {
 
 const MAGIC_COLOR_PHRASES: Record<MagicColor, string> = {
   starryBlue: "deep blue liquid mixed with glowing silver glitter",
+  nebulaPink: "deep pink liquid mixed with glowing silver glitter",
   galaxyGreen: "glowing phosphorescent green liquid mixed with sparkling stardust",
   clearAurora: "iridescent, clear aurora-like swirls with soft rainbow glitter",
+  cometOrange: "warm amber-orange liquid mixed with sparkling gold glitter",
+  cosmicPurple: "deep violet-purple liquid mixed with glowing lavender glitter",
   furCavity: "",
 };
 

@@ -34,8 +34,11 @@ const DRAFT_DEFAULTS = {
   sizeOption: "S" as const,
   colorQuantities: {
     starryBlue: 1,
-    galaxyGreen: 0,
+    nebulaPink: 0,
     clearAurora: 0,
+    galaxyGreen: 0,
+    cometOrange: 0,
+    cosmicPurple: 0,
     furCavity: 0,
   },
   wantsHardware: false,

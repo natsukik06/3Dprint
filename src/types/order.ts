@@ -9,8 +9,11 @@ export const POSE_OPTIONS = [
 ] as const;
 export const MAGIC_COLOR_OPTIONS = [
   "starryBlue",
-  "galaxyGreen",
+  "nebulaPink",
   "clearAurora",
+  "galaxyGreen",
+  "cometOrange",
+  "cosmicPurple",
   "furCavity",
 ] as const;
 export const DELIVERY_TIME_SLOT_OPTIONS = [
@@ -130,13 +133,23 @@ const imageFileSchema = z
 const colorQuantitiesSchema = z
   .object({
     starryBlue: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
-    galaxyGreen: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
+    nebulaPink: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
     clearAurora: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
+    galaxyGreen: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
+    cometOrange: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
+    cosmicPurple: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
     furCavity: z.number().int().min(0).max(MAX_TOTAL_QUANTITY),
   })
   .refine(
     (v) => {
-      const total = v.starryBlue + v.galaxyGreen + v.clearAurora + v.furCavity;
+      const total =
+        v.starryBlue +
+        v.nebulaPink +
+        v.clearAurora +
+        v.galaxyGreen +
+        v.cometOrange +
+        v.cosmicPurple +
+        v.furCavity;
       return total >= 1 && total <= MAX_TOTAL_QUANTITY;
     },
     { error: `合計1〜${MAX_TOTAL_QUANTITY}個の範囲で指定してください` }

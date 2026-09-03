@@ -22,8 +22,11 @@ export const POSE_LABELS: Record<Pose, string> = {
 
 export const MAGIC_COLOR_LABELS: Record<MagicColor, string> = {
   starryBlue: "星空ブルー（青＋銀ラメ）",
-  galaxyGreen: "ギャラクシーグリーン（暗闇で光る・蓄光ラメ）",
+  nebulaPink: "ネビュラピンク（ピンク＋銀ラメ）",
   clearAurora: "クリアオーロラ",
+  galaxyGreen: "ギャラクシーグリーン（暗闇で光る・蓄光ラメ）",
+  cometOrange: "コメットオレンジ（オレンジ＋金ラメ）",
+  cosmicPurple: "コズミックパープル（紫＋ラメ）",
   furCavity: "毛入れ用（空洞・コルク栓付き）",
 };
 

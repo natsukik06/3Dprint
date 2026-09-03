@@ -3,7 +3,7 @@
 import { useFormContext, useWatch } from "react-hook-form";
 import {
   FIGURE_PRICE_YEN,
-  FREE_SHIPPING_MIN_QUANTITY,
+  FREE_SHIPPING_SUBTOTAL_YEN,
   calculateEstimate,
   formatYen,
 } from "@/lib/pricing";
@@ -23,7 +23,10 @@ export function EstimateSummary() {
   // discount actually brings it down to -- makes the quantity discount legible at a glance.
   const listPriceYen = FIGURE_PRICE_YEN * quantity;
   const hasSetDiscount = quantity > 1 && listPriceYen > subtotalYen;
-  const unitsUntilFreeShipping = Math.max(0, FREE_SHIPPING_MIN_QUANTITY - quantity);
+  const yenUntilFreeShipping = Math.max(
+    0,
+    FREE_SHIPPING_SUBTOTAL_YEN - subtotalYen
+  );
 
   return (
     <div className="rounded-xl bg-slate-800 p-4 text-white">
@@ -50,9 +53,9 @@ export function EstimateSummary() {
           {shippingYen === 0 ? "無料" : formatYen(shippingYen)}
         </span>
       </div>
-      {quantity > 0 && unitsUntilFreeShipping > 0 && (
+      {quantity > 0 && yenUntilFreeShipping > 0 && (
         <p className="mt-1 text-xs text-emerald-300">
-          あと{unitsUntilFreeShipping}個追加すると送料無料になります
+          あと{formatYen(yenUntilFreeShipping)}分ご注文いただくと送料無料になります
         </p>
       )}
       {discountYen > 0 && (

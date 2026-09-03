@@ -5,8 +5,15 @@ import { ArrowLeft } from "lucide-react";
 import { CreditPurchase } from "@/components/auth/CreditPurchase";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { OrderForm } from "@/components/order/OrderForm";
+import { isOrderingOpen } from "@/lib/orderCap";
 
-export default function OrderPage() {
+// Must be checked fresh on every request -- the monthly order-cap count would otherwise be
+// baked in once at build time and never re-checked.
+export const dynamic = "force-dynamic";
+
+export default async function OrderPage() {
+  const orderingOpen = await isOrderingOpen();
+
   return (
     <div className="min-h-full bg-slate-50">
       <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-6 md:max-w-2xl lg:max-w-3xl lg:px-8">
@@ -38,9 +45,21 @@ export default function OrderPage() {
             ペットや大切なものの写真から、魔法のカラーで輝くクリスタルフィギュアを作成・注文できます。
           </p>
         </header>
-        <Suspense fallback={null}>
-          <OrderForm />
-        </Suspense>
+        {orderingOpen ? (
+          <Suspense fallback={null}>
+            <OrderForm />
+          </Suspense>
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">
+              今月の受付は終了しました
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              一人で製作しているため、月ごとにご注文数の上限を設けております。
+              大変申し訳ございませんが、来月の受付開始までお待ちください。
+            </p>
+          </div>
+        )}
       </main>
     </div>
   );

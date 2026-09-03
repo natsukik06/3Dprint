@@ -9,6 +9,7 @@ import { RadioCard } from "@/components/ui/RadioCard";
 import {
   ADDITIONAL_UNIT_PRICE_YEN,
   FIGURE_PRICE_YEN,
+  FREE_SHIPPING_SUBTOTAL_YEN,
   MAGIC_COLOR_LABELS,
   POSE_LABELS,
   getTotalQuantity,
@@ -131,7 +132,7 @@ export function SpecOptions() {
           {FIGURE_PRICE_YEN.toLocaleString()}、2個目以降は+
           {ADDITIONAL_UNIT_PRICE_YEN}円、最大{MAX_TOTAL_QUANTITY}個。
           <span className="font-semibold text-slate-700">
-            3個以上で送料無料
+            合計{FREE_SHIPPING_SUBTOTAL_YEN.toLocaleString()}円以上で送料無料
           </span>
           ）
         </p>

@@ -7,10 +7,10 @@ import {
   type Pose,
 } from "@/types/order";
 
-export const FIGURE_PRICE_YEN = 1500;
+export const FIGURE_PRICE_YEN = 800;
 export const ADDITIONAL_UNIT_PRICE_YEN = 400;
 export const SHIPPING_FEE_YEN = 700;
-export const FREE_SHIPPING_MIN_QUANTITY = 3;
+export const FREE_SHIPPING_SUBTOTAL_YEN = 2200;
 
 export const POSE_LABELS: Record<Pose, string> = {
   sitting: "お座り",
@@ -74,7 +74,7 @@ export function calculateEstimate({
   }
   const subtotalYen =
     FIGURE_PRICE_YEN + (quantity - 1) * ADDITIONAL_UNIT_PRICE_YEN;
-  const shippingYen = quantity >= FREE_SHIPPING_MIN_QUANTITY ? 0 : SHIPPING_FEE_YEN;
+  const shippingYen = subtotalYen >= FREE_SHIPPING_SUBTOTAL_YEN ? 0 : SHIPPING_FEE_YEN;
   const discountYen =
     Math.min(generationCreditsUsed, MAX_DISCOUNTABLE_CREDITS) *
     CREDIT_PRICE_YEN;

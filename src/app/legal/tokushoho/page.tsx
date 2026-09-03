@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import {
   ADDITIONAL_UNIT_PRICE_YEN,
   FIGURE_PRICE_YEN,
-  FREE_SHIPPING_MIN_QUANTITY,
+  FREE_SHIPPING_SUBTOTAL_YEN,
   SHIPPING_FEE_YEN,
 } from "@/lib/pricing";
 
@@ -25,14 +25,14 @@ const ROWS: Row[] = [
   },
   {
     label: "商品代金以外の必要料金",
-    value: `送料 ${SHIPPING_FEE_YEN.toLocaleString()}円（税込）。同一注文で合計${FREE_SHIPPING_MIN_QUANTITY}個以上ご注文の場合は送料無料。決済手数料はかかりません。`,
+    value: `送料 ${SHIPPING_FEE_YEN.toLocaleString()}円（税込）。同一注文で合計${FREE_SHIPPING_SUBTOTAL_YEN.toLocaleString()}円以上ご注文の場合は送料無料。決済手数料はかかりません。`,
   },
   { label: "お支払い方法", value: "クレジットカード決済・PayPay（Stripe）" },
   { label: "お支払い時期", value: "ご注文時に全額前払いとなります。" },
   {
     label: "引き渡し時期",
     value:
-      "【受注生産のため実際の発送目安（例：決済完了後◯週間以内）を入力してください】",
+      "決済完了後、発送まで通常3週間ほどお時間をいただいております。特にサービス開始直後はご注文が集中し、発送までお時間をいただく場合がございます。",
   },
   {
     label: "返品・交換について",
@@ -43,6 +43,11 @@ const ROWS: Row[] = [
     label: "キャンセルについて",
     value:
       "3Dモデルの製作着手前であればキャンセル・返金が可能です。着手後のキャンセルはお受けできません。【実際の運用に合わせて内容をご確認・修正してください】",
+  },
+  {
+    label: "販売数量の制限",
+    value:
+      "一人で製作しているため、月間のご注文受付件数に上限（200件）を設けております。上限に達した場合、当月の注文受付を締め切り、翌月まで新規注文をお待ちいただきます。",
   },
 ];
 

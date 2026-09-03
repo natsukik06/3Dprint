@@ -10,15 +10,17 @@ import {
 type Row = { label: string; value: string };
 
 const ROWS: Row[] = [
-  { label: "販売業者", value: "【本名（屋号を使う場合は屋号も併記）を入力してください】" },
-  { label: "運営統括責任者", value: "【責任者の氏名を入力してください】" },
+  { label: "販売業者", value: "纐纈夏輝" },
+  { label: "運営統括責任者", value: "纐纈夏輝" },
   {
     label: "所在地",
-    value:
-      "【都道府県・市区町村・番地まで入力してください（請求があれば遅滞なく開示する運用にする場合はその旨に差し替え）】",
+    value: "ご請求をいただいた場合、遅滞なく開示いたします。",
   },
-  { label: "電話番号", value: "【電話番号を入力してください】" },
-  { label: "メールアドレス", value: "【問い合わせ用メールアドレスを入力してください】" },
+  {
+    label: "電話番号",
+    value: "ご請求をいただいた場合、遅滞なく開示いたします。",
+  },
+  { label: "メールアドレス", value: "natsuki.ko006@gmail.com" },
   {
     label: "販売価格",
     value: `1個目 ${FIGURE_PRICE_YEN.toLocaleString()}円（税込）、2個目以降 +${ADDITIONAL_UNIT_PRICE_YEN.toLocaleString()}円/個（税込）。表示価格はすべて税込です。`,

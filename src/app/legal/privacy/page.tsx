@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
 
         <Section title="事業者情報">
           <p>
-            【本名（屋号を使う場合は屋号も併記）】（以下「当店」）は、本サービス（以下「本サービス」）における、ご利用者様（以下「お客様」）の個人情報の取り扱いについて、以下のとおりプライバシーポリシーを定めます。
+            纐纈夏輝（以下「当店」）は、本サービス（以下「本サービス」）における、ご利用者様（以下「お客様」）の個人情報の取り扱いについて、以下のとおりプライバシーポリシーを定めます。
           </p>
         </Section>
 
@@ -89,7 +89,7 @@ export default function PrivacyPolicyPage() {
         </Section>
 
         <Section title="お問い合わせ先">
-          <p>【問い合わせ用メールアドレスを入力してください】</p>
+          <p>natsuki.ko006@gmail.com</p>
         </Section>
 
         <Section title="改定について">

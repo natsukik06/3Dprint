@@ -42,7 +42,7 @@ const DRAFT_DEFAULTS = {
     furCavity: 0,
   },
   wantsHardware: false,
-  holePosition: null,
+  chainPositionNote: "",
   bottomHolePosition: null,
   bottomHoleDiameterMm: DEFAULT_BOTTOM_HOLE_DIAMETER_MM,
 };
@@ -104,8 +104,6 @@ export function OrderForm() {
       postalCode: "",
       address: "",
       phoneNumber: "",
-      deliveryDate: "",
-      deliveryTimeSlot: "none",
       requestNote: "",
       agreeCopyright: undefined,
       agreeRisk: undefined,
@@ -198,7 +196,7 @@ export function OrderForm() {
       sizeOption: draft.sizeOption,
       colorQuantities: draft.colorQuantities,
       wantsHardware: draft.wantsHardware,
-      holePosition: draft.wantsHardware ? draft.holePosition : null,
+      chainPositionNote: draft.wantsHardware ? draft.chainPositionNote : "",
       bottomHolePosition: draft.bottomHolePosition,
       bottomHoleDiameterMm: draft.bottomHoleDiameterMm,
       referenceImageUrls: generatedReferenceImageUrls,
@@ -218,7 +216,7 @@ export function OrderForm() {
     setValue("sizeOption", DRAFT_DEFAULTS.sizeOption);
     setValue("colorQuantities", DRAFT_DEFAULTS.colorQuantities);
     setValue("wantsHardware", DRAFT_DEFAULTS.wantsHardware);
-    setValue("holePosition", DRAFT_DEFAULTS.holePosition);
+    setValue("chainPositionNote", DRAFT_DEFAULTS.chainPositionNote);
     setValue("bottomHolePosition", DRAFT_DEFAULTS.bottomHolePosition);
     setValue("bottomHoleDiameterMm", DRAFT_DEFAULTS.bottomHoleDiameterMm);
     setGeneratedModelUrl(null);

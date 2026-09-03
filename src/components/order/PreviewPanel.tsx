@@ -190,7 +190,6 @@ const POLL_INTERVAL_MS = 4000;
 // geometry injected into the previewed GLB so occlusion/lighting look right.
 const HOLE_MARKER_DIAMETER_MM = 0.8;
 const HOLE_MARKER_HEIGHT_MM = 8;
-const TOP_HOLE_MARKER_COLOR: [number, number, number] = [0.937, 0.267, 0.267]; // red-500
 const BOTTOM_HOLE_MARKER_COLOR: [number, number, number] = [0.961, 0.62, 0.043]; // amber-500
 
 // Flat alpha blending just makes the model look like semi-see-through
@@ -271,9 +270,9 @@ export function PreviewPanel({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isClearMaterial, setIsClearMaterial] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [placingHoleTarget, setPlacingHoleTarget] = useState<
-    "top" | "bottom" | null
-  >(null);
+  const [placingHoleTarget, setPlacingHoleTarget] = useState<"bottom" | null>(
+    null
+  );
   const [expandedView, setExpandedView] = useState<"model" | "preview" | null>(
     null
   );
@@ -303,17 +302,11 @@ export function PreviewPanel({
   const credits = useCredits();
   const hasCredits = (credits ?? 0) > 0;
 
-  const { control, setValue } = useFormContext<OrderFormValues>();
-  const [wantsHardware, holePosition, bottomHolePosition, bottomHoleDiameterMm] =
-    useWatch({
-      control,
-      name: [
-        "wantsHardware",
-        "holePosition",
-        "bottomHolePosition",
-        "bottomHoleDiameterMm",
-      ],
-    });
+  const { control, setValue, register } = useFormContext<OrderFormValues>();
+  const [wantsHardware, bottomHolePosition, bottomHoleDiameterMm] = useWatch({
+    control,
+    name: ["wantsHardware", "bottomHolePosition", "bottomHoleDiameterMm"],
+  });
 
   if (purchasedColors.length > 0 && !purchasedColors.includes(activeColor)) {
     setActiveColor(purchasedColors[0]);
@@ -344,20 +337,6 @@ export function PreviewPanel({
 
     async function rebuild() {
       const markers: MarkerSpec[] = [];
-      if (holePosition) {
-        markers.push({
-          position: [holePosition.x, holePosition.y, holePosition.z],
-          direction:
-            typeof holePosition.nx === "number" &&
-            typeof holePosition.ny === "number" &&
-            typeof holePosition.nz === "number"
-              ? [holePosition.nx, holePosition.ny, holePosition.nz]
-              : [0, 1, 0],
-          diameterMm: HOLE_MARKER_DIAMETER_MM,
-          heightMm: HOLE_MARKER_HEIGHT_MM,
-          colorRgb: TOP_HOLE_MARKER_COLOR,
-        });
-      }
       if (bottomHolePosition) {
         markers.push({
           position: [bottomHolePosition.x, bottomHolePosition.y, bottomHolePosition.z],
@@ -413,7 +392,7 @@ export function PreviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [currentModelUrl, holePosition, bottomHolePosition]);
+  }, [currentModelUrl, bottomHolePosition]);
 
   useEffect(() => {
     return () => {
@@ -608,7 +587,7 @@ export function PreviewPanel({
 
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     onGenerated(null);
-    setValue("holePosition", null);
+    setValue("chainPositionNote", "");
     setValue("bottomHolePosition", null);
     setPlacingHoleTarget(null);
     const finishedPreviewUrls: FinishedPreviewUrls = Object.fromEntries(
@@ -704,7 +683,7 @@ export function PreviewPanel({
 
   function handleSelectGalleryItem(entry: GeneratedModel) {
     if (entry.taskId === selectedTaskId) return;
-    setValue("holePosition", null);
+    setValue("chainPositionNote", "");
     setValue("bottomHolePosition", null);
     setPlacingHoleTarget(null);
     suppressResetRef.current = true;
@@ -779,11 +758,7 @@ export function PreviewPanel({
 
   function confirmPlacement() {
     if (!crosshairPoint || !placingHoleTarget) return;
-    if (placingHoleTarget === "top") {
-      setValue("holePosition", crosshairPoint);
-    } else {
-      setValue("bottomHolePosition", crosshairPoint);
-    }
+    setValue("bottomHolePosition", crosshairPoint);
     setPlacingHoleTarget(null);
   }
 
@@ -803,7 +778,7 @@ export function PreviewPanel({
     return `${nx}m ${ny}m ${nz}m`;
   }
 
-  function startPlacing(target: "top" | "bottom") {
+  function startPlacing(target: "bottom") {
     setPlacingHoleTarget((prev) => (prev === target ? null : target));
     setExpandedView("model");
   }
@@ -862,16 +837,6 @@ export function PreviewPanel({
               shadow-intensity="1"
               style={{ width: "100%", height: "100%" }}
             >
-              {holePosition && (
-                <button
-                  type="button"
-                  slot="hotspot-hole"
-                  data-position={`${holePosition.x}m ${holePosition.y}m ${holePosition.z}m`}
-                  data-normal={normalAttr(holePosition, [0, 1, 0])}
-                  className="flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 shadow"
-                  aria-label="上の穴（金具用）の位置"
-                />
-              )}
               {bottomHolePosition && (
                 <button
                   type="button"
@@ -1067,28 +1032,23 @@ export function PreviewPanel({
 
       {modelState.phase === "success" && wantsHardware && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs text-slate-600">
-            <span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-500 align-middle" />
-            上の穴（金具用）を開ける位置をモデル上で指定できます（回転させて照準を合わせるだけ）
-          </p>
-          <button
-            type="button"
-            onClick={() => startPlacing("top")}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          <label
+            htmlFor="chainPositionNote"
+            className="flex items-center gap-1.5 text-xs text-slate-600"
           >
-            <MapPin className="h-3.5 w-3.5" />
-            {placingHoleTarget === "top"
-              ? "指定中（完了するには下のボタン）"
-              : holePosition
-                ? "位置を選び直す"
-                : "位置を指定する"}
-          </button>
-          {holePosition && placingHoleTarget !== "top" && (
-            <p className="mt-1 text-xs text-slate-500">
-              位置を指定しました（座標: x={holePosition.x.toFixed(2)}, y=
-              {holePosition.y.toFixed(2)}, z={holePosition.z.toFixed(2)}）
-            </p>
-          )}
+            <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+            上の穴（金具用）を開けたい位置（任意）
+          </label>
+          <textarea
+            id="chainPositionNote"
+            rows={2}
+            {...register("chainPositionNote")}
+            placeholder="例：頭の上／背中の中央　※未記入の場合はおまかせで判断します"
+            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+          />
+          <p className="mt-1 text-[10px] text-slate-400">
+            ※実際の穴あけは製作時に手作業で行います。ご希望に近い位置で仕上げますが、形状によっては多少ずれる場合がございます。
+          </p>
         </div>
       )}
 
@@ -1210,16 +1170,6 @@ export function PreviewPanel({
                 shadow-intensity="1"
                 style={{ width: "100%", height: "100%" }}
               >
-                {holePosition && (
-                  <button
-                    type="button"
-                    slot="hotspot-hole"
-                    data-position={`${holePosition.x}m ${holePosition.y}m ${holePosition.z}m`}
-                    data-normal={normalAttr(holePosition, [0, 1, 0])}
-                    className="flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 shadow"
-                    aria-label="上の穴（金具用）の位置"
-                  />
-                )}
                 {bottomHolePosition && (
                   <button
                     type="button"
@@ -1239,10 +1189,7 @@ export function PreviewPanel({
                     type="button"
                     slot="hotspot-crosshair-preview"
                     data-position={`${crosshairPoint.x}m ${crosshairPoint.y}m ${crosshairPoint.z}m`}
-                    data-normal={normalAttr(
-                      crosshairPoint,
-                      placingHoleTarget === "top" ? [0, 1, 0] : [0, -1, 0]
-                    )}
+                    data-normal={normalAttr(crosshairPoint, [0, -1, 0])}
                     className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
                     aria-hidden="true"
                   >
@@ -1259,7 +1206,7 @@ export function PreviewPanel({
                       }}
                     >
                       <g
-                        stroke={placingHoleTarget === "top" ? "#ef4444" : "#f59e0b"}
+                        stroke="#f59e0b"
                         strokeWidth={2}
                         strokeLinecap="round"
                       >
@@ -1293,7 +1240,7 @@ export function PreviewPanel({
                         cx={22}
                         cy={22}
                         r={4}
-                        fill={placingHoleTarget === "top" ? "#ef4444" : "#f59e0b"}
+                        fill="#f59e0b"
                         stroke="white"
                         strokeWidth={1.5}
                       />
@@ -1311,9 +1258,7 @@ export function PreviewPanel({
                   <Crosshair className="h-8 w-8" strokeWidth={1.5} />
                 </div>
                 <p className="pointer-events-none absolute inset-x-0 top-4 z-10 text-center text-sm font-medium text-white">
-                  モデルを回転させて、
-                  {placingHoleTarget === "top" ? "上の穴" : "下の穴"}
-                  を開けたい場所を中央の照準に合わせてください
+                  モデルを回転させて、下の穴を開けたい場所を中央の照準に合わせてください
                 </p>
                 <div className="absolute inset-x-0 bottom-4 z-10 flex justify-center gap-2">
                   <button

@@ -70,8 +70,6 @@ export async function submitOrder(values: OrderFormValues): Promise<string> {
     postalCode: values.postalCode,
     address: values.address,
     phoneNumber: values.phoneNumber,
-    deliveryDate: values.deliveryDate || null,
-    deliveryTimeSlot: values.deliveryTimeSlot,
     requestNote: values.requestNote ?? "",
     agreeShowcase: values.agreeShowcase,
     agreeMarketingEmail: values.agreeMarketingEmail,

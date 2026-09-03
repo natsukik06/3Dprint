@@ -2,7 +2,6 @@ import { CREDIT_PRICE_YEN, MAX_DISCOUNTABLE_CREDITS } from "@/lib/creditPacks";
 import {
   MAGIC_COLOR_OPTIONS,
   type ColorQuantities,
-  type DeliveryTimeSlot,
   type MagicColor,
   type Pose,
 } from "@/types/order";
@@ -24,20 +23,10 @@ export const MAGIC_COLOR_LABELS: Record<MagicColor, string> = {
   starryBlue: "星空ブルー（青＋銀ラメ）",
   nebulaPink: "ネビュラピンク（ピンク＋銀ラメ）",
   clearAurora: "クリアオーロラ",
-  galaxyGreen: "ギャラクシーグリーン（暗闇で光る・蓄光ラメ）",
+  galaxyGreen: "ギャラクシーグリーン（緑＋蓄光ラメ）",
   cometOrange: "コメットオレンジ（オレンジ＋金ラメ）",
   cosmicPurple: "コズミックパープル（紫＋ラメ）",
   furCavity: "毛入れ用（空洞・コルク栓付き）",
-};
-
-export const DELIVERY_TIME_SLOT_LABELS: Record<DeliveryTimeSlot, string> = {
-  none: "指定なし",
-  morning: "午前中",
-  "12-14": "12:00〜14:00",
-  "14-16": "14:00〜16:00",
-  "16-18": "16:00〜18:00",
-  "18-20": "18:00〜20:00",
-  "19-21": "19:00〜21:00",
 };
 
 export function getTotalQuantity(colorQuantities: ColorQuantities): number {

@@ -217,7 +217,7 @@ export default function Home() {
           暗闇でそっと光る、あなただけのお守り。
         </h2>
         <p className="relative mx-auto mt-3 max-w-sm text-sm leading-relaxed text-slate-300">
-          ギャラクシーグリーンは蓄光ラメ入り。電気を消すと、青白い光がふわりと浮かび上がります。
+          毛入れ用以外の全色に蓄光素材入り。電気を消すと、青白い光がふわりと浮かび上がります（光り方の強さは色によって異なります）。
           眠る前や、少し心細い夜に寄り添う存在に。
         </p>
         <p className="relative mx-auto mt-3 flex max-w-xs items-center justify-center gap-1.5 text-xs text-slate-400">

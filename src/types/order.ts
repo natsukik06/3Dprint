@@ -16,15 +16,6 @@ export const MAGIC_COLOR_OPTIONS = [
   "cosmicPurple",
   "furCavity",
 ] as const;
-export const DELIVERY_TIME_SLOT_OPTIONS = [
-  "none",
-  "morning",
-  "12-14",
-  "14-16",
-  "16-18",
-  "18-20",
-  "19-21",
-] as const;
 export const SIZE_OPTIONS = ["S", "M", "L"] as const;
 export const AVAILABLE_SIZE_OPTIONS = ["S", "M", "L"] as const satisfies readonly (typeof SIZE_OPTIONS)[number][];
 // Per-piece production lifecycle (each set item is printed/finished independently).
@@ -33,7 +24,6 @@ export const PAYMENT_STATUS_OPTIONS = ["unpaid", "paid"] as const;
 
 export type Pose = (typeof POSE_OPTIONS)[number];
 export type MagicColor = (typeof MAGIC_COLOR_OPTIONS)[number];
-export type DeliveryTimeSlot = (typeof DELIVERY_TIME_SLOT_OPTIONS)[number];
 export type ColorQuantities = Record<MagicColor, number>;
 export type PetDetails = {
   furColorNote?: string;
@@ -180,7 +170,7 @@ const orderItemSchema = z.object({
   sizeOption: z.enum(SIZE_OPTIONS),
   colorQuantities: colorQuantitiesSchema,
   wantsHardware: z.boolean(),
-  holePosition: holePointSchema.nullable(),
+  chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
   bottomHolePosition: holePointSchema.nullable(),
   bottomHoleDiameterMm: z
     .number()
@@ -211,7 +201,7 @@ export const orderFormSchema = z.object({
   sizeOption: z.enum(SIZE_OPTIONS, "サイズを選択してください"),
   colorQuantities: colorQuantitiesSchema,
   wantsHardware: z.boolean(),
-  holePosition: holePointSchema.nullable(),
+  chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
   bottomHolePosition: holePointSchema.nullable(),
   bottomHoleDiameterMm: z
     .number()
@@ -230,8 +220,6 @@ export const orderFormSchema = z.object({
   postalCode: z.string().min(1, "郵便番号を入力してください"),
   address: z.string().min(1, "住所を入力してください"),
   phoneNumber: z.string().min(1, "電話番号を入力してください"),
-  deliveryDate: z.string().optional(),
-  deliveryTimeSlot: z.enum(DELIVERY_TIME_SLOT_OPTIONS),
   requestNote: z
     .string()
     .max(1000, "1000文字以内で入力してください")
@@ -265,8 +253,6 @@ export type OrderRecord = {
   postalCode: string;
   address: string;
   phoneNumber: string;
-  deliveryDate: string | null;
-  deliveryTimeSlot: DeliveryTimeSlot;
   requestNote: string;
   agreeShowcase: boolean;
   agreeMarketingEmail: boolean;

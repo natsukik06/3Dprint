@@ -5,12 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { db } from "@/lib/firebase";
 import { downloadCsv, toCsv } from "@/lib/csv";
-import { DELIVERY_TIME_SLOT_LABELS } from "@/lib/pricing";
-import {
-  SHIPPING_METHOD_BY_SIZE,
-  type DeliveryTimeSlot,
-  type OrderItemDraft,
-} from "@/types/order";
+import { SHIPPING_METHOD_BY_SIZE, type OrderItemDraft } from "@/types/order";
 
 const CSV_HEADERS = [
   "注文ID",
@@ -18,8 +13,6 @@ const CSV_HEADERS = [
   "郵便番号",
   "住所",
   "電話番号",
-  "配送希望日",
-  "配送希望時間帯",
   "セット内容",
   "サイズ",
   "配送方法",
@@ -47,8 +40,6 @@ function ShippingExportButton({ method }: { method: string }) {
           data.postalCode ?? "",
           data.address ?? "",
           data.phoneNumber ?? "",
-          data.deliveryDate ?? "",
-          DELIVERY_TIME_SLOT_LABELS[(data.deliveryTimeSlot ?? "none") as DeliveryTimeSlot],
           items.map((item) => item.subject).join(" / "),
           items.map((item) => item.sizeOption).join(" / "),
           method,

@@ -1,8 +1,7 @@
 "use client";
 
 import { useFormContext } from "react-hook-form";
-import { DELIVERY_TIME_SLOT_LABELS } from "@/lib/pricing";
-import { DELIVERY_TIME_SLOT_OPTIONS, type OrderFormValues } from "@/types/order";
+import type { OrderFormValues } from "@/types/order";
 
 export function CustomerInfoForm() {
   const {
@@ -115,42 +114,6 @@ export function CustomerInfoForm() {
         {errors.address && (
           <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
         )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label
-            htmlFor="deliveryDate"
-            className="mb-1 block text-sm font-medium text-slate-700"
-          >
-            お届け希望日（任意）
-          </label>
-          <input
-            id="deliveryDate"
-            type="date"
-            {...register("deliveryDate")}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
-          />
-        </div>
-        <div>
-          <label
-            htmlFor="deliveryTimeSlot"
-            className="mb-1 block text-sm font-medium text-slate-700"
-          >
-            お届け希望時間帯
-          </label>
-          <select
-            id="deliveryTimeSlot"
-            {...register("deliveryTimeSlot")}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
-          >
-            {DELIVERY_TIME_SLOT_OPTIONS.map((slot) => (
-              <option key={slot} value={slot}>
-                {DELIVERY_TIME_SLOT_LABELS[slot]}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       <div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Gem, Minus, Moon, Plus, Smartphone } from "lucide-react";
+import { Gem, Minus, Moon, Plus } from "lucide-react";
 import Image from "next/image";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { PetDetailsFields } from "@/components/order/PetDetailsFields";
@@ -34,10 +34,6 @@ const COLOR_IMAGE_SRC: Record<MagicColor, string | null> = {
   cosmicPurple: "/colors/cosmicPurple.jpg",
   furCavity: null,
 };
-
-// Only this color glows -- called out on its card and with a short usage tip once it's selected,
-// rather than leaving "暗闇で光る" buried in the label text alone.
-const GLOWING_COLOR: MagicColor = "galaxyGreen";
 
 export function SpecOptions() {
   const {
@@ -143,6 +139,10 @@ export function SpecOptions() {
           </span>
           ）
         </p>
+        <p className="flex items-start gap-1.5 rounded-lg bg-emerald-50 p-2 text-xs text-emerald-800">
+          <Moon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          毛入れ用以外の全色、蓄光素材入りで暗闇でやさしく光ります（光り方の強さは色によって異なり、光る色は昼間の色とは異なる青白い光になります）。光が弱くなったらスマホのライトを数十秒当てるだけで再チャージできます。
+        </p>
         <Controller
           name="colorQuantities"
           control={control}
@@ -170,12 +170,6 @@ export function SpecOptions() {
                           <div className="flex h-full w-full items-center justify-center">
                             <Gem className="h-8 w-8 text-slate-300" />
                           </div>
-                        )}
-                        {color === GLOWING_COLOR && (
-                          <span className="absolute left-1 top-1 flex items-center gap-0.5 rounded-full bg-slate-900/80 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
-                            <Moon className="h-2.5 w-2.5" />
-                            暗闇で光る
-                          </span>
                         )}
                       </div>
                       <div className="space-y-1.5 p-2">
@@ -244,12 +238,6 @@ export function SpecOptions() {
               <p className="text-xs text-slate-500">
                 合計 {totalQuantity} 個
               </p>
-              {field.value[GLOWING_COLOR] > 0 && (
-                <p className="flex items-start gap-1.5 rounded-lg bg-emerald-50 p-2 text-xs text-emerald-800">
-                  <Smartphone className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  {MAGIC_COLOR_LABELS[GLOWING_COLOR]}は蓄光素材入り。電気を消すとやさしく光ります。光が弱くなったら、スマホのライトを数十秒当てるだけで再チャージできます。
-                </p>
-              )}
               {fieldState.error && (
                 <p className="text-sm text-red-600">
                   {fieldState.error.message}

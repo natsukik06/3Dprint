@@ -6,17 +6,11 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { db } from "@/lib/firebase";
-import {
-  DELIVERY_TIME_SLOT_LABELS,
-  MAGIC_COLOR_LABELS,
-  POSE_LABELS,
-  formatYen,
-} from "@/lib/pricing";
+import { MAGIC_COLOR_LABELS, POSE_LABELS, formatYen } from "@/lib/pricing";
 import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
 import {
   MAGIC_COLOR_OPTIONS,
   ORDER_STATUS_LABELS,
-  type DeliveryTimeSlot,
   type OrderItemDraft,
   type OrderItemRecord,
   type PaymentStatus,
@@ -33,8 +27,6 @@ type OrderDetail = {
   postalCode: string;
   address: string;
   phoneNumber: string;
-  deliveryDate: string | null;
-  deliveryTimeSlot: DeliveryTimeSlot;
   requestNote: string;
   agreeShowcase: boolean;
   createdAt: { toDate: () => Date } | null;
@@ -257,9 +249,9 @@ function ItemCard({
           label="上の穴（金具用）"
           value={
             item.wantsHardware
-              ? item.holePosition
-                ? `あり（x=${item.holePosition.x.toFixed(2)}, y=${item.holePosition.y.toFixed(2)}, z=${item.holePosition.z.toFixed(2)}）`
-                : "希望あり（位置未指定）"
+              ? item.chainPositionNote
+                ? `希望あり：${item.chainPositionNote}`
+                : "希望あり（位置指定なし・おまかせ）"
               : "なし"
           }
         />
@@ -435,8 +427,6 @@ function AdminOrderDetail({ id }: { id: string }) {
           postalCode: data.postalCode ?? "",
           address: data.address ?? "",
           phoneNumber: data.phoneNumber ?? "",
-          deliveryDate: data.deliveryDate ?? null,
-          deliveryTimeSlot: data.deliveryTimeSlot ?? "none",
           requestNote: data.requestNote ?? "",
           agreeShowcase: data.agreeShowcase ?? false,
           createdAt: data.createdAt ?? null,
@@ -516,11 +506,6 @@ function AdminOrderDetail({ id }: { id: string }) {
         <InfoRow label="メール" value={order.customerEmail} />
         <InfoRow label="電話番号" value={order.phoneNumber} />
         <InfoRow label="配送先" value={`〒${order.postalCode} ${order.address}`} />
-        <InfoRow label="お届け希望日" value={order.deliveryDate || "指定なし"} />
-        <InfoRow
-          label="お届け希望時間帯"
-          value={DELIVERY_TIME_SLOT_LABELS[order.deliveryTimeSlot]}
-        />
         {order.requestNote && (
           <div className="pt-2">
             <p className="text-xs text-slate-500">ご要望</p>

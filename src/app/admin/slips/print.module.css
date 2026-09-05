@@ -1,0 +1,44 @@
+.sheet {
+  width: 148mm;
+  min-height: 210mm;
+  margin: 0 auto 24px;
+  padding: 14mm;
+  background: #fffdf7;
+  border: 1px solid #e0d3b8;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.printSheets {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A5 portrait;
+    margin: 0;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .printSheets {
+    display: block;
+  }
+
+  .sheet {
+    width: auto;
+    min-height: 0;
+    height: 210mm;
+    margin: 0;
+    padding: 14mm;
+    border: none;
+    break-after: page;
+  }
+
+  .sheet:last-child {
+    break-after: auto;
+  }
+}

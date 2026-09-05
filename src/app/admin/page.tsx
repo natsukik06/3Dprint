@@ -147,6 +147,12 @@ export default function AdminPage() {
           >
             お知らせメール
           </Link>
+          <Link
+            href="/admin/slips"
+            className="text-slate-600 underline underline-offset-2"
+          >
+            同梱シート印刷
+          </Link>
         </div>
       </div>
       <AdminOrderList />

@@ -77,6 +77,7 @@ export async function submitOrder(values: OrderFormValues): Promise<string> {
     paymentStatus: "unpaid",
     paidAt: null,
     stripeCheckoutSessionId: null,
+    insertPrinted: false,
   };
 
   const docRef = await addDoc(collection(db, "orders"), order);

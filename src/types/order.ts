@@ -225,6 +225,10 @@ export type OrderRecord = {
   paymentStatus: PaymentStatus;
   paidAt: unknown;
   stripeCheckoutSessionId: string | null;
+  // Whether the A5 packing-slip/thank-you insert has been printed for this order (see
+  // /admin/slips) -- tracked separately from production status since it's a packing-desk task,
+  // not a fabrication one.
+  insertPrinted: boolean;
 };
 
 // One physical piece to be printed/finished, fanned out from a paid order's `items[itemIndex]`.

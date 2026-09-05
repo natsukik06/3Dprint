@@ -15,7 +15,6 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { submitOrder } from "@/lib/orders";
 import { MAGIC_COLOR_LABELS } from "@/lib/pricing";
 import {
-  DEFAULT_BOTTOM_HOLE_DIAMETER_MM,
   MAX_CART_ITEMS,
   orderFormSchema,
   type MagicColor,
@@ -43,8 +42,6 @@ const DRAFT_DEFAULTS = {
   },
   wantsHardware: false,
   chainPositionNote: "",
-  bottomHolePosition: null,
-  bottomHoleDiameterMm: DEFAULT_BOTTOM_HOLE_DIAMETER_MM,
 };
 
 function CartItemRow({
@@ -197,8 +194,6 @@ export function OrderForm() {
       colorQuantities: draft.colorQuantities,
       wantsHardware: draft.wantsHardware,
       chainPositionNote: draft.wantsHardware ? draft.chainPositionNote : "",
-      bottomHolePosition: draft.bottomHolePosition,
-      bottomHoleDiameterMm: draft.bottomHoleDiameterMm,
       referenceImageUrls: generatedReferenceImageUrls,
       modelUrl: generatedModelUrl,
       finishedPreviewUrls: generatedPreviewUrls,
@@ -217,8 +212,6 @@ export function OrderForm() {
     setValue("colorQuantities", DRAFT_DEFAULTS.colorQuantities);
     setValue("wantsHardware", DRAFT_DEFAULTS.wantsHardware);
     setValue("chainPositionNote", DRAFT_DEFAULTS.chainPositionNote);
-    setValue("bottomHolePosition", DRAFT_DEFAULTS.bottomHolePosition);
-    setValue("bottomHoleDiameterMm", DRAFT_DEFAULTS.bottomHoleDiameterMm);
     setGeneratedModelUrl(null);
     setGeneratedPreviewUrls({});
     setGeneratedReferenceImageUrls([]);

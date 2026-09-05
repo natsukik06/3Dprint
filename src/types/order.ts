@@ -31,20 +31,6 @@ export type PetDetails = {
   accessoryNote?: string;
   bodyFeatureNote?: string;
 };
-// Position plus the local surface normal at that point (captured via
-// model-viewer's positionAndNormalFromPoint), so holes can be drilled
-// perpendicular to the actual surface instead of always straight down.
-// nx/ny/nz are optional for backward compatibility with records saved
-// before normal capture was added; consumers should fall back to a
-// vertical direction when absent.
-export type HolePoint = {
-  x: number;
-  y: number;
-  z: number;
-  nx?: number;
-  ny?: number;
-  nz?: number;
-};
 export type SizeOption = (typeof SIZE_OPTIONS)[number];
 export type OrderStatus = (typeof ORDER_STATUS_OPTIONS)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUS_OPTIONS)[number];
@@ -92,8 +78,6 @@ export function determineShippingMethod(
 // available miniature-bottle cork stopper (~7-12.5mm); provisional until a
 // specific stopper product is sourced and confirmed by test-fit.
 export const DEFAULT_BOTTOM_HOLE_DIAMETER_MM = 8;
-export const MIN_BOTTOM_HOLE_DIAMETER_MM = 5;
-export const MAX_BOTTOM_HOLE_DIAMETER_MM = 25;
 // Fixed diameter for the top hardware hole (ヒートン金具用).
 export const HARDWARE_HOLE_DIAMETER_MM = 3;
 // Diameter for the automatically-placed drain/vent hole added when hollowing
@@ -145,15 +129,6 @@ const colorQuantitiesSchema = z
     { error: `合計1〜${MAX_TOTAL_QUANTITY}個の範囲で指定してください` }
   );
 
-const holePointSchema = z.object({
-  x: z.number(),
-  y: z.number(),
-  z: z.number(),
-  nx: z.number().optional(),
-  ny: z.number().optional(),
-  nz: z.number().optional(),
-});
-
 // One generated figure within a set: everything needed to reproduce and price it. Captured into
 // the `items` array when the customer clicks "セットに追加"; the top-level draft fields below
 // (subject, pose, sizeOption, ...) are just the in-progress builder for the item not yet added.
@@ -171,11 +146,6 @@ const orderItemSchema = z.object({
   colorQuantities: colorQuantitiesSchema,
   wantsHardware: z.boolean(),
   chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
-  bottomHolePosition: holePointSchema.nullable(),
-  bottomHoleDiameterMm: z
-    .number()
-    .min(MIN_BOTTOM_HOLE_DIAMETER_MM)
-    .max(MAX_BOTTOM_HOLE_DIAMETER_MM),
   referenceImageUrls: z.array(z.string()),
   modelUrl: z.string().min(1, "3Dモデルが生成されていません"),
   finishedPreviewUrls: z.record(z.string(), z.string()),
@@ -202,11 +172,6 @@ export const orderFormSchema = z.object({
   colorQuantities: colorQuantitiesSchema,
   wantsHardware: z.boolean(),
   chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
-  bottomHolePosition: holePointSchema.nullable(),
-  bottomHoleDiameterMm: z
-    .number()
-    .min(MIN_BOTTOM_HOLE_DIAMETER_MM)
-    .max(MAX_BOTTOM_HOLE_DIAMETER_MM),
   generationCreditsUsed: z.number().int().min(0),
 
   // The real payload: every item added to the set.

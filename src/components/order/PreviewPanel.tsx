@@ -11,10 +11,8 @@ import {
 } from "firebase/firestore";
 import {
   Box,
-  Crosshair,
   Download,
   Loader2,
-  MapPin,
   Maximize2,
   Sparkles,
   X,
@@ -25,13 +23,9 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { signInWithGoogle } from "@/lib/auth";
 import { db } from "@/lib/firebase";
-import { injectHoleMarkers, type MarkerSpec } from "@/lib/glbMarker";
 import { MAGIC_COLOR_LABELS } from "@/lib/pricing";
 import {
-  DEFAULT_BOTTOM_HOLE_DIAMETER_MM,
   MAGIC_COLOR_OPTIONS,
-  MAX_BOTTOM_HOLE_DIAMETER_MM,
-  MIN_BOTTOM_HOLE_DIAMETER_MM,
   type ColorQuantities,
   type MagicColor,
   type OrderFormValues,
@@ -115,54 +109,6 @@ type GeneratedModel = {
   pose: Pose;
 };
 
-type Vec3 = [number, number, number];
-
-function cross(a: Vec3, b: Vec3): Vec3 {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
-}
-function dot(a: Vec3, b: Vec3): number {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-function normalizeVec(v: Vec3): Vec3 {
-  const len = Math.hypot(v[0], v[1], v[2]);
-  return len > 1e-6 ? [v[0] / len, v[1] / len, v[2] / len] : [0, 0, 0];
-}
-
-/**
- * Projects a world-space surface normal onto the current camera's screen plane, so a flat
- * 2D marker can show which way the surface actually faces (and how face-on vs. edge-on it
- * is to the current view) without needing access to model-viewer's internal Three.js scene.
- * Derived purely from the public camera-orbit spherical angles (model-viewer's own
- * theta/phi convention: phi from the +Y pole, theta around Y from +Z).
- */
-function computeNormalScreenArrow(
-  normal: Vec3,
-  orbit: { theta: number; phi: number }
-): { angleDeg: number; magnitude: number } {
-  const towardCamera: Vec3 = [
-    Math.sin(orbit.phi) * Math.sin(orbit.theta),
-    Math.cos(orbit.phi),
-    Math.sin(orbit.phi) * Math.cos(orbit.theta),
-  ];
-  const forward: Vec3 = [-towardCamera[0], -towardCamera[1], -towardCamera[2]];
-  const worldUp: Vec3 = [0, 1, 0];
-  let right = normalizeVec(cross(forward, worldUp));
-  if (right[0] === 0 && right[1] === 0 && right[2] === 0) {
-    right = [1, 0, 0]; // camera looking straight up/down the Y axis; arbitrary but stable fallback
-  }
-  const camUp = normalizeVec(cross(right, forward));
-
-  const dx = dot(normal, right);
-  const dy = -dot(normal, camUp); // screen Y grows downward, world/camera "up" grows upward
-  const magnitude = Math.max(0.15, Math.min(1, Math.hypot(dx, dy)));
-  const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-  return { angleDeg, magnitude };
-}
-
 type ColorPreviewState =
   | { phase: "idle" }
   | { phase: "generating" }
@@ -184,13 +130,6 @@ type ModelState =
   | { phase: "error"; message: string };
 
 const POLL_INTERVAL_MS = 4000;
-
-// Visual-only indicator pegs (not the real hole diameter) showing where and
-// in which direction a hole will actually be drilled, rendered as real 3D
-// geometry injected into the previewed GLB so occlusion/lighting look right.
-const HOLE_MARKER_DIAMETER_MM = 0.8;
-const HOLE_MARKER_HEIGHT_MM = 8;
-const BOTTOM_HOLE_MARKER_COLOR: [number, number, number] = [0.961, 0.62, 0.043]; // amber-500
 
 // Flat alpha blending just makes the model look like semi-see-through
 // plastic, not real clear resin/crystal. Real transparency needs light to
@@ -270,9 +209,6 @@ export function PreviewPanel({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isClearMaterial, setIsClearMaterial] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [placingHoleTarget, setPlacingHoleTarget] = useState<"bottom" | null>(
-    null
-  );
   const [expandedView, setExpandedView] = useState<"model" | "preview" | null>(
     null
   );
@@ -280,32 +216,15 @@ export function PreviewPanel({
   const modelViewerRef = useRef<ModelViewerElement | null>(null);
   const modalModelViewerRef = useRef<ModelViewerElement | null>(null);
   const suppressResetRef = useRef(false);
-  const [crosshairPoint, setCrosshairPoint] = useState<{
-    x: number;
-    y: number;
-    z: number;
-    nx: number;
-    ny: number;
-    nz: number;
-  } | null>(null);
-  const [crosshairArrow, setCrosshairArrow] = useState<{
-    angleDeg: number;
-    magnitude: number;
-  } | null>(null);
-  const modelBufferCacheRef = useRef<{ url: string; buffer: ArrayBuffer } | null>(
-    null
-  );
-  const markerBlobUrlRef = useRef<string | null>(null);
-  const [markerModelUrl, setMarkerModelUrl] = useState<string | null>(null);
 
   const { user } = useAuth();
   const credits = useCredits();
   const hasCredits = (credits ?? 0) > 0;
 
   const { control, setValue, register } = useFormContext<OrderFormValues>();
-  const [wantsHardware, bottomHolePosition, bottomHoleDiameterMm] = useWatch({
+  const [wantsHardware] = useWatch({
     control,
-    name: ["wantsHardware", "bottomHolePosition", "bottomHoleDiameterMm"],
+    name: ["wantsHardware"],
   });
 
   if (purchasedColors.length > 0 && !purchasedColors.includes(activeColor)) {
@@ -329,78 +248,7 @@ export function PreviewPanel({
   const currentModelUrl =
     modelState.phase === "success" ? modelState.modelUrl : null;
 
-  // Renders the placed hole(s) as real 3D marker geometry (position + actual
-  // drill direction) injected into a copy of the GLB, so the preview shows
-  // correctly-occluded/lit pegs instead of a flat camera-facing dot.
-  useEffect(() => {
-    let cancelled = false;
-
-    async function rebuild() {
-      const markers: MarkerSpec[] = [];
-      if (bottomHolePosition) {
-        markers.push({
-          position: [bottomHolePosition.x, bottomHolePosition.y, bottomHolePosition.z],
-          direction:
-            typeof bottomHolePosition.nx === "number" &&
-            typeof bottomHolePosition.ny === "number" &&
-            typeof bottomHolePosition.nz === "number"
-              ? [bottomHolePosition.nx, bottomHolePosition.ny, bottomHolePosition.nz]
-              : [0, -1, 0],
-          diameterMm: HOLE_MARKER_DIAMETER_MM,
-          heightMm: HOLE_MARKER_HEIGHT_MM,
-          colorRgb: BOTTOM_HOLE_MARKER_COLOR,
-        });
-      }
-
-      if (!currentModelUrl || markers.length === 0) {
-        if (markerBlobUrlRef.current) {
-          URL.revokeObjectURL(markerBlobUrlRef.current);
-          markerBlobUrlRef.current = null;
-        }
-        setMarkerModelUrl(null);
-        return;
-      }
-
-      try {
-        let cached = modelBufferCacheRef.current;
-        if (!cached || cached.url !== currentModelUrl) {
-          const res = await fetch(currentModelUrl);
-          if (!res.ok) throw new Error("モデルの取得に失敗しました");
-          const buffer = await res.arrayBuffer();
-          cached = { url: currentModelUrl, buffer };
-          modelBufferCacheRef.current = cached;
-        }
-        if (cancelled) return;
-
-        const augmented = injectHoleMarkers(cached.buffer, markers);
-        const blob = new Blob([augmented], { type: "model/gltf-binary" });
-        const url = URL.createObjectURL(blob);
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        if (markerBlobUrlRef.current) URL.revokeObjectURL(markerBlobUrlRef.current);
-        markerBlobUrlRef.current = url;
-        setMarkerModelUrl(url);
-      } catch (error) {
-        console.error("hole marker preview failed", error);
-        setMarkerModelUrl(null);
-      }
-    }
-
-    rebuild();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentModelUrl, bottomHolePosition]);
-
-  useEffect(() => {
-    return () => {
-      if (markerBlobUrlRef.current) URL.revokeObjectURL(markerBlobUrlRef.current);
-    };
-  }, []);
-
-  const displayModelUrl = markerModelUrl ?? currentModelUrl ?? undefined;
+  const displayModelUrl = currentModelUrl ?? undefined;
 
   useEffect(() => {
     import("@google/model-viewer");
@@ -588,8 +436,6 @@ export function PreviewPanel({
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     onGenerated(null);
     setValue("chainPositionNote", "");
-    setValue("bottomHolePosition", null);
-    setPlacingHoleTarget(null);
     const finishedPreviewUrls: FinishedPreviewUrls = Object.fromEntries(
       Object.entries(previewsByColor)
         .filter(([, state]) => state?.phase === "success")
@@ -684,8 +530,6 @@ export function PreviewPanel({
   function handleSelectGalleryItem(entry: GeneratedModel) {
     if (entry.taskId === selectedTaskId) return;
     setValue("chainPositionNote", "");
-    setValue("bottomHolePosition", null);
-    setPlacingHoleTarget(null);
     suppressResetRef.current = true;
     setValue("subject", entry.subject, { shouldValidate: true });
     setValue("pose", entry.pose, { shouldValidate: true });
@@ -707,80 +551,8 @@ export function PreviewPanel({
     });
   }
 
-  // Placement uses a fixed center "crosshair" instead of tap-to-place: tapping a precise
-  // point directly is unreliable on touch (finger occludes the target, small hitboxes on a
-  // rotating model), so instead the user freely rotates/pans the model with model-viewer's
-  // own camera-controls (never competing with a placement gesture) until the desired spot
-  // lines up with the on-screen crosshair, then confirms. This tracks the point currently
-  // under the crosshair in real time so the live preview hotspot follows the model as it turns.
-  function recomputeCrosshairPoint(viewer: ModelViewerElement | null) {
-    if (!viewer) return;
-    const rect = viewer.getBoundingClientRect();
-    const hit = viewer.positionAndNormalFromPoint(rect.width / 2, rect.height / 2);
-    if (!hit) {
-      setCrosshairPoint(null);
-      setCrosshairArrow(null);
-      return;
-    }
-    setCrosshairPoint({
-      x: hit.position.x,
-      y: hit.position.y,
-      z: hit.position.z,
-      nx: hit.normal.x,
-      ny: hit.normal.y,
-      nz: hit.normal.z,
-    });
-    setCrosshairArrow(
-      computeNormalScreenArrow(
-        [hit.normal.x, hit.normal.y, hit.normal.z],
-        viewer.getCameraOrbit()
-      )
-    );
-  }
-
-  useEffect(() => {
-    if (!placingHoleTarget || expandedView !== "model") {
-      setCrosshairPoint(null);
-      setCrosshairArrow(null);
-      return;
-    }
-    const viewer = modalModelViewerRef.current;
-    if (!viewer) return;
-    const handle = () => recomputeCrosshairPoint(viewer);
-    handle();
-    viewer.addEventListener("camera-change", handle);
-    viewer.addEventListener("load", handle);
-    return () => {
-      viewer.removeEventListener("camera-change", handle);
-      viewer.removeEventListener("load", handle);
-    };
-  }, [placingHoleTarget, expandedView]);
-
-  function confirmPlacement() {
-    if (!crosshairPoint || !placingHoleTarget) return;
-    setValue("bottomHolePosition", crosshairPoint);
-    setPlacingHoleTarget(null);
-  }
-
   function closeExpandedView() {
     setExpandedView(null);
-    setPlacingHoleTarget(null);
-  }
-
-  function normalAttr(
-    point: { nx?: number; ny?: number; nz?: number },
-    fallback: readonly [number, number, number]
-  ): string {
-    const [fx, fy, fz] = fallback;
-    const nx = point.nx ?? fx;
-    const ny = point.ny ?? fy;
-    const nz = point.nz ?? fz;
-    return `${nx}m ${ny}m ${nz}m`;
-  }
-
-  function startPlacing(target: "bottom") {
-    setPlacingHoleTarget((prev) => (prev === target ? null : target));
-    setExpandedView("model");
   }
 
   return (
@@ -833,25 +605,10 @@ export function PreviewPanel({
               src={displayModelUrl}
               alt="生成された3Dモデルのプレビュー"
               camera-controls
-              auto-rotate={!placingHoleTarget}
+              auto-rotate
               shadow-intensity="1"
               style={{ width: "100%", height: "100%" }}
-            >
-              {bottomHolePosition && (
-                <button
-                  type="button"
-                  slot="hotspot-bottom-hole"
-                  data-position={`${bottomHolePosition.x}m ${bottomHolePosition.y}m ${bottomHolePosition.z}m`}
-                  data-normal={normalAttr(bottomHolePosition, [0, -1, 0])}
-                  style={{
-                    width: `${Math.max(12, (bottomHoleDiameterMm ?? 10) * 1.2)}px`,
-                    height: `${Math.max(12, (bottomHoleDiameterMm ?? 10) * 1.2)}px`,
-                  }}
-                  className="-translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-amber-500 shadow"
-                  aria-label="下の穴（コルク用）の位置"
-                />
-              )}
-            </model-viewer>
+            />
           )}
           {modelState.phase === "error" && (
             <p className="text-xs text-red-600">{modelState.message}</p>
@@ -1052,53 +809,6 @@ export function PreviewPanel({
         </div>
       )}
 
-      {modelState.phase === "success" && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs text-slate-600">
-            <span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500 align-middle" />
-            下の穴（コルク用・レジン充填口）の位置と大きさを指定できます
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => startPlacing("bottom")}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
-            >
-              <MapPin className="h-3.5 w-3.5" />
-              {placingHoleTarget === "bottom"
-                ? "指定中（完了するには下のボタン）"
-                : bottomHolePosition
-                  ? "位置を選び直す"
-                  : "位置を指定する"}
-            </button>
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
-              直径
-              <input
-                type="number"
-                min={MIN_BOTTOM_HOLE_DIAMETER_MM}
-                max={MAX_BOTTOM_HOLE_DIAMETER_MM}
-                value={bottomHoleDiameterMm ?? DEFAULT_BOTTOM_HOLE_DIAMETER_MM}
-                onChange={(e) =>
-                  setValue("bottomHoleDiameterMm", Number(e.target.value))
-                }
-                className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
-              />
-              mm
-            </label>
-          </div>
-          {bottomHolePosition && placingHoleTarget !== "bottom" && (
-            <p className="mt-1 text-xs text-slate-500">
-              位置を指定しました（座標: x={bottomHolePosition.x.toFixed(2)}, y=
-              {bottomHolePosition.y.toFixed(2)}, z=
-              {bottomHolePosition.z.toFixed(2)}）
-            </p>
-          )}
-          <p className="mt-1 text-[10px] text-slate-400">
-            ※ここで指定した位置・大きさをもとに、製造時に自動で穴あけ加工されます
-          </p>
-        </div>
-      )}
-
       {gallery.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {gallery.map((entry) => (
@@ -1166,124 +876,10 @@ export function PreviewPanel({
                 src={displayModelUrl}
                 alt="生成された3Dモデルのプレビュー（拡大）"
                 camera-controls
-                auto-rotate={!placingHoleTarget}
+                auto-rotate
                 shadow-intensity="1"
                 style={{ width: "100%", height: "100%" }}
-              >
-                {bottomHolePosition && (
-                  <button
-                    type="button"
-                    slot="hotspot-bottom-hole"
-                    data-position={`${bottomHolePosition.x}m ${bottomHolePosition.y}m ${bottomHolePosition.z}m`}
-                    data-normal={normalAttr(bottomHolePosition, [0, -1, 0])}
-                    style={{
-                      width: `${Math.max(12, (bottomHoleDiameterMm ?? 10) * 1.2)}px`,
-                      height: `${Math.max(12, (bottomHoleDiameterMm ?? 10) * 1.2)}px`,
-                    }}
-                    className="-translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-amber-500 shadow"
-                    aria-label="下の穴（コルク用）の位置"
-                  />
-                )}
-                {placingHoleTarget && crosshairPoint && (
-                  <button
-                    type="button"
-                    slot="hotspot-crosshair-preview"
-                    data-position={`${crosshairPoint.x}m ${crosshairPoint.y}m ${crosshairPoint.z}m`}
-                    data-normal={normalAttr(crosshairPoint, [0, -1, 0])}
-                    className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
-                    aria-hidden="true"
-                  >
-                    {/* Surface indicator: the short perpendicular line is the tangent
-                        plane seen edge-on, the arrow is the outward normal, both
-                        projected into current screen space from computeNormalScreenArrow
-                        (see its comment for why this can't just use the real 3D normal). */}
-                    <svg
-                      width="44"
-                      height="44"
-                      viewBox="0 0 44 44"
-                      style={{
-                        transform: `rotate(${crosshairArrow?.angleDeg ?? 0}deg)`,
-                      }}
-                    >
-                      <g
-                        stroke="#f59e0b"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                      >
-                        <line
-                          x1={22}
-                          y1={22 - 10}
-                          x2={22}
-                          y2={22 + 10}
-                          opacity={0.85}
-                        />
-                        <line
-                          x1={22}
-                          y1={22}
-                          x2={22 + 16 * (crosshairArrow?.magnitude ?? 0.15)}
-                          y2={22}
-                        />
-                        <line
-                          x1={22 + 16 * (crosshairArrow?.magnitude ?? 0.15) - 4}
-                          y1={22 - 4}
-                          x2={22 + 16 * (crosshairArrow?.magnitude ?? 0.15)}
-                          y2={22}
-                        />
-                        <line
-                          x1={22 + 16 * (crosshairArrow?.magnitude ?? 0.15) - 4}
-                          y1={22 + 4}
-                          x2={22 + 16 * (crosshairArrow?.magnitude ?? 0.15)}
-                          y2={22}
-                        />
-                      </g>
-                      <circle
-                        cx={22}
-                        cy={22}
-                        r={4}
-                        fill="#f59e0b"
-                        stroke="white"
-                        strokeWidth={1.5}
-                      />
-                    </svg>
-                  </button>
-                )}
-              </model-viewer>
-            )}
-            {expandedView === "model" && placingHoleTarget && (
-              <>
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow"
-                >
-                  <Crosshair className="h-8 w-8" strokeWidth={1.5} />
-                </div>
-                <p className="pointer-events-none absolute inset-x-0 top-4 z-10 text-center text-sm font-medium text-white">
-                  モデルを回転させて、下の穴を開けたい場所を中央の照準に合わせてください
-                </p>
-                <div className="absolute inset-x-0 bottom-4 z-10 flex justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setPlacingHoleTarget(null);
-                    }}
-                    className="rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow hover:bg-white"
-                  >
-                    キャンセル
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!crosshairPoint}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      confirmPlacement();
-                    }}
-                    className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 shadow hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    ここに指定する
-                  </button>
-                </div>
-              </>
+              />
             )}
             {expandedView === "preview" && activePreview.phase === "success" && (
               // eslint-disable-next-line @next/next/no-img-element

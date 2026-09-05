@@ -255,14 +255,6 @@ function ItemCard({
               : "なし"
           }
         />
-        <InfoRow
-          label="下の穴（コルク用）"
-          value={
-            item.bottomHolePosition
-              ? `x=${item.bottomHolePosition.x.toFixed(2)}, y=${item.bottomHolePosition.y.toFixed(2)}, z=${item.bottomHolePosition.z.toFixed(2)}（直径${item.bottomHoleDiameterMm ?? "-"}mm）`
-              : "未指定"
-          }
-        />
       </div>
 
       <div className="rounded-xl bg-slate-50 p-3">

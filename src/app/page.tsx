@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRef } from "react";
 import { Zen_Old_Mincho, Zen_Kaku_Gothic_New } from "next/font/google";
 import { Moon, Smartphone } from "lucide-react";
-import { FIGURE_PRICE_YEN } from "@/lib/pricing";
+import { SMALL_SIZE_PRICE_YEN } from "@/lib/pricing";
 import { IntroSplash } from "@/components/home/IntroSplash";
 
 const zenMincho = Zen_Old_Mincho({
@@ -217,7 +217,7 @@ export default function Home() {
           暗闇でそっと光る、あなただけのお守り。
         </h2>
         <p className="relative mx-auto mt-3 max-w-sm text-sm leading-relaxed text-slate-300">
-          毛入れ用以外の全色に蓄光素材入り。電気を消すと、青白い光がふわりと浮かび上がります（光り方の強さは色によって異なります）。
+          毛入れ用以外の全色に蓄光素材入り。電気を消すと、やさしい光がふわりと浮かび上がります（光り方の強さや光る色は色によって異なります）。
           眠る前や、少し心細い夜に寄り添う存在に。
         </p>
         <p className="relative mx-auto mt-3 flex max-w-xs items-center justify-center gap-1.5 text-xs text-slate-400">
@@ -259,7 +259,7 @@ export default function Home() {
               <ul className="mt-5 space-y-2.5 text-xs text-[#6b5c40] dark:text-[#9fb0ae]">
                 <li className="flex items-start gap-2">
                   <span className="text-[#0f766e] dark:text-[#7fd8cb]">✦</span>
-                  ペットの写真からAIが3Dモデルを生成
+                  ペットや思い出の品の写真からAIが3Dモデルを生成
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#0f766e] dark:text-[#7fd8cb]">✦</span>
@@ -305,7 +305,7 @@ export default function Home() {
                     キーホルダー（S）
                   </p>
                   <p className="text-xs font-bold tabular-nums">
-                    ¥{FIGURE_PRICE_YEN.toLocaleString()}〜
+                    ¥{SMALL_SIZE_PRICE_YEN.toLocaleString()}〜
                   </p>
                 </div>
               </div>

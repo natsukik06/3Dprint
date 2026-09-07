@@ -4,7 +4,10 @@ import {
   ADDITIONAL_UNIT_PRICE_YEN,
   FIGURE_PRICE_YEN,
   FREE_SHIPPING_SUBTOTAL_YEN,
+  HARDWARE_ADDON_PRICE_YEN,
   SHIPPING_FEE_YEN,
+  SMALL_SIZE_ADDITIONAL_UNIT_PRICE_YEN,
+  SMALL_SIZE_PRICE_YEN,
 } from "@/lib/pricing";
 
 type Row = { label: string; value: string };
@@ -23,11 +26,11 @@ const ROWS: Row[] = [
   { label: "メールアドレス", value: "natsuki.ko006@gmail.com" },
   {
     label: "販売価格",
-    value: `1個目 ${FIGURE_PRICE_YEN.toLocaleString()}円（税込）、2個目以降 +${ADDITIONAL_UNIT_PRICE_YEN.toLocaleString()}円/個（税込）。表示価格はすべて税込です。`,
+    value: `Sサイズ 1個目${SMALL_SIZE_PRICE_YEN.toLocaleString()}円、2個目以降+${SMALL_SIZE_ADDITIONAL_UNIT_PRICE_YEN.toLocaleString()}円/個（税込）。Mサイズ 1個目${FIGURE_PRICE_YEN.toLocaleString()}円、2個目以降+${ADDITIONAL_UNIT_PRICE_YEN.toLocaleString()}円/個（税込）。表示価格はすべて税込です。`,
   },
   {
     label: "商品代金以外の必要料金",
-    value: `送料 ${SHIPPING_FEE_YEN.toLocaleString()}円（税込）。同一注文で合計${FREE_SHIPPING_SUBTOTAL_YEN.toLocaleString()}円以上ご注文の場合は送料無料。決済手数料はかかりません。`,
+    value: `送料 ${SHIPPING_FEE_YEN.toLocaleString()}円（税込）。同一注文で合計${FREE_SHIPPING_SUBTOTAL_YEN.toLocaleString()}円以上ご注文の場合は送料無料。ストラップ・キーホルダー用金具穴の追加は+${HARDWARE_ADDON_PRICE_YEN.toLocaleString()}円/個（税込・任意）。決済手数料はかかりません。`,
   },
   { label: "お支払い方法", value: "クレジットカード決済・PayPay（Stripe）" },
   { label: "お支払い時期", value: "ご注文時に全額前払いとなります。" },

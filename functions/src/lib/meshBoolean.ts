@@ -7,6 +7,7 @@
 // analysis. As real ESM, this static import resolves normally.
 import Module, { type Manifold as ManifoldInstance, type ManifoldToplevel } from "manifold-3d";
 import { buildAlignAndTranslate } from "./rotation.js";
+import { engraveLetter } from "./textEngrave.js";
 
 let wasmPromise: Promise<ManifoldToplevel> | null = null;
 
@@ -59,6 +60,17 @@ function manifoldToTriangles(manifold: ManifoldInstance): Float32Array {
   return out;
 }
 
+// AI-generated meshes routinely arrive wildly oversampled for a keychain-sized print (measured
+// ~960k triangles for one real 28mm order -- see the timing investigation this was added
+// alongside) -- every triangle in the ORIGINAL mesh pays its cost again in every downstream
+// boolean op (minkowskiDifference erosion, then subtract, then the hole/engrave subtracts on
+// top). 0.02mm is well under the printer's own 46-micron pixel pitch (see
+// config/anycubic_m7_max.ini in print-pipeline/), so simplifying to that tolerance cannot change
+// what actually comes out of the printer -- it only removes geometry the print process was
+// already discarding. Pass 0 to disable (kept overridable, not hardcoded, in case a future
+// subject type needs finer surface detail than a resin pet/object keychain does).
+const DEFAULT_SIMPLIFY_TOLERANCE_MM = 0.02;
+
 /**
  * Hollows a solid triangle-soup mesh by a uniform wall thickness using morphological erosion
  * (Manifold.minkowskiDifference against a sphere of radius = wallThicknessMm), then subtracting
@@ -67,10 +79,14 @@ function manifoldToTriangles(manifold: ManifoldInstance): Float32Array {
 export async function hollowMesh(
   triangles: Float32Array,
   wallThicknessMm: number,
-  sphereSegments = 32
+  sphereSegments = 32,
+  simplifyToleranceMm = DEFAULT_SIMPLIFY_TOLERANCE_MM
 ): Promise<Float32Array> {
   const wasm = await initManifold();
-  const outer = await trianglesToManifold(triangles);
+  let outer = await trianglesToManifold(triangles);
+  if (simplifyToleranceMm > 0) {
+    outer = outer.simplify(simplifyToleranceMm);
+  }
 
   const cavity = outer.minkowskiDifference(wasm.Manifold.sphere(wallThicknessMm, sphereSegments));
   if (cavity.status() !== "NoError") {
@@ -124,4 +140,27 @@ export async function cutHoles(
   }
 
   return manifoldToTriangles(solid);
+}
+
+// NOT mirrored to src/lib/meshBoolean.ts on purpose (unlike the rest of this file) -- it depends
+// on ./textEngrave.js, which pulls in opentype.js + a bundled font file. That's fine for this
+// Cloud Functions package (already a Node-only, non-bundled-for-browser context) but would add
+// real weight to the Next.js app for a function nothing there calls (finish-mesh runs exclusively
+// as a Cloud Function -- see the comment on the API route). If this ever needs to run client-side
+// too, port textEngrave.ts over at that point rather than pre-emptively.
+export async function engraveText(
+  triangles: Float32Array,
+  letter: string,
+  position: [number, number, number],
+  normal: [number, number, number],
+  heightMm: number,
+  depthMm: number
+): Promise<Float32Array> {
+  const wasm = await initManifold();
+  const solid = await trianglesToManifold(triangles);
+  const engraved = await engraveLetter(wasm, solid, letter, position, normal, heightMm, depthMm);
+  if (engraved.status() !== "NoError") {
+    throw new Error(`刻印処理の結果が不正な形状になりました（status: ${engraved.status()}）`);
+  }
+  return manifoldToTriangles(engraved);
 }

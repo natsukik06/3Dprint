@@ -8,3 +8,7 @@ export const CREDIT_PACKS = [
 ] as const;
 
 export type CreditPackId = (typeof CREDIT_PACKS)[number]["id"];
+
+// Upper bound for a custom (non-pack) credit purchase -- guards against fat-finger or abusive
+// quantities. Well above the largest pack (30) so it never gets in a genuine bulk buyer's way.
+export const MAX_CUSTOM_CREDITS = 200;

@@ -30,6 +30,12 @@ export async function POST(
   const { id: itemId } = await params;
   let wallThicknessMm = DEFAULT_WALL_THICKNESS_MM;
   let sphereSegments = DEFAULT_SPHERE_SEGMENTS;
+  // Where the drain hole sits on the model's bottom face (0-1 fraction of its footprint).
+  // Left undefined when not specified -- the Cloud Function falls back to its own default
+  // (centered) or a legacy stored position, not to 0.5/0.5 hardcoded here.
+  let bottomHoleXFraction: number | undefined;
+  let bottomHoleZFraction: number | undefined;
+  let bottomHoleDiameterMm: number | undefined;
   try {
     const body = await request.json();
     if (typeof body?.wallThicknessMm === "number" && body.wallThicknessMm > 0) {
@@ -40,6 +46,20 @@ export async function POST(
         MAX_SPHERE_SEGMENTS,
         Math.max(MIN_SPHERE_SEGMENTS, Math.round(body.sphereSegments))
       );
+    }
+    if (
+      typeof body?.bottomHoleXFraction === "number" &&
+      body.bottomHoleXFraction >= 0 &&
+      body.bottomHoleXFraction <= 1 &&
+      typeof body?.bottomHoleZFraction === "number" &&
+      body.bottomHoleZFraction >= 0 &&
+      body.bottomHoleZFraction <= 1
+    ) {
+      bottomHoleXFraction = body.bottomHoleXFraction;
+      bottomHoleZFraction = body.bottomHoleZFraction;
+    }
+    if (typeof body?.bottomHoleDiameterMm === "number" && body.bottomHoleDiameterMm > 0) {
+      bottomHoleDiameterMm = body.bottomHoleDiameterMm;
     }
   } catch {
     // no body / invalid JSON — use defaults
@@ -56,7 +76,14 @@ export async function POST(
       status: "queued",
       progress: 0,
       message: null,
-      params: { itemId, wallThicknessMm, sphereSegments },
+      params: {
+        itemId,
+        wallThicknessMm,
+        sphereSegments,
+        bottomHoleXFraction,
+        bottomHoleZFraction,
+        bottomHoleDiameterMm,
+      },
       result: null,
       error: null,
       createdAt: FieldValue.serverTimestamp(),

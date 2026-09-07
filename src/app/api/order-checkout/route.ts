@@ -15,8 +15,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const orderRef = adminDb.collection("orders").doc(orderId);
-    const snap = await orderRef.get();
+    // Reads the pre-payment draft (order_drafts), not orders -- the real orders/{orderId} doc
+    // doesn't exist yet at this point; the webhook creates it, using this same id, once Stripe
+    // confirms payment. See submitOrder in src/lib/orders.ts for why.
+    const draftRef = adminDb.collection("order_drafts").doc(orderId);
+    const snap = await draftRef.get();
     if (!snap.exists) {
       return NextResponse.json({ error: "注文が見つかりません" }, { status: 404 });
     }
@@ -27,9 +30,6 @@ export async function POST(request: NextRequest) {
       paymentStatus: "unpaid" | "paid";
     };
 
-    if (order.paymentStatus === "paid") {
-      return NextResponse.json({ status: "already_paid" });
-    }
     if (!(order.estimatedPriceYen > 0)) {
       return NextResponse.json({ error: "金額が不正です" }, { status: 400 });
     }
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       cancel_url: `${origin}/order?checkout=cancel`,
     });
 
-    await orderRef.update({ stripeCheckoutSessionId: session.id });
+    await draftRef.update({ stripeCheckoutSessionId: session.id });
 
     return NextResponse.json({ url: session.url });
   } catch (error) {

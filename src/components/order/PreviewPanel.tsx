@@ -15,6 +15,7 @@ import {
   Loader2,
   Maximize2,
   Sparkles,
+  Upload,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -23,14 +24,17 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { signInWithGoogle } from "@/lib/auth";
 import { db } from "@/lib/firebase";
+import { uploadCustomModel } from "@/lib/orders";
 import { MAGIC_COLOR_LABELS } from "@/lib/pricing";
 import {
   MAGIC_COLOR_OPTIONS,
+  MAX_CUSTOM_MODEL_SIZE_BYTES,
   type ColorQuantities,
   type MagicColor,
   type OrderFormValues,
   type PetDetails,
   type Pose,
+  type SubjectType,
 } from "@/types/order";
 import type { ModelViewerElement } from "@google/model-viewer";
 import type { ImagePayload, View } from "@/lib/gemini";
@@ -80,11 +84,13 @@ type GeneratedResult = {
   modelUrl: string;
   finishedPreviewUrls: FinishedPreviewUrls;
   referenceImageUrls: string[];
+  isCustomModel?: boolean;
 };
 
 type PreviewPanelProps = {
   photos: File[];
   subject: string;
+  subjectType: SubjectType;
   pose: Pose;
   colorQuantities: ColorQuantities;
   petDetails: PetDetails;
@@ -159,29 +165,40 @@ function applyMaterialAppearance(
     Math.max(dimensions.x, dimensions.y, dimensions.z) * 0.15 || 1;
 
   for (const material of model.materials) {
-    if (!originalMaterialAppearance.has(material)) {
-      originalMaterialAppearance.set(material, {
-        roughness: material.pbrMetallicRoughness.roughnessFactor,
-        metallic: material.pbrMetallicRoughness.metallicFactor,
-      });
-    }
-    const original = originalMaterialAppearance.get(material)!;
+    // Wrapped per-material: a customer-uploaded model (see "自分の3Dモデルを持ち込む") can carry
+    // material setups the AI-generated pipeline never produces -- e.g. KHR_materials_unlit, or a
+    // pbrMetallicRoughness channel missing entirely -- and model-viewer's scene-graph setters
+    // throw in those cases. One incompatible material shouldn't crash the whole toggle (and
+    // everyone else's 3D preview with it); best-effort the rest and move on.
+    try {
+      if (!material.pbrMetallicRoughness) continue;
 
-    if (clear) {
-      material.setTransmissionFactor(1);
-      material.setIor(CLEAR_MATERIAL_IOR);
-      material.setThicknessFactor(thickness);
-      material.setAttenuationColor([1, 1, 1]);
-      material.pbrMetallicRoughness.setRoughnessFactor(CLEAR_MATERIAL_ROUGHNESS);
-      material.pbrMetallicRoughness.setMetallicFactor(0);
-      material.setAlphaMode("OPAQUE");
-      material.setDoubleSided(true);
-    } else {
-      material.setTransmissionFactor(0);
-      material.pbrMetallicRoughness.setRoughnessFactor(original.roughness);
-      material.pbrMetallicRoughness.setMetallicFactor(original.metallic);
-      material.setAlphaMode("OPAQUE");
-      material.setDoubleSided(false);
+      if (!originalMaterialAppearance.has(material)) {
+        originalMaterialAppearance.set(material, {
+          roughness: material.pbrMetallicRoughness.roughnessFactor,
+          metallic: material.pbrMetallicRoughness.metallicFactor,
+        });
+      }
+      const original = originalMaterialAppearance.get(material)!;
+
+      if (clear) {
+        material.setTransmissionFactor(1);
+        material.setIor(CLEAR_MATERIAL_IOR);
+        material.setThicknessFactor(thickness);
+        material.setAttenuationColor([1, 1, 1]);
+        material.pbrMetallicRoughness.setRoughnessFactor(CLEAR_MATERIAL_ROUGHNESS);
+        material.pbrMetallicRoughness.setMetallicFactor(0);
+        material.setAlphaMode("OPAQUE");
+        material.setDoubleSided(true);
+      } else {
+        material.setTransmissionFactor(0);
+        material.pbrMetallicRoughness.setRoughnessFactor(original.roughness);
+        material.pbrMetallicRoughness.setMetallicFactor(original.metallic);
+        material.setAlphaMode("OPAQUE");
+        material.setDoubleSided(false);
+      }
+    } catch (err) {
+      console.warn("clear-material appearance failed for one material, skipping it", err);
     }
   }
 }
@@ -189,6 +206,7 @@ function applyMaterialAppearance(
 export function PreviewPanel({
   photos,
   subject,
+  subjectType,
   pose,
   colorQuantities,
   petDetails,
@@ -205,6 +223,10 @@ export function PreviewPanel({
     purchasedColors[0] ?? MAGIC_COLOR_OPTIONS[0]
   );
   const [modelState, setModelState] = useState<ModelState>({ phase: "idle" });
+  const [mode, setMode] = useState<"ai" | "custom">("ai");
+  const [customUpload, setCustomUpload] = useState<
+    { phase: "idle" } | { phase: "uploading" } | { phase: "error"; message: string }
+  >({ phase: "idle" });
   const [gallery, setGallery] = useState<GeneratedModel[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isClearMaterial, setIsClearMaterial] = useState(false);
@@ -260,13 +282,14 @@ export function PreviewPanel({
     };
   }, []);
 
-  const [prevInputs, setPrevInputs] = useState({ photos, subject, pose });
+  const [prevInputs, setPrevInputs] = useState({ photos, subject, subjectType, pose });
   if (
     prevInputs.photos !== photos ||
     prevInputs.subject !== subject ||
+    prevInputs.subjectType !== subjectType ||
     prevInputs.pose !== pose
   ) {
-    setPrevInputs({ photos, subject, pose });
+    setPrevInputs({ photos, subject, subjectType, pose });
     if (suppressResetRef.current) {
       suppressResetRef.current = false;
     } else {
@@ -337,6 +360,7 @@ export function PreviewPanel({
       const formData = new FormData();
       photos.forEach((file) => formData.append("photos", file));
       formData.append("subject", subject);
+      formData.append("subjectType", subjectType);
       formData.append("pose", pose);
       formData.append("magicColor", activeColor);
       appendPetDetails(formData, petDetails);
@@ -427,8 +451,7 @@ export function PreviewPanel({
       !hasAnySuccessfulPreview ||
       photos.length === 0 ||
       !subject.trim() ||
-      !user ||
-      !hasCredits
+      !user
     ) {
       return;
     }
@@ -451,6 +474,7 @@ export function PreviewPanel({
       const formData = new FormData();
       photos.forEach((file) => formData.append("photos", file));
       formData.append("subject", subject);
+      formData.append("subjectType", subjectType);
       formData.append("pose", pose);
       appendPetDetails(formData, petDetails);
 
@@ -501,6 +525,54 @@ export function PreviewPanel({
       setModelState({
         phase: "error",
         message: err instanceof Error ? err.message : "生成開始に失敗しました",
+      });
+    }
+  }
+
+  function handleModeChange(next: "ai" | "custom") {
+    if (next === mode) return;
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    setMode(next);
+    setModelState({ phase: "idle" });
+    setCustomUpload({ phase: "idle" });
+    setValue("chainPositionNote", "");
+    onGenerated(null);
+  }
+
+  async function handleCustomModelFile(file: File) {
+    if (!file.name.toLowerCase().endsWith(".glb")) {
+      setCustomUpload({
+        phase: "error",
+        message: "GLB形式（.glb）の3Dモデルファイルを選択してください",
+      });
+      return;
+    }
+    if (file.size > MAX_CUSTOM_MODEL_SIZE_BYTES) {
+      setCustomUpload({
+        phase: "error",
+        message: `ファイルサイズは${Math.floor(
+          MAX_CUSTOM_MODEL_SIZE_BYTES / (1024 * 1024)
+        )}MB以下にしてください`,
+      });
+      return;
+    }
+
+    setCustomUpload({ phase: "uploading" });
+    try {
+      const modelUrl = await uploadCustomModel(file);
+      setCustomUpload({ phase: "idle" });
+      setModelState({ phase: "success", modelUrl });
+      setValue("chainPositionNote", "");
+      onGenerated({
+        modelUrl,
+        finishedPreviewUrls: {},
+        referenceImageUrls: [],
+        isCustomModel: true,
+      });
+    } catch (err) {
+      setCustomUpload({
+        phase: "error",
+        message: err instanceof Error ? err.message : "アップロードに失敗しました",
       });
     }
   }
@@ -557,6 +629,27 @@ export function PreviewPanel({
 
   return (
     <div className="space-y-3">
+      <div className="flex gap-2 rounded-lg bg-slate-100 p-1 text-xs font-medium">
+        <button
+          type="button"
+          onClick={() => handleModeChange("ai")}
+          className={`flex-1 rounded-md py-1.5 transition-colors ${
+            mode === "ai" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+          }`}
+        >
+          AIで生成する
+        </button>
+        <button
+          type="button"
+          onClick={() => handleModeChange("custom")}
+          className={`flex-1 rounded-md py-1.5 transition-colors ${
+            mode === "custom" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+          }`}
+        >
+          自分の3Dモデルを持ち込む
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <div className="relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-3 text-center">
           {modelState.phase === "success" && (
@@ -616,39 +709,50 @@ export function PreviewPanel({
         </div>
 
         <div className="relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-3 text-center">
-          {activePreview.phase === "success" && (
-            <button
-              type="button"
-              onClick={() => setExpandedView("preview")}
-              aria-label="完成イメージを拡大表示"
-              className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1.5 text-slate-600 shadow hover:bg-white"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {activePreview.phase === "idle" && (
+          {mode === "custom" ? (
             <>
               <Sparkles className="h-10 w-10 text-slate-300" strokeWidth={1.5} />
-              <p className="text-xs text-slate-400">完成イメージ（未生成）</p>
+              <p className="text-xs text-slate-400">
+                持ち込みモデルのため完成イメージのプレビューはありません
+              </p>
             </>
-          )}
-          {activePreview.phase === "generating" && (
+          ) : (
             <>
-              <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-              <p className="text-xs text-slate-500">生成中...</p>
-              <p className="text-[10px] text-slate-400">{previewGenerationStatus}</p>
+              {activePreview.phase === "success" && (
+                <button
+                  type="button"
+                  onClick={() => setExpandedView("preview")}
+                  aria-label="完成イメージを拡大表示"
+                  className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1.5 text-slate-600 shadow hover:bg-white"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {activePreview.phase === "idle" && (
+                <>
+                  <Sparkles className="h-10 w-10 text-slate-300" strokeWidth={1.5} />
+                  <p className="text-xs text-slate-400">完成イメージ（未生成）</p>
+                </>
+              )}
+              {activePreview.phase === "generating" && (
+                <>
+                  <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                  <p className="text-xs text-slate-500">生成中...</p>
+                  <p className="text-[10px] text-slate-400">{previewGenerationStatus}</p>
+                </>
+              )}
+              {activePreview.phase === "success" && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={activePreview.previewUrl}
+                  alt="魔法の素材での完成イメージ"
+                  className="h-full w-full object-cover"
+                />
+              )}
+              {activePreview.phase === "error" && (
+                <p className="text-xs text-red-600">{activePreview.message}</p>
+              )}
             </>
-          )}
-          {activePreview.phase === "success" && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={activePreview.previewUrl}
-              alt="魔法の素材での完成イメージ"
-              className="h-full w-full object-cover"
-            />
-          )}
-          {activePreview.phase === "error" && (
-            <p className="text-xs text-red-600">{activePreview.message}</p>
           )}
         </div>
       </div>
@@ -656,7 +760,45 @@ export function PreviewPanel({
         左：3D形状（白マット） / 右：選択中カラーの完成イメージ
       </p>
 
-      {purchasedColors.length > 1 && (
+      {mode === "custom" && (
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white py-4 text-center hover:border-slate-400">
+            <Upload className="h-6 w-6 text-slate-400" />
+            <span className="text-xs font-medium text-slate-700">
+              {customUpload.phase === "uploading"
+                ? "アップロード中..."
+                : "3Dモデルファイル（.glb）を選択"}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              GLB形式、{Math.floor(MAX_CUSTOM_MODEL_SIZE_BYTES / (1024 * 1024))}MBまで
+            </span>
+            <input
+              type="file"
+              accept=".glb,model/gltf-binary"
+              className="hidden"
+              disabled={customUpload.phase === "uploading"}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) handleCustomModelFile(file);
+              }}
+            />
+          </label>
+          {customUpload.phase === "error" && (
+            <p className="text-xs text-red-600">{customUpload.message}</p>
+          )}
+          {modelState.phase === "success" && customUpload.phase === "idle" && (
+            <p className="text-xs text-emerald-600">
+              ✓ アップロード済み。サイズはS/Mサイズの指定に合わせて調整されます。
+            </p>
+          )}
+          <p className="text-[10px] text-slate-400">
+            寸法・強度・厚みなどの造形上の理由で、お預かりしたモデルをそのまま製作できない場合があります。あらかじめご了承ください。
+          </p>
+        </div>
+      )}
+
+      {mode === "ai" && purchasedColors.length > 1 && (
         <div className="flex justify-center gap-2">
           {purchasedColors.map((color) => (
             <button
@@ -676,49 +818,49 @@ export function PreviewPanel({
         </div>
       )}
 
-      {user ? (
-        <button
-          type="button"
-          onClick={handleGeneratePreviewClick}
-          disabled={
-            photos.length === 0 ||
-            !subject.trim() ||
-            activePreview.phase === "generating"
-          }
-          className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {activePreview.phase === "success" || activePreview.phase === "error"
-            ? `${MAGIC_COLOR_LABELS[activeColor]}の完成イメージを作り直す（無料）`
-            : `${MAGIC_COLOR_LABELS[activeColor]}の完成イメージを生成する（無料）`}
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => signInWithGoogle()}
-          className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-        >
-          ログインして完成イメージを生成する
-        </button>
-      )}
+      {mode === "ai" &&
+        (user ? (
+          <button
+            type="button"
+            onClick={handleGeneratePreviewClick}
+            disabled={
+              photos.length === 0 ||
+              !subject.trim() ||
+              activePreview.phase === "generating"
+            }
+            className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {activePreview.phase === "success" || activePreview.phase === "error"
+              ? `${MAGIC_COLOR_LABELS[activeColor]}の完成イメージを作り直す（無料）`
+              : `${MAGIC_COLOR_LABELS[activeColor]}の完成イメージを生成する（無料）`}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => signInWithGoogle()}
+            className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            ログインして完成イメージを生成する
+          </button>
+        ))}
 
-      {hasAnySuccessfulPreview && modelState.phase !== "reviewingViews" && (
+      {mode === "ai" && hasAnySuccessfulPreview && modelState.phase !== "reviewingViews" && (
         <button
           type="button"
           onClick={handleGenerateModelClick}
           disabled={
-            !hasCredits ||
             modelState.phase === "starting" ||
             modelState.phase === "polling"
           }
           className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {modelState.phase === "success" || modelState.phase === "error"
-            ? "この形状でもう一度3D化する（1クレジット）"
-            : "この形状を3D化する（1クレジット）"}
+            ? "この形状でもう一度3D化する（無料）"
+            : "この形状を3D化する（無料）"}
         </button>
       )}
 
-      {modelState.phase === "reviewingViews" && (
+      {mode === "ai" && modelState.phase === "reviewingViews" && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs font-medium text-slate-700">
             4方向の形状を確認してください
@@ -744,18 +886,18 @@ export function PreviewPanel({
             <button
               type="button"
               onClick={handleGenerateModelClick}
-              disabled={!hasCredits || modelState.confirming}
+              disabled={modelState.confirming}
               className="flex-1 rounded-lg border border-slate-300 bg-white py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              作り直す（1クレジット）
+              作り直す（無料）
             </button>
             <button
               type="button"
               onClick={handleConfirmViews}
-              disabled={modelState.confirming}
+              disabled={!hasCredits || modelState.confirming}
               className="flex-1 rounded-lg bg-slate-800 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {modelState.confirming ? "作成中..." : "この形状でOK・3Dモデルを作成"}
+              {modelState.confirming ? "作成中..." : "この形状でOK・3Dモデルを作成（1クレジット）"}
             </button>
           </div>
         </div>
@@ -809,7 +951,7 @@ export function PreviewPanel({
         </div>
       )}
 
-      {gallery.length > 1 && (
+      {mode === "ai" && gallery.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {gallery.map((entry) => (
             <button
@@ -837,19 +979,19 @@ export function PreviewPanel({
         </div>
       )}
 
-      {modelState.phase !== "success" && photos.length === 0 && (
+      {mode === "ai" && modelState.phase !== "success" && photos.length === 0 && (
         <p className="text-center text-xs text-slate-400">
           先に写真をアップロードしてください（過去に生成したモデルはギャラリーから選べます）
         </p>
       )}
-      {modelState.phase !== "success" && photos.length > 0 && !subject.trim() && (
+      {mode === "ai" && modelState.phase !== "success" && photos.length > 0 && !subject.trim() && (
         <p className="text-center text-xs text-slate-400">
           「何を作りますか？」を入力してください
         </p>
       )}
-      {user && hasAnySuccessfulPreview && !hasCredits && (
+      {mode === "ai" && user && modelState.phase === "reviewingViews" && !hasCredits && (
         <p className="text-center text-xs text-amber-600">
-          クレジットが不足しています。購入してからお試しください。
+          クレジットが不足しています。3Dモデルの作成には購入が必要です（形状の確認・作り直しは無料です）。
         </p>
       )}
 

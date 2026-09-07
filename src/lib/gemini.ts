@@ -1,6 +1,6 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import sharp from "sharp";
-import type { MagicColor, PetDetails, Pose } from "@/types/order";
+import type { MagicColor, PetDetails, Pose, SubjectType } from "@/types/order";
 
 const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
 
@@ -27,23 +27,47 @@ const MAGIC_COLOR_PHRASES: Record<MagicColor, string> = {
 
 export type ImagePayload = { data: string; mimeType: string };
 
+// Field labels for the same four detail-note inputs, phrased for whichever kind of subject this
+// order is (see SUBJECT_TYPE_OPTIONS in src/types/order.ts) -- the underlying form fields
+// (furColorNote/breedNote/accessoryNote/bodyFeatureNote) are reused as-is for "object" orders
+// too, just re-labeled in the UI and here, rather than adding a parallel set of fields.
+const DETAIL_LABELS: Record<SubjectType, Record<keyof PetDetails, string>> = {
+  pet: {
+    furColorNote: "fur color/pattern",
+    breedNote: "breed",
+    accessoryNote: "clothing/accessories",
+    bodyFeatureNote: "other body features",
+  },
+  object: {
+    furColorNote: "color/pattern",
+    breedNote: "material",
+    accessoryNote: "decorations/logos",
+    bodyFeatureNote: "other distinguishing features (wear, chips, marks)",
+  },
+};
+
 // Photos alone often don't convey things like "fur is dyed/faded", breed identity, whether
-// clothing should be removed, or a docked tail — this turns whatever the customer filled in into
-// plain sentences appended to the generation prompt so those details actually reach the model.
-function petDetailsPhrase(details?: PetDetails): string {
+// clothing should be removed, or a docked tail (or, for an object: what it's made of, a chip in
+// the handle) — this turns whatever the customer filled in into plain sentences appended to the
+// generation prompt so those details actually reach the model.
+function petDetailsPhrase(
+  details: PetDetails | undefined,
+  subjectType: SubjectType
+): string {
   if (!details) return "";
+  const labels = DETAIL_LABELS[subjectType];
   const parts: string[] = [];
   if (details.furColorNote?.trim()) {
-    parts.push(`fur color/pattern: ${details.furColorNote.trim()}`);
+    parts.push(`${labels.furColorNote}: ${details.furColorNote.trim()}`);
   }
   if (details.breedNote?.trim()) {
-    parts.push(`breed: ${details.breedNote.trim()}`);
+    parts.push(`${labels.breedNote}: ${details.breedNote.trim()}`);
   }
   if (details.accessoryNote?.trim()) {
-    parts.push(`clothing/accessories: ${details.accessoryNote.trim()}`);
+    parts.push(`${labels.accessoryNote}: ${details.accessoryNote.trim()}`);
   }
   if (details.bodyFeatureNote?.trim()) {
-    parts.push(`other body features: ${details.bodyFeatureNote.trim()}`);
+    parts.push(`${labels.bodyFeatureNote}: ${details.bodyFeatureNote.trim()}`);
   }
   if (parts.length === 0) return "";
   return (
@@ -102,7 +126,24 @@ const GRID_CELLS: Record<View, { row: 0 | 1; col: 0 | 1 }> = {
 // information the reconstruction needs and was over-smoothing coat/fur shape in the process. Only
 // the print-safety constraint (no fragile paper-thin geometry) is kept, and phrased narrowly so it
 // doesn't erase the pet's actual silhouette.
-function figureGridPrompt(subject: string, pose: Pose, petDetails?: PetDetails): string {
+function figureGridPrompt(
+  subject: string,
+  pose: Pose,
+  petDetails: PetDetails | undefined,
+  subjectType: SubjectType
+): string {
+  // The engineering constraint (nothing print-fragile) is the same for both, just phrased in
+  // terms of what actually appears on each kind of subject.
+  const printSafetyPhrase =
+    subjectType === "pet"
+      ? "render fur/feathers as defined locks or tufts of a real, printable thickness rather " +
+        "than fine wispy individual strands, keep every part of the body thick and continuous, " +
+        "and avoid any thin protrusion that tapers down to a sharp point."
+      : "keep every part of the object thick and continuous, and avoid any thin handle, rim, " +
+        "blade, or protrusion that tapers down to a sharp or fragile edge.";
+  const proportionsPhrase =
+    subjectType === "pet" ? "Precise anatomical proportions" : "Precise proportions";
+
   return (
     "A single image containing a precise 2x2 grid of four photos of the same small figurine of " +
     `${subject}, in ${POSE_PHRASES[pose]}. The grid has exactly four equal-sized quadrants with no ` +
@@ -124,16 +165,14 @@ function figureGridPrompt(subject: string, pose: Pose, petDetails?: PetDetails):
     "height, identical camera distance, identical scale, identical pose — only the turntable " +
     "rotation differs between quadrants. Leave generous plain white margin around the figurine " +
     "within each quadrant so no part of it comes close to the quadrant boundary. Render the " +
-    "figurine's actual colors, markings, and coat pattern as closely as possible to the reference " +
-    "photos — do not simplify it to a plain or single-color material. This will be 3D printed at " +
-    "only a few centimeters tall, so keep the sculpted form itself sturdy: render fur/feathers as " +
-    "defined locks or tufts of a real, printable thickness rather than fine wispy individual " +
-    "strands, keep every part of the body thick and continuous, and avoid any thin protrusion that " +
-    "tapers down to a sharp point. Soft even studio lighting with no harsh shadows or reflections. " +
-    "Precise anatomical proportions, full body visible and centered within each quadrant, no text " +
+    `figurine's actual colors, markings, and ${subjectType === "pet" ? "coat pattern" : "surface pattern/texture"} as closely as possible to the ` +
+    "reference photos — do not simplify it to a plain or single-color material. This will be 3D " +
+    `printed at only a few centimeters tall, so keep the sculpted form itself sturdy: ${printSafetyPhrase} ` +
+    "Soft even studio lighting with no harsh shadows or reflections. " +
+    `${proportionsPhrase}, full body visible and centered within each quadrant, no text ` +
     "or watermark anywhere. Use the attached reference photos to match the subject's shape, " +
     "features, coloring, and identity exactly." +
-    petDetailsPhrase(petDetails)
+    petDetailsPhrase(petDetails, subjectType)
   );
 }
 
@@ -172,13 +211,14 @@ export async function generateWhiteClayViews(
   referencePhotos: ImagePayload[],
   subject: string,
   pose: Pose,
-  petDetails?: PetDetails
+  petDetails?: PetDetails,
+  subjectType: SubjectType = "pet"
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
   const gridImage = await generateImage(
     client,
     referencePhotos,
-    figureGridPrompt(subject, pose, petDetails)
+    figureGridPrompt(subject, pose, petDetails, subjectType)
   );
   return splitGridImage(gridImage);
 }
@@ -189,15 +229,26 @@ export async function generateFinishedPreview(
   subject: string,
   pose: Pose,
   magicColor: MagicColor,
-  petDetails?: PetDetails
+  petDetails?: PetDetails,
+  subjectType: SubjectType = "pet"
 ): Promise<ImagePayload> {
   const client = getClient();
+  const wholeSubjectPhrase =
+    subjectType === "pet" ? "every part of the body, face, and fur" : "every part of the object";
+  const realColoringPhrase =
+    subjectType === "pet"
+      ? "real fur colors, markings, or facial coloring"
+      : "real surface colors, markings, or texture";
+  const neverRealisticPhrase =
+    subjectType === "pet"
+      ? "never realistically colored/textured fur"
+      : "never a realistically colored/textured surface";
   const interiorPhrase =
     magicColor === "furCavity"
       ? "The whole figure is carved from clear, colorless glass-like crystal, and the " +
         "inside is left completely empty and hollow, ready for the owner to add their " +
         "own keepsake later."
-      : `The entire figure -- every part of the body, face, and fur -- is carved from ` +
+      : `The entire figure -- ${wholeSubjectPhrase} -- is carved from ` +
         `ONE single uniform block of solid-colored translucent crystal resin: ` +
         `${MAGIC_COLOR_PHRASES[magicColor]} runs evenly through the whole piece, the ` +
         "same way it does in the attached product reference photo, not just filling " +
@@ -205,15 +256,15 @@ export async function generateFinishedPreview(
   const prompt =
     `A highly detailed, photorealistic macro photography of a ${subject} figurine ` +
     `keychain, in ${POSE_PHRASES[pose]}. ${interiorPhrase} Do not depict the subject's ` +
-    "real fur colors, markings, or facial coloring anywhere -- only the overall body " +
-    "shape and silhouette should be recognizable; the material itself must read as " +
+    `${realColoringPhrase} anywhere -- only the overall shape ` +
+    "and silhouette should be recognizable; the material itself must read as " +
     "solid, three-dimensional colored glass with tiny sparkling glitter suspended " +
-    "inside, never a flat illustration and never realistically colored/textured fur. " +
+    `inside, never a flat illustration and ${neverRealisticPhrase}. ` +
     "Do not show any cork, wooden base, keychain hardware, or other object -- just " +
     "the bare crystal figurine by itself. Cinematic lighting, centered composition, " +
     "no text or watermark. Use the attached reference photos only to match the " +
     "subject's shape, pose, and identity, not its real coloring." +
-    petDetailsPhrase(petDetails);
+    petDetailsPhrase(petDetails, subjectType);
 
   return generateImage(client, referencePhotos, prompt);
 }

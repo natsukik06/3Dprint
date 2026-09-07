@@ -1,14 +1,14 @@
 import admin from "firebase-admin";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { FieldValue } from "firebase-admin/firestore";
-import { cutHoles, hollowMesh, type HoleSpec } from "./lib/meshBoolean.js";
+import { cutHoles, engraveText, hollowMesh, type HoleSpec } from "./lib/meshBoolean.js";
 import {
   boundsOfTriangles,
   computeScaleFactor,
   extractWorldTriangles,
 } from "./lib/modelScaling.js";
 import { buildPlacedItemStl, packPlates, type StlPlacement } from "./lib/plateLayout.js";
-import { trianglesToStl } from "./lib/stl.js";
+import { stlToTriangles, trianglesToStl } from "./lib/stl.js";
 import {
   DEFAULT_DRAIN_HOLE_DIAMETER_MM,
   HARDWARE_HOLE_DIAMETER_MM,
@@ -57,9 +57,21 @@ async function updateProgress(
 
 async function runFinishMeshJob(
   jobRef: FirebaseFirestore.DocumentReference,
-  params: { itemId: string; wallThicknessMm: number; sphereSegments: number }
+  params: {
+    itemId: string;
+    wallThicknessMm: number;
+    sphereSegments: number;
+    // Where the drain hole sits on the model's bottom face, as 0-1 fractions across its
+    // footprint (0.5, 0.5 = centered) -- set from the admin UI per item, since the ideal spot
+    // (avoiding a visible face, a support point, etc.) differs per model. Computed against the
+    // ORIGINAL (unscaled) model's bounds, matching how holePosition/bottomHolePosition below are
+    // also stored in original-model space and later scaled by `scaleFactor`.
+    bottomHoleXFraction?: number;
+    bottomHoleZFraction?: number;
+    bottomHoleDiameterMm?: number;
+  }
 ) {
-  const { itemId, wallThicknessMm, sphereSegments } = params;
+  const { itemId, wallThicknessMm, sphereSegments, bottomHoleXFraction, bottomHoleZFraction, bottomHoleDiameterMm } = params;
   const itemRef = db.collection("order_items").doc(itemId);
   const snap = await itemRef.get();
   if (!snap.exists) throw new Error("アイテムが見つかりません");
@@ -73,6 +85,7 @@ async function runFinishMeshJob(
     holePosition: HolePoint | null;
     bottomHolePosition: HolePoint | null;
     bottomHoleDiameterMm: number | null;
+    initial: string | null;
   };
 
   const sourceUrl = item.scaledModelUrl ?? item.modelUrl;
@@ -101,7 +114,22 @@ async function runFinishMeshJob(
       direction: holeDirection(item.holePosition),
     });
   }
-  if (item.bottomHolePosition && item.bottomHoleDiameterMm) {
+  if (typeof bottomHoleXFraction === "number" && typeof bottomHoleZFraction === "number") {
+    // Admin-specified position from the order page, as a fraction (0-1) of the ORIGINAL
+    // (unscaled) model's own footprint -- computed here rather than trusting a stored absolute
+    // position, so it stays correct regardless of the model's actual size.
+    const { min: origMin, max: origMax } = boundsOfTriangles(originalTriangles);
+    const point: HolePoint = {
+      x: origMin[0] + (origMax[0] - origMin[0]) * bottomHoleXFraction,
+      y: origMin[1],
+      z: origMin[2] + (origMax[2] - origMin[2]) * bottomHoleZFraction,
+    };
+    holes.push({
+      position: scalePoint(point, scaleFactor),
+      diameterMm: bottomHoleDiameterMm ?? DEFAULT_DRAIN_HOLE_DIAMETER_MM,
+      direction: [0, 1, 0],
+    });
+  } else if (item.bottomHolePosition && item.bottomHoleDiameterMm) {
     holes.push({
       position: scalePoint(item.bottomHolePosition, scaleFactor),
       diameterMm: item.bottomHoleDiameterMm,
@@ -128,7 +156,36 @@ async function runFinishMeshJob(
     hollowedMax[1] - hollowedMin[1],
     hollowedMax[2] - hollowedMin[2]
   );
-  const finalTriangles = await cutHoles(hollowed, holes, maxDim * 2);
+  let finalTriangles = await cutHoles(hollowed, holes, maxDim * 2);
+
+  // Engrave the customer's chosen initial (INITIAL_OPTIONS in src/types/order.ts) into the
+  // bottom face, offset from center (away from where the drain hole usually sits, default
+  // fraction 0.5) so a physical piece can be identified even after it's off the shared print
+  // plate, mixed in with others, and still colorless (see the batch work-sheet's own "刻印" label
+  // for the paper-side half of this same cross-check). Uses hollowedMin/hollowedMax (already in
+  // the final, scaled coordinate space `finalTriangles` is in) rather than the origMin/origMax +
+  // scaleFactor route above -- that route only exists to translate a customer-specified position
+  // captured in an earlier, different coordinate space; this one is always computed fresh, here.
+  if (item.initial) {
+    await updateProgress(jobRef, 85, "イニシャルを刻印しています...");
+    const engraveXFraction = 0.2;
+    const engraveZFraction = 0.2;
+    const engravePosition: [number, number, number] = [
+      hollowedMin[0] + (hollowedMax[0] - hollowedMin[0]) * engraveXFraction,
+      hollowedMin[1],
+      hollowedMin[2] + (hollowedMax[2] - hollowedMin[2]) * engraveZFraction,
+    ];
+    const engraveHeightMm = Math.min(2.5, (hollowedMax[0] - hollowedMin[0]) * 0.3);
+    const engraveDepthMm = Math.min(0.4, wallThicknessMm * 0.5);
+    finalTriangles = await engraveText(
+      finalTriangles,
+      item.initial,
+      engravePosition,
+      [0, -1, 0],
+      engraveHeightMm,
+      engraveDepthMm
+    );
+  }
 
   await updateProgress(jobRef, 90, "STLを保存中...");
   const stl = trianglesToStl(finalTriangles);
@@ -166,6 +223,14 @@ async function runPlateLayoutJob(
     footprintZ: number;
   }[] = [];
 
+  // A design ordered in quantity > 1 appears as several entries sharing one itemId (one grid
+  // cell per physical copy) -- it's hollowed/holed once, so fetch+parse its STL once too, and
+  // reuse that same geometry for every duplicate cell's placement below.
+  const modelDataByItemId = new Map<
+    string,
+    { triangles: Float32Array; worldMin: [number, number, number]; footprintX: number; footprintZ: number }
+  >();
+
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     await updateProgress(
@@ -173,23 +238,34 @@ async function runPlateLayoutJob(
       Math.round((i / entries.length) * 60),
       `モデルを取得中... (${i + 1}/${entries.length})`
     );
-    const itemSnap = await db.collection("order_items").doc(entry.itemId).get();
-    const scaledModelUrl = itemSnap.data()?.scaledModelUrl as string | undefined;
-    if (!scaledModelUrl) {
-      throw new Error(`アイテム ${entry.itemId}（${entry.gridId}）がスケーリング未処理です`);
+
+    let modelData = modelDataByItemId.get(entry.itemId);
+    if (!modelData) {
+      const itemSnap = await db.collection("order_items").doc(entry.itemId).get();
+      // Require the hollowed+holed STL, not the raw scaledModelUrl (GLB) -- packing the
+      // pre-hollowing model would ship solid, un-vented pieces straight to the printer. Run
+      // "中空化・穴あけ処理を実行" on the order detail page for this item first.
+      const finishedModelUrl = itemSnap.data()?.finishedModelUrl as string | undefined;
+      if (!finishedModelUrl) {
+        throw new Error(
+          `アイテム ${entry.itemId}（${entry.gridId}）が中空化・穴あけ未処理です。先に注文詳細ページで処理してください`
+        );
+      }
+      const modelRes = await fetch(finishedModelUrl);
+      if (!modelRes.ok) throw new Error(`モデルのダウンロードに失敗しました: ${entry.orderId}`);
+      const buffer = Buffer.from(await modelRes.arrayBuffer());
+      const triangles = stlToTriangles(buffer);
+      const { min, max } = boundsOfTriangles(triangles);
+      modelData = {
+        triangles,
+        worldMin: min,
+        footprintX: max[0] - min[0],
+        footprintZ: max[2] - min[2],
+      };
+      modelDataByItemId.set(entry.itemId, modelData);
     }
-    const modelRes = await fetch(scaledModelUrl);
-    if (!modelRes.ok) throw new Error(`モデルのダウンロードに失敗しました: ${entry.orderId}`);
-    const buffer = Buffer.from(await modelRes.arrayBuffer());
-    const triangles = extractWorldTriangles(buffer);
-    const { min, max } = boundsOfTriangles(triangles);
-    items.push({
-      id: entry.gridId,
-      triangles,
-      worldMin: min,
-      footprintX: max[0] - min[0],
-      footprintZ: max[2] - min[2],
-    });
+
+    items.push({ id: entry.gridId, ...modelData });
   }
 
   await updateProgress(jobRef, 65, "プレートに配置を計算中...");
@@ -246,7 +322,14 @@ export const processJob = onDocumentCreated(
       if (job.type === "finish-mesh") {
         result = await runFinishMeshJob(
           jobRef,
-          job.params as { itemId: string; wallThicknessMm: number; sphereSegments: number }
+          job.params as {
+            itemId: string;
+            wallThicknessMm: number;
+            sphereSegments: number;
+            bottomHoleXFraction?: number;
+            bottomHoleZFraction?: number;
+            bottomHoleDiameterMm?: number;
+          }
         );
       } else if (job.type === "plate-layout") {
         result = await runPlateLayoutJob(jobRef, job.params as { batchId: string });

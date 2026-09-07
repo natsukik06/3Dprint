@@ -3,13 +3,24 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isAdmin() {
       return request.auth != null &&
-        request.auth.token.email == 'natsuki.ko006@gmail.com';
+        request.auth.token.email == 'natsukik0616@gmail.com';
     }
 
     match /orders/{orderId} {
-      allow create: if true;
+      // Only ever created by the Stripe webhook (Admin SDK, bypasses rules), once payment is
+      // confirmed -- see order_drafts below for the pre-payment side of this.
+      allow create: if false;
       allow read: if isAdmin();
       allow update, delete: if false;
+    }
+    match /order_drafts/{draftId} {
+      // Written by the order form before Stripe checkout; promoted into orders/{sameId} by the
+      // webhook once payment succeeds (src/app/api/stripe/webhook/route.ts), or left behind
+      // (never read back) if the customer abandons checkout -- keeps failed/incomplete attempts
+      // out of the admin's real order list entirely, rather than showing up there as permanent
+      // "unpaid" clutter.
+      allow create: if true;
+      allow read, update, delete: if false;
     }
     match /order_items/{itemId} {
       allow read: if isAdmin();

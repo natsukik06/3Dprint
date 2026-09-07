@@ -19,7 +19,7 @@ export function ConsentSection() {
           className="mt-0.5 h-4 w-4 shrink-0 accent-slate-800"
         />
         <span className="text-sm text-slate-700">
-          アップロードした画像が第三者の著作権（アニメキャラ等）を侵害していないことに同意します
+          アップロードした画像・作りたいものが、第三者の著作権・商標権・意匠権（アニメ等のキャラクター、ブランドロゴ、商品デザイン等）を侵害していないことに同意します。侵害のおそれがあると当店が判断した場合、注文をお断りする場合があります
         </span>
       </label>
       {errors.agreeCopyright && (

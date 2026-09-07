@@ -3,12 +3,15 @@
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ModelViewerElement } from "@google/model-viewer";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { db } from "@/lib/firebase";
 import { MAGIC_COLOR_LABELS, POSE_LABELS, formatYen } from "@/lib/pricing";
 import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
+import { estimateRemaining } from "@/lib/eta";
 import {
+  HARDWARE_COLOR_LABELS,
   MAGIC_COLOR_OPTIONS,
   ORDER_STATUS_LABELS,
   type OrderItemDraft,
@@ -74,12 +77,79 @@ function ItemCard({
   const [finishingMesh, setFinishingMesh] = useState(false);
   const [finishMeshError, setFinishMeshError] = useState<string | null>(null);
   const [finishMeshProgress, setFinishMeshProgress] = useState<JobSnapshot | null>(null);
+  const [finishMeshStartedAt, setFinishMeshStartedAt] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [wallThicknessMm, setWallThicknessMm] = useState(DEFAULT_WALL_THICKNESS_MM);
   const [sphereSegments, setSphereSegments] = useState<number>(DEFAULT_SPHERE_SEGMENTS);
+  // Where the drain hole sits on the model's bottom face, as a 0-1 fraction of its footprint
+  // (0.5, 0.5 = centered). Sent to the finish-mesh job so it's cut in the right spot before
+  // hollowing+holes ever leave this page -- adjust per item to dodge a visible face or a support.
+  const [bottomHoleX, setBottomHoleX] = useState(0.5);
+  const [bottomHoleZ, setBottomHoleZ] = useState(0.5);
+  const [bottomHoleDiameterMm, setBottomHoleDiameterMm] = useState(2);
+  // Lets the admin click directly on the model instead of guessing X/Z fractions blindly.
+  const [pickMode, setPickMode] = useState(false);
+  const rawModelViewerRef = useRef<ModelViewerElement | null>(null);
+  const [modelBounds, setModelBounds] = useState<{
+    min: { x: number; y: number; z: number };
+    max: { x: number; y: number; z: number };
+  } | null>(null);
+
+  const modelSrc = production?.scaledModelUrl ?? item.modelUrl ?? undefined;
 
   useEffect(() => {
     import("@google/model-viewer");
   }, []);
+
+  // Ticks once a second while a job is running so the elapsed/remaining-time readout below keeps
+  // counting up even between Firestore progress updates (which land sparsely, not every second).
+  useEffect(() => {
+    if (!finishingMesh) return;
+    const timer = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [finishingMesh]);
+
+  // Same coordinate frame getDimensions()/getBoundingBoxCenter() and positionAndNormalFromPoint()
+  // both use (the model's own local space, excluding model-viewer's internal centering) -- so a
+  // fraction computed from a click lines up with the same X/Z-fraction-of-footprint convention
+  // the finish-mesh Cloud Function already uses server-side (see bottomHoleXFraction there).
+  useEffect(() => {
+    const mv = rawModelViewerRef.current;
+    if (!mv) return;
+
+    function updateBounds() {
+      if (!mv!.loaded) return;
+      const dims = mv!.getDimensions();
+      const center = mv!.getBoundingBoxCenter();
+      setModelBounds({
+        min: { x: center.x - dims.x / 2, y: center.y - dims.y / 2, z: center.z - dims.z / 2 },
+        max: { x: center.x + dims.x / 2, y: center.y + dims.y / 2, z: center.z + dims.z / 2 },
+      });
+    }
+
+    updateBounds();
+    mv.addEventListener("load", updateBounds);
+    return () => mv.removeEventListener("load", updateBounds);
+  }, [modelSrc]);
+
+  function handlePickClick(e: React.MouseEvent<HTMLElement>) {
+    if (!pickMode) return;
+    const mv = rawModelViewerRef.current;
+    if (!mv || !modelBounds) return;
+    const rect = mv.getBoundingClientRect();
+    const hit = mv.positionAndNormalFromPoint(e.clientX - rect.left, e.clientY - rect.top);
+    if (!hit) return;
+    const { min, max } = modelBounds;
+    const spanX = max.x - min.x || 1;
+    const spanZ = max.z - min.z || 1;
+    setBottomHoleX(Math.min(1, Math.max(0, (hit.position.x - min.x) / spanX)));
+    setBottomHoleZ(Math.min(1, Math.max(0, (hit.position.z - min.z) / spanZ)));
+    setPickMode(false);
+  }
+
+  const hotspotPosition = modelBounds
+    ? `${modelBounds.min.x + bottomHoleX * (modelBounds.max.x - modelBounds.min.x)} ${modelBounds.min.y} ${modelBounds.min.z + bottomHoleZ * (modelBounds.max.z - modelBounds.min.z)}`
+    : null;
 
   async function refetchProduction() {
     if (!production) return;
@@ -118,6 +188,7 @@ function ItemCard({
     setFinishingMesh(true);
     setFinishMeshError(null);
     setFinishMeshProgress(null);
+    setFinishMeshStartedAt(Date.now());
     try {
       const idToken = await user.getIdToken();
       const res = await fetch(`/api/admin/order-items/${production.id}/finish-mesh`, {
@@ -126,7 +197,13 @@ function ItemCard({
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ wallThicknessMm, sphereSegments }),
+        body: JSON.stringify({
+          wallThicknessMm,
+          sphereSegments,
+          bottomHoleXFraction: bottomHoleX,
+          bottomHoleZFraction: bottomHoleZ,
+          bottomHoleDiameterMm,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "処理の予約に失敗しました");
@@ -142,8 +219,6 @@ function ItemCard({
     }
   }
 
-  const modelSrc = production?.scaledModelUrl ?? item.modelUrl ?? undefined;
-
   return (
     <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
       <p className="text-sm font-semibold text-slate-900">
@@ -151,23 +226,73 @@ function ItemCard({
         <span className="ml-1 rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">
           {item.sizeOption}
         </span>
+        <span
+          className="ml-1 rounded bg-indigo-100 px-1 text-[10px] font-bold text-indigo-700"
+          title="刻印するイニシャル"
+        >
+          {item.initial}
+        </span>
+        {item.isCustomModel && (
+          <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">
+            お客様提供モデル
+          </span>
+        )}
+        {item.subjectType === "object" && (
+          <span className="ml-1 rounded bg-teal-100 px-1 text-[10px] font-bold text-teal-700">
+            モノ・思い出の品
+          </span>
+        )}
       </p>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+        <div className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
           {modelSrc ? (
             <model-viewer
+              ref={rawModelViewerRef}
               src={modelSrc}
               alt="3Dモデル"
               camera-controls
-              auto-rotate
+              auto-rotate={!pickMode}
               shadow-intensity="1"
-              style={{ width: "100%", height: "100%" }}
-            />
+              onClick={handlePickClick}
+              style={{ width: "100%", height: "100%", cursor: pickMode ? "crosshair" : undefined }}
+            >
+              {hotspotPosition && (
+                <button
+                  type="button"
+                  slot="hotspot-hole"
+                  data-position={hotspotPosition}
+                  data-normal="0 1 0"
+                  style={{
+                    width: "14px",
+                    height: "14px",
+                    borderRadius: "50%",
+                    background: "#ef4444",
+                    border: "2px solid white",
+                    boxShadow: "0 0 0 1px rgba(0,0,0,0.4)",
+                    padding: 0,
+                  }}
+                  aria-label="水抜き穴の位置"
+                />
+              )}
+            </model-viewer>
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-slate-400">
               3Dモデルなし
             </div>
+          )}
+          {modelSrc && (
+            <button
+              type="button"
+              onClick={() => setPickMode((prev) => !prev)}
+              className={`absolute bottom-2 right-2 rounded-lg px-2 py-1 text-[10px] font-semibold shadow ${
+                pickMode
+                  ? "bg-red-600 text-white"
+                  : "bg-white/90 text-slate-700 hover:bg-white"
+              }`}
+            >
+              {pickMode ? "モデルをクリックして指定..." : "📍 クリックで穴位置を指定"}
+            </button>
           )}
         </div>
         <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
@@ -230,15 +355,32 @@ function ItemCard({
       )}
 
       <div>
-        {item.furColorNote && <InfoRow label="毛色・柄" value={item.furColorNote} />}
-        {item.breedNote && <InfoRow label="犬種・ミックス" value={item.breedNote} />}
-        {item.accessoryNote && (
-          <InfoRow label="服・首輪などの扱い" value={item.accessoryNote} />
+        {item.subjectType === "object" ? (
+          <>
+            {item.furColorNote && <InfoRow label="色・柄" value={item.furColorNote} />}
+            {item.breedNote && <InfoRow label="素材・材質" value={item.breedNote} />}
+            {item.accessoryNote && (
+              <InfoRow label="ロゴ・装飾などの扱い" value={item.accessoryNote} />
+            )}
+            {item.bodyFeatureNote && (
+              <InfoRow label="欠け・傷など特徴的な部分" value={item.bodyFeatureNote} />
+            )}
+          </>
+        ) : (
+          <>
+            {item.furColorNote && <InfoRow label="毛色・柄" value={item.furColorNote} />}
+            {item.breedNote && <InfoRow label="犬種・ミックス" value={item.breedNote} />}
+            {item.accessoryNote && (
+              <InfoRow label="服・首輪などの扱い" value={item.accessoryNote} />
+            )}
+            {item.bodyFeatureNote && (
+              <InfoRow label="しっぽ・耳など体の特徴" value={item.bodyFeatureNote} />
+            )}
+          </>
         )}
-        {item.bodyFeatureNote && (
-          <InfoRow label="しっぽ・耳など体の特徴" value={item.bodyFeatureNote} />
+        {item.subjectType !== "object" && (
+          <InfoRow label="ポーズ" value={POSE_LABELS[item.pose]} />
         )}
-        <InfoRow label="ポーズ" value={POSE_LABELS[item.pose]} />
         <InfoRow
           label="カラー・個数"
           value={MAGIC_COLOR_OPTIONS.filter((c) => (item.colorQuantities[c] ?? 0) > 0)
@@ -255,6 +397,9 @@ function ItemCard({
               : "なし"
           }
         />
+        {item.wantsHardware && (
+          <InfoRow label="金具の色" value={HARDWARE_COLOR_LABELS[item.hardwareColor]} />
+        )}
       </div>
 
       <div className="rounded-xl bg-slate-50 p-3">
@@ -308,7 +453,9 @@ function ItemCard({
                     value={
                       production.ventHoleSource === "customer"
                         ? "あり（顧客指定の金具穴/コルク穴を使用）"
-                        : "あり（自動追加・底面中心）"
+                        : production.ventHoleSource === "manual"
+                          ? "あり（管理者が自分の環境で中空化・穴あけ済み）"
+                          : "あり（自動追加・底面中心）"
                     }
                   />
                   <a
@@ -352,6 +499,54 @@ function ItemCard({
                   </select>
                 </label>
               </div>
+              <div className="mt-2 flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
+                  水抜き穴 X位置（0〜1）
+                  <input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={bottomHoleX}
+                    onChange={(e) =>
+                      setBottomHoleX(Math.min(1, Math.max(0, Number(e.target.value))))
+                    }
+                    className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
+                  水抜き穴 Z位置（0〜1）
+                  <input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={bottomHoleZ}
+                    onChange={(e) =>
+                      setBottomHoleZ(Math.min(1, Math.max(0, Number(e.target.value))))
+                    }
+                    className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
+                  穴径
+                  <span className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={10}
+                      step={0.5}
+                      value={bottomHoleDiameterMm}
+                      onChange={(e) => setBottomHoleDiameterMm(Number(e.target.value))}
+                      className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+                    />
+                    mm
+                  </span>
+                </label>
+                <p className="w-full text-[10px] text-slate-400">
+                  左上のプレビューの「📍クリックで穴位置を指定」を押してからモデル上の狙いたい場所をクリックすると、その真下（底面）に穴が来るようにX/Zが自動入力されます。数値を直接微調整することもできます。
+                </p>
+              </div>
               <div className="pt-2">
                 <button
                   type="button"
@@ -375,6 +570,20 @@ function ItemCard({
                     </div>
                     <p className="mt-1 text-[10px] text-slate-500">
                       {finishMeshProgress.message ?? "処理中..."}
+                      {finishMeshStartedAt && (() => {
+                        const eta = estimateRemaining(
+                          finishMeshStartedAt,
+                          finishMeshProgress.progress,
+                          nowTick
+                        );
+                        return (
+                          <>
+                            {" "}
+                            （経過{eta.elapsedLabel}
+                            {eta.remainingLabel && ` ／ 残り約${eta.remainingLabel}`}）
+                          </>
+                        );
+                      })()}
                     </p>
                   </div>
                 )}

@@ -50,3 +50,21 @@ export function trianglesToStl(vertices: Float32Array | number[]): Buffer {
 
   return Buffer.concat([header, countBuffer, body]);
 }
+
+/**
+ * Reads a binary STL (as written by trianglesToStl, or any standard binary STL) back into a flat
+ * triangle array (9 floats per triangle: 3 vertices x xyz) -- the same shape trianglesToStl and
+ * extractWorldTriangles (for GLB) both produce, so callers can treat either source uniformly.
+ * Skips each triangle's stored normal and 2-byte attribute; normals are recomputed on re-export.
+ */
+export function stlToTriangles(buffer: Buffer): Float32Array {
+  const triangleCount = buffer.readUInt32LE(80);
+  const out = new Float32Array(triangleCount * 9);
+  for (let t = 0; t < triangleCount; t++) {
+    const offset = 84 + t * 50 + 12; // skip header+count, this triangle's normal
+    for (let v = 0; v < 9; v++) {
+      out[t * 9 + v] = buffer.readFloatLE(offset + v * 4);
+    }
+  }
+  return out;
+}

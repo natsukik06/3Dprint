@@ -4,8 +4,11 @@ import { useFormContext, useWatch } from "react-hook-form";
 import {
   FIGURE_PRICE_YEN,
   FREE_SHIPPING_SUBTOTAL_YEN,
+  HARDWARE_ADDON_PRICE_YEN,
+  SMALL_SIZE_PRICE_YEN,
   calculateEstimate,
   formatYen,
+  getTotalQuantity,
 } from "@/lib/pricing";
 import type { OrderFormValues } from "@/types/order";
 
@@ -19,9 +22,15 @@ export function EstimateSummary() {
   const { quantity, subtotalYen, shippingYen, discountYen, totalPriceYen } =
     calculateEstimate({ items, generationCreditsUsed });
 
-  // The undiscounted reference price (every unit at the standalone price) vs. what the set
-  // discount actually brings it down to -- makes the quantity discount legible at a glance.
-  const listPriceYen = FIGURE_PRICE_YEN * quantity;
+  // The undiscounted reference price (every unit at its size's standalone 1st-unit rate) vs. what
+  // the set discount actually brings it down to -- makes the quantity discount legible at a
+  // glance.
+  const listPriceYen = items.reduce((sum, item) => {
+    const unitPrice =
+      item.sizeOption === "S" ? SMALL_SIZE_PRICE_YEN : FIGURE_PRICE_YEN;
+    const hardwarePrice = item.wantsHardware ? HARDWARE_ADDON_PRICE_YEN : 0;
+    return sum + (unitPrice + hardwarePrice) * getTotalQuantity(item.colorQuantities);
+  }, 0);
   const hasSetDiscount = quantity > 1 && listPriceYen > subtotalYen;
   const yenUntilFreeShipping = Math.max(
     0,

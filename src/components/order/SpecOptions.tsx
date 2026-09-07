@@ -10,17 +10,26 @@ import {
   ADDITIONAL_UNIT_PRICE_YEN,
   FIGURE_PRICE_YEN,
   FREE_SHIPPING_SUBTOTAL_YEN,
+  HARDWARE_ADDON_PRICE_YEN,
   MAGIC_COLOR_LABELS,
   POSE_LABELS,
+  SMALL_SIZE_ADDITIONAL_UNIT_PRICE_YEN,
+  SMALL_SIZE_PRICE_YEN,
+  SUBJECT_TYPE_LABELS,
   getTotalQuantity,
 } from "@/lib/pricing";
 import {
   AVAILABLE_SIZE_OPTIONS,
   DEFAULT_BOTTOM_HOLE_DIAMETER_MM,
+  HARDWARE_COLOR_LABELS,
+  HARDWARE_COLOR_OPTIONS,
+  INITIAL_OPTIONS,
   MAGIC_COLOR_OPTIONS,
   MAX_TOTAL_QUANTITY,
   POSE_OPTIONS,
   SIZE_LABELS,
+  SUBJECT_TYPE_OPTIONS,
+  type HardwareColor,
   type MagicColor,
   type OrderFormValues,
 } from "@/types/order";
@@ -35,18 +44,63 @@ const COLOR_IMAGE_SRC: Record<MagicColor, string | null> = {
   furCavity: null,
 };
 
+const HARDWARE_COLOR_IMAGE_SRC: Record<HardwareColor, string> = {
+  silver: "/hardware/silver.jpg",
+  gold: "/hardware/gold.jpg",
+  roseGold: "/hardware/roseGold.jpg",
+  clear: "/hardware/clear.jpg",
+};
+
+const SUBJECT_TYPE_PLACEHOLDER: Record<(typeof SUBJECT_TYPE_OPTIONS)[number], string> = {
+  pet: "例：たれ耳のうさぎ",
+  object: "例：旅行のお土産のマグカップ",
+};
+
 export function SpecOptions() {
   const {
     control,
     register,
+    setValue,
     formState: { errors },
   } = useFormContext<OrderFormValues>();
 
   const colorQuantities = useWatch({ control, name: "colorQuantities" });
+  const sizeOption = useWatch({ control, name: "sizeOption" });
+  const wantsHardware = useWatch({ control, name: "wantsHardware" });
+  const subjectType = useWatch({ control, name: "subjectType" }) ?? "pet";
   const totalQuantity = getTotalQuantity(colorQuantities);
+  const isSmallSize = sizeOption === "S";
 
   return (
     <div className="space-y-6">
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-slate-700">作りたいものの種類</legend>
+        <Controller
+          name="subjectType"
+          control={control}
+          render={({ field }) => (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {SUBJECT_TYPE_OPTIONS.map((option) => (
+                <RadioCard
+                  key={option}
+                  name={field.name}
+                  value={option}
+                  checked={field.value === option}
+                  onChange={(value) => {
+                    field.onChange(value);
+                    // "object" always reproduces the pose as photographed -- a mug doesn't sit,
+                    // stand, or lie down, so the pose picker below is hidden for this type and
+                    // the underlying field is just fixed here instead.
+                    if (value === "object") setValue("pose", "asPhoto");
+                  }}
+                  label={SUBJECT_TYPE_LABELS[option]}
+                />
+              ))}
+            </div>
+          )}
+        />
+      </fieldset>
+
       <div className="space-y-2">
         <label
           htmlFor="subject"
@@ -57,7 +111,7 @@ export function SpecOptions() {
         <input
           id="subject"
           type="text"
-          placeholder="例：たれ耳のうさぎ"
+          placeholder={SUBJECT_TYPE_PLACEHOLDER[subjectType]}
           {...register("subject")}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
         />
@@ -66,36 +120,64 @@ export function SpecOptions() {
         )}
       </div>
 
+      <div className="space-y-2">
+        <label
+          htmlFor="initial"
+          className="block text-sm font-medium text-slate-700"
+        >
+          刻印するイニシャルを1文字選んでください
+        </label>
+        <select
+          id="initial"
+          {...register("initial")}
+          className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+        >
+          {INITIAL_OPTIONS.map((letter) => (
+            <option key={letter} value={letter}>
+              {letter}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-slate-500">
+          底面の目立たない場所に小さく彫り込みます。複数点セットで作る場合も、選んだ文字でお手元の一点一点を見分けられます。
+        </p>
+        {errors.initial && (
+          <p className="text-sm text-red-600">{errors.initial.message}</p>
+        )}
+      </div>
+
       <PetDetailsFields />
 
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium text-slate-700">ポーズ</legend>
-        <Controller
-          name="pose"
-          control={control}
-          render={({ field, fieldState }) => (
-            <div className="space-y-2">
-              <div className="grid gap-2 sm:grid-cols-2">
-                {POSE_OPTIONS.map((option) => (
-                  <RadioCard
-                    key={option}
-                    name={field.name}
-                    value={option}
-                    checked={field.value === option}
-                    onChange={field.onChange}
-                    label={POSE_LABELS[option]}
-                  />
-                ))}
+      {subjectType !== "object" && (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-slate-700">ポーズ</legend>
+          <Controller
+            name="pose"
+            control={control}
+            render={({ field, fieldState }) => (
+              <div className="space-y-2">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {POSE_OPTIONS.map((option) => (
+                    <RadioCard
+                      key={option}
+                      name={field.name}
+                      value={option}
+                      checked={field.value === option}
+                      onChange={field.onChange}
+                      label={POSE_LABELS[option]}
+                    />
+                  ))}
+                </div>
+                {fieldState.error && (
+                  <p className="text-sm text-red-600">
+                    {fieldState.error.message}
+                  </p>
+                )}
               </div>
-              {fieldState.error && (
-                <p className="text-sm text-red-600">
-                  {fieldState.error.message}
-                </p>
-              )}
-            </div>
-          )}
-        />
-      </fieldset>
+            )}
+          />
+        </fieldset>
+      )}
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-slate-700">サイズ</legend>
@@ -131,9 +213,19 @@ export function SpecOptions() {
           魔法のカラー・個数
         </legend>
         <p className="text-xs text-slate-500">
-          同じ形状を複数のカラーで注文できます（1個目¥
-          {FIGURE_PRICE_YEN.toLocaleString()}、2個目以降は+
-          {ADDITIONAL_UNIT_PRICE_YEN}円、最大{MAX_TOTAL_QUANTITY}個。
+          同じ形状を複数のカラーで注文できます（
+          {isSmallSize ? (
+            <>
+              1個目¥{SMALL_SIZE_PRICE_YEN.toLocaleString()}、2個目以降は+
+              {SMALL_SIZE_ADDITIONAL_UNIT_PRICE_YEN}円
+            </>
+          ) : (
+            <>
+              1個目¥{FIGURE_PRICE_YEN.toLocaleString()}、2個目以降は+
+              {ADDITIONAL_UNIT_PRICE_YEN}円
+            </>
+          )}
+          、最大{MAX_TOTAL_QUANTITY}個。
           <span className="font-semibold text-slate-700">
             合計{FREE_SHIPPING_SUBTOTAL_YEN.toLocaleString()}円以上で送料無料
           </span>
@@ -141,7 +233,7 @@ export function SpecOptions() {
         </p>
         <p className="flex items-start gap-1.5 rounded-lg bg-emerald-50 p-2 text-xs text-emerald-800">
           <Moon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          毛入れ用以外の全色、蓄光素材入りで暗闇でやさしく光ります（光り方の強さは色によって異なり、光る色は昼間の色とは異なる青白い光になります）。光が弱くなったらスマホのライトを数十秒当てるだけで再チャージできます。
+          毛入れ用以外の全色、蓄光素材入りで暗闇でやさしく光ります（光り方の強さや光る色は色によって異なります）。光が弱くなったらスマホのライトを数十秒当てるだけで再チャージできます。
         </p>
         <Controller
           name="colorQuantities"
@@ -175,19 +267,36 @@ export function SpecOptions() {
                       <div className="space-y-1.5 p-2">
                         <span className="flex min-h-[2rem] items-start gap-1 text-xs font-medium leading-tight text-slate-900">
                           <span className="line-clamp-2">
-                            {MAGIC_COLOR_LABELS[color]}
+                            {color === "furCavity" && subjectType === "object"
+                              ? "思い出の品入れ用（空洞・コルク栓付き）"
+                              : MAGIC_COLOR_LABELS[color]}
                           </span>
                           {color === "furCavity" && (
                             <InfoModalButton
-                              label="毛入れ用フィギュアの使い方を見る"
-                              title="毛入れ用フィギュアの使い方"
+                              label={
+                                subjectType === "object"
+                                  ? "思い出の品入れ用フィギュアの使い方を見る"
+                                  : "毛入れ用フィギュアの使い方を見る"
+                              }
+                              title={
+                                subjectType === "object"
+                                  ? "思い出の品入れ用フィギュアの使い方"
+                                  : "毛入れ用フィギュアの使い方"
+                              }
                               imageSrc="/guide/fur-cavity-howto.jpg"
-                              imageAlt="コルク栓と穴にピンセットで毛を詰める様子のイメージ"
+                              imageAlt="コルク栓と穴にピンセットで詰める様子のイメージ"
                             >
-                              <p>
-                                底面に直径{DEFAULT_BOTTOM_HOLE_DIAMETER_MM}
-                                mmの穴が空いた状態でお届けします。ピンセットなどで愛犬・愛猫の毛を少しずつ詰めていただき、最後にコルク栓で蓋をしてください。
-                              </p>
+                              {subjectType === "object" ? (
+                                <p>
+                                  底面に直径{DEFAULT_BOTTOM_HOLE_DIAMETER_MM}
+                                  mmの穴が空いた状態でお届けします。ピンセットなどで思い出の品（花びら、砂、灰など小さなもの）を少しずつ詰めていただき、最後にコルク栓で蓋をしてください。
+                                </p>
+                              ) : (
+                                <p>
+                                  底面に直径{DEFAULT_BOTTOM_HOLE_DIAMETER_MM}
+                                  mmの穴が空いた状態でお届けします。ピンセットなどで愛犬・愛猫の毛を少しずつ詰めていただき、最後にコルク栓で蓋をしてください。
+                                </p>
+                              )}
                               <p className="mt-1 text-[10px] text-slate-400">
                                 ※画像はイメージを伝えるためのAI生成イラストです（実際の商品写真ではありません）
                               </p>
@@ -265,15 +374,47 @@ export function SpecOptions() {
               />
               <span className="flex-1">
                 <span className="block text-sm font-medium text-slate-900">
-                  ストラップ・キーホルダー用の金具穴を追加する
+                  ストラップ・キーホルダー用の金具穴を追加する（+¥
+                  {HARDWARE_ADDON_PRICE_YEN.toLocaleString()}/個）
                 </span>
                 <span className="mt-0.5 block text-xs text-slate-500">
-                  3Dプレビュー生成後、モデル上をクリックして位置を指定できます
+                  3Dプレビュー生成後、開けたい位置を指定できます
                 </span>
               </span>
             </label>
           )}
         />
+        {wantsHardware && (
+          <Controller
+            name="hardwareColor"
+            control={control}
+            render={({ field }) => (
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {HARDWARE_COLOR_OPTIONS.map((option) => (
+                  <RadioCard
+                    key={option}
+                    name={field.name}
+                    value={option}
+                    checked={field.value === option}
+                    onChange={field.onChange}
+                    label={HARDWARE_COLOR_LABELS[option]}
+                    icon={
+                      <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                        <Image
+                          src={HARDWARE_COLOR_IMAGE_SRC[option]}
+                          alt={HARDWARE_COLOR_LABELS[option]}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                        />
+                      </span>
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          />
+        )}
       </fieldset>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useFormContext } from "react-hook-form";
-import type { OrderFormValues } from "@/types/order";
+import { useFormContext, useWatch } from "react-hook-form";
+import type { OrderFormValues, SubjectType } from "@/types/order";
 
 type FieldDef = {
   name: "furColorNote" | "breedNote" | "accessoryNote" | "bodyFeatureNote";
@@ -10,40 +10,70 @@ type FieldDef = {
   note?: string;
 };
 
-const FIELDS: FieldDef[] = [
-  {
-    name: "furColorNote",
-    label: "毛色・柄",
-    placeholder: "例：茶色、お腹だけ白いです",
-  },
-  {
-    name: "breedNote",
-    label: "犬種・ミックス",
-    placeholder: "例：チワワとポメラニアンのミックスです",
-  },
-  {
-    name: "accessoryNote",
-    label: "服・首輪などの扱い",
-    placeholder: "例：服は脱がせて、首輪はそのまま再現してください",
-    note: "※服の柄などは権利上の理由で再現できない場合があります",
-  },
-  {
-    name: "bodyFeatureNote",
-    label: "しっぽ・耳など体の特徴",
-    placeholder: "例：しっぽは短めです、耳は片方だけ立っています",
-  },
-];
+// Same four underlying form fields for both subject types -- only the labels/placeholders (and
+// what they mean in the AI prompt, see DETAIL_LABELS in src/lib/gemini.ts) change.
+const FIELDS_BY_SUBJECT_TYPE: Record<SubjectType, FieldDef[]> = {
+  pet: [
+    {
+      name: "furColorNote",
+      label: "毛色・柄",
+      placeholder: "例：茶色、お腹だけ白いです",
+    },
+    {
+      name: "breedNote",
+      label: "犬種・ミックス",
+      placeholder: "例：チワワとポメラニアンのミックスです",
+    },
+    {
+      name: "accessoryNote",
+      label: "服・首輪などの扱い",
+      placeholder: "例：服は脱がせて、首輪はそのまま再現してください",
+      note: "※服の柄などは権利上の理由で再現できない場合があります",
+    },
+    {
+      name: "bodyFeatureNote",
+      label: "しっぽ・耳など体の特徴",
+      placeholder: "例：しっぽは短めです、耳は片方だけ立っています",
+    },
+  ],
+  object: [
+    {
+      name: "furColorNote",
+      label: "色・柄",
+      placeholder: "例：白地に青い模様",
+    },
+    {
+      name: "breedNote",
+      label: "素材・材質",
+      placeholder: "例：陶器、木製、ぬいぐるみの生地など",
+    },
+    {
+      name: "accessoryNote",
+      label: "ロゴ・装飾などの扱い",
+      placeholder: "例：文字の部分は省略してください",
+      note: "※キャラクター・ブランドロゴなど第三者の権利物は再現できない場合があります",
+    },
+    {
+      name: "bodyFeatureNote",
+      label: "欠け・傷など特徴的な部分",
+      placeholder: "例：持ち手の欠け、使い込んだ角の丸みも再現してほしい",
+    },
+  ],
+};
 
 export function PetDetailsFields() {
   const {
     register,
+    control,
     formState: { errors },
   } = useFormContext<OrderFormValues>();
+  const subjectType = useWatch({ control, name: "subjectType" }) ?? "pet";
+  const FIELDS = FIELDS_BY_SUBJECT_TYPE[subjectType];
 
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-medium text-slate-700">
-        ペットの特徴（任意）
+        {subjectType === "pet" ? "ペットの特徴（任意）" : "モノの特徴（任意）"}
       </legend>
       <p className="text-xs text-slate-500">
         詳しく書いていただくほど、写真だけでは伝わりにくい特徴まで仕上がりに反映されやすくなります

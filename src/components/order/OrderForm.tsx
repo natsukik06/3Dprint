@@ -24,6 +24,7 @@ import {
 
 const DRAFT_DEFAULTS = {
   photos: [] as File[],
+  subjectType: "pet" as const,
   subject: "",
   furColorNote: "",
   breedNote: "",
@@ -41,7 +42,9 @@ const DRAFT_DEFAULTS = {
     furCavity: 0,
   },
   wantsHardware: false,
+  hardwareColor: "silver" as const,
   chainPositionNote: "",
+  initial: "A" as const,
 };
 
 function CartItemRow({
@@ -74,6 +77,9 @@ function CartItemRow({
           {item.subject}
           <span className="ml-1 rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">
             {item.sizeOption}
+          </span>
+          <span className="ml-1 rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">
+            {item.initial}
           </span>
         </p>
         <p className="truncate text-xs text-slate-500">{colorSummary}</p>
@@ -122,6 +128,7 @@ export function OrderForm() {
 
   const [
     photos,
+    subjectType,
     subject,
     pose,
     colorQuantities,
@@ -133,6 +140,7 @@ export function OrderForm() {
     control,
     name: [
       "photos",
+      "subjectType",
       "subject",
       "pose",
       "colorQuantities",
@@ -150,6 +158,7 @@ export function OrderForm() {
   const [generatedReferenceImageUrls, setGeneratedReferenceImageUrls] = useState<
     string[]
   >([]);
+  const [isCustomModel, setIsCustomModel] = useState(false);
   // Bumped every time an item is added to the set, forced into PreviewPanel's `key` so it fully
   // remounts (clearing its internal 3D-generation state) when starting the next item.
   const [draftKey, setDraftKey] = useState(0);
@@ -169,12 +178,16 @@ export function OrderForm() {
       modelUrl: string;
       finishedPreviewUrls: Partial<Record<MagicColor, string>>;
       referenceImageUrls: string[];
+      isCustomModel?: boolean;
     } | null
   ) {
     setGeneratedModelUrl(result?.modelUrl ?? null);
     setGeneratedPreviewUrls(result?.finishedPreviewUrls ?? {});
     setGeneratedReferenceImageUrls(result?.referenceImageUrls ?? []);
-    if (result) {
+    setIsCustomModel(result?.isCustomModel ?? false);
+    // A customer-uploaded model doesn't spend an AI generation credit, so it shouldn't count
+    // toward the credit-usage discount either.
+    if (result && !result.isCustomModel) {
       setValue("generationCreditsUsed", getValues("generationCreditsUsed") + 1);
     }
   }
@@ -184,6 +197,7 @@ export function OrderForm() {
     const draft = getValues();
 
     append({
+      subjectType: draft.subjectType,
       subject: draft.subject,
       furColorNote: draft.furColorNote,
       breedNote: draft.breedNote,
@@ -193,15 +207,19 @@ export function OrderForm() {
       sizeOption: draft.sizeOption,
       colorQuantities: draft.colorQuantities,
       wantsHardware: draft.wantsHardware,
+      hardwareColor: draft.wantsHardware ? draft.hardwareColor : DRAFT_DEFAULTS.hardwareColor,
       chainPositionNote: draft.wantsHardware ? draft.chainPositionNote : "",
+      initial: draft.initial,
       referenceImageUrls: generatedReferenceImageUrls,
       modelUrl: generatedModelUrl,
       finishedPreviewUrls: generatedPreviewUrls,
+      isCustomModel,
     });
 
     // Reset the draft builder for the next item; generationCreditsUsed is intentionally NOT
     // reset -- it accumulates across the whole set for the credit-usage discount.
     setValue("photos", DRAFT_DEFAULTS.photos);
+    setValue("subjectType", DRAFT_DEFAULTS.subjectType);
     setValue("subject", DRAFT_DEFAULTS.subject);
     setValue("furColorNote", DRAFT_DEFAULTS.furColorNote);
     setValue("breedNote", DRAFT_DEFAULTS.breedNote);
@@ -211,10 +229,13 @@ export function OrderForm() {
     setValue("sizeOption", DRAFT_DEFAULTS.sizeOption);
     setValue("colorQuantities", DRAFT_DEFAULTS.colorQuantities);
     setValue("wantsHardware", DRAFT_DEFAULTS.wantsHardware);
+    setValue("hardwareColor", DRAFT_DEFAULTS.hardwareColor);
     setValue("chainPositionNote", DRAFT_DEFAULTS.chainPositionNote);
+    setValue("initial", DRAFT_DEFAULTS.initial);
     setGeneratedModelUrl(null);
     setGeneratedPreviewUrls({});
     setGeneratedReferenceImageUrls([]);
+    setIsCustomModel(false);
     setDraftKey((k) => k + 1);
   }
 
@@ -299,6 +320,7 @@ export function OrderForm() {
             key={draftKey}
             photos={photos ?? []}
             subject={subject ?? ""}
+            subjectType={subjectType ?? "pet"}
             pose={pose}
             colorQuantities={colorQuantities}
             petDetails={{

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { consumeCredit, refundCredit } from "@/lib/credits";
 import { VIEWS, type ImagePayload } from "@/lib/gemini";
 import { createMultiviewTask, uploadImageToTripo } from "@/lib/tripo";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
@@ -13,10 +14,10 @@ function isImagePayload(value: unknown): value is ImagePayload {
 }
 
 /**
- * Second half of model generation: the customer has already reviewed the four turnaround views
- * from /api/generate-model and approved the shape, so this just sends those same images on to
- * Tripo's (paid) reconstruction. No credit charge here -- that already happened generating the
- * views themselves.
+ * Second half of model generation: the customer has already reviewed the four (free) turnaround
+ * views from /api/generate-model and approved the shape, so this sends those same images on to
+ * Tripo's (paid) reconstruction. The credit is charged HERE, not when generating the views --
+ * see checkAndConsumeFreeGeneration in src/lib/credits.ts for why.
  */
 export async function POST(request: NextRequest) {
   const user = await verifyRequestUser(request);
@@ -30,6 +31,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "4方向の画像が正しく渡されていません" },
       { status: 400 }
+    );
+  }
+
+  const hasCredit = await consumeCredit(user.uid);
+  if (!hasCredit) {
+    return NextResponse.json(
+      { error: "クレジットが不足しています。購入してからお試しください。" },
+      { status: 402 }
     );
   }
 
@@ -60,6 +69,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ taskId });
   } catch (error) {
     console.error("generate-model/confirm failed", error);
+    await refundCredit(user.uid);
     return NextResponse.json(
       { error: "3Dモデル生成の開始に失敗しました" },
       { status: 502 }

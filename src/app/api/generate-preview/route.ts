@@ -6,8 +6,10 @@ import { verifyRequestUser } from "@/lib/verifyRequestUser";
 import {
   MAGIC_COLOR_OPTIONS,
   POSE_OPTIONS,
+  SUBJECT_TYPE_OPTIONS,
   type MagicColor,
   type Pose,
+  type SubjectType,
 } from "@/types/order";
 
 function isImageFile(value: FormDataEntryValue | null): value is File {
@@ -30,6 +32,12 @@ export async function POST(request: NextRequest) {
   const subject = formData.get("subject");
   const pose = formData.get("pose");
   const magicColor = formData.get("magicColor");
+  const subjectTypeRaw = formData.get("subjectType");
+  const subjectType: SubjectType = SUBJECT_TYPE_OPTIONS.includes(
+    subjectTypeRaw as SubjectType
+  )
+    ? (subjectTypeRaw as SubjectType)
+    : "pet";
 
   if (photoFiles.length === 0) {
     return NextResponse.json(
@@ -67,7 +75,8 @@ export async function POST(request: NextRequest) {
       subject,
       pose as Pose,
       magicColor as MagicColor,
-      petDetails
+      petDetails,
+      subjectType
     );
 
     const previewId = crypto.randomUUID();

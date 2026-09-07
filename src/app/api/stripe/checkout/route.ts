@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { CREDIT_PACKS } from "@/lib/creditPacks";
+import { CREDIT_PACKS, CREDIT_PRICE_YEN, MAX_CUSTOM_CREDITS } from "@/lib/creditPacks";
 import { stripe } from "@/lib/stripe";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 
@@ -9,10 +9,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
   }
 
-  const { packId } = await request.json();
-  const pack = CREDIT_PACKS.find((p) => p.id === packId);
-  if (!pack) {
-    return NextResponse.json({ error: "無効なプランです" }, { status: 400 });
+  const { packId, customCredits } = await request.json();
+
+  // Either a fixed pack, or a customer-chosen quantity priced at the same per-credit rate.
+  let credits: number;
+  let priceYen: number;
+  if (packId) {
+    const pack = CREDIT_PACKS.find((p) => p.id === packId);
+    if (!pack) {
+      return NextResponse.json({ error: "無効なプランです" }, { status: 400 });
+    }
+    credits = pack.credits;
+    priceYen = pack.priceYen;
+  } else {
+    const parsed = Number(customCredits);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_CUSTOM_CREDITS) {
+      return NextResponse.json(
+        { error: `個数は1〜${MAX_CUSTOM_CREDITS}の範囲で指定してください` },
+        { status: 400 }
+      );
+    }
+    credits = parsed;
+    priceYen = parsed * CREDIT_PRICE_YEN;
   }
 
   const origin = request.headers.get("origin") ?? new URL(request.url).origin;
@@ -25,14 +43,14 @@ export async function POST(request: NextRequest) {
       // (https://dashboard.stripe.com/settings/payment_methods), plus currency/amount/customer
       // eligibility. All line items are jpy, which is required for PayPay to be offered.
       client_reference_id: user.uid,
-      metadata: { uid: user.uid, credits: String(pack.credits) },
+      metadata: { uid: user.uid, credits: String(credits) },
       line_items: [
         {
           quantity: 1,
           price_data: {
             currency: "jpy",
-            unit_amount: pack.priceYen,
-            product_data: { name: `生成クレジット ${pack.credits}回分` },
+            unit_amount: priceYen,
+            product_data: { name: `生成クレジット ${credits}回分` },
           },
         },
       ],

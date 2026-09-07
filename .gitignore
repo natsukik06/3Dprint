@@ -47,3 +47,9 @@ deepresarch.txt
 # firebase functions
 /functions/node_modules
 /functions/lib
+
+# print-pipeline: generated STL/SL1/Photon output and self-built tool binaries -- large binaries
+# that don't belong in git, and (worse) can crash the Next.js dev server's file watcher if a
+# native tool (PrusaSlicer/UVtools) still has one open/locked when Turbopack tries to read it.
+/print-pipeline/output/
+/print-pipeline/tools/

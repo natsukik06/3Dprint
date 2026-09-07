@@ -16,12 +16,29 @@ export const MAGIC_COLOR_OPTIONS = [
   "cosmicPurple",
   "furCavity",
 ] as const;
+export const HARDWARE_COLOR_OPTIONS = ["silver", "gold", "roseGold", "clear"] as const;
+// A-Z, engraved into the underside of the piece during hollowing (see functions/src's
+// engraveInitial) so a physical piece can never be mixed up with another order's piece or
+// color once it's off the shared print plate and out of colorless resin -- the customer's own
+// choice of letter travels with the object itself, not just a paper work sheet.
+export const INITIAL_OPTIONS = [
+  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+  "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+] as const;
+// What's being reproduced -- affects which detail-note fields are shown, the AI prompt wording
+// (fur/anatomy language only makes sense for "pet"), and whether the pose picker is shown at all
+// ("object" always reproduces the pose as photographed, since a mug doesn't sit/stand/lie down).
+export const SUBJECT_TYPE_OPTIONS = ["pet", "object"] as const;
 export const SIZE_OPTIONS = ["S", "M", "L"] as const;
-export const AVAILABLE_SIZE_OPTIONS = ["S", "M", "L"] as const satisfies readonly (typeof SIZE_OPTIONS)[number][];
+// Launch sells S (2.8cm) and M (4cm) only. L stays fully wired up server-side
+// (scaling/shipping/pricing) for when it's reintroduced -- only the
+// customer-facing size picker is restricted.
+export const AVAILABLE_SIZE_OPTIONS = ["S", "M"] as const satisfies readonly (typeof SIZE_OPTIONS)[number][];
 // Per-piece production lifecycle (each set item is printed/finished independently).
 export const ORDER_STATUS_OPTIONS = ["pending", "batched", "completed"] as const;
 export const PAYMENT_STATUS_OPTIONS = ["unpaid", "paid"] as const;
 
+export type SubjectType = (typeof SUBJECT_TYPE_OPTIONS)[number];
 export type Pose = (typeof POSE_OPTIONS)[number];
 export type MagicColor = (typeof MAGIC_COLOR_OPTIONS)[number];
 export type ColorQuantities = Record<MagicColor, number>;
@@ -31,6 +48,8 @@ export type PetDetails = {
   accessoryNote?: string;
   bodyFeatureNote?: string;
 };
+export type HardwareColor = (typeof HARDWARE_COLOR_OPTIONS)[number];
+export type Initial = (typeof INITIAL_OPTIONS)[number];
 export type SizeOption = (typeof SIZE_OPTIONS)[number];
 export type OrderStatus = (typeof ORDER_STATUS_OPTIONS)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUS_OPTIONS)[number];
@@ -41,6 +60,12 @@ export const SHIPPING_METHOD_BY_SIZE: Record<SizeOption, string> = {
   S: "クリックポスト",
   M: "クリックポスト",
   L: "宅急便コンパクト",
+};
+export const HARDWARE_COLOR_LABELS: Record<HardwareColor, string> = {
+  silver: "シルバー",
+  gold: "ゴールド",
+  roseGold: "ローズゴールド",
+  clear: "目印チャーム",
 };
 export const SIZE_LABELS: Record<SizeOption, string> = {
   S: "Sサイズ（最大辺2.8cm・クリックポスト配送）",
@@ -86,6 +111,12 @@ export const DEFAULT_DRAIN_HOLE_DIAMETER_MM = 2;
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+// Own-model bring-in: the file still goes through the same server-side scaling/hollowing
+// pipeline as an AI-generated model (which expects a GLB), so the size cap here is purely a
+// storage/upload-time guard, not a physical-size limit -- physical size is still controlled by
+// the S/M sizeOption, which rescales whatever model (AI or customer-made) to that size's target
+// dimension.
+export const MAX_CUSTOM_MODEL_SIZE_BYTES = 30 * 1024 * 1024;
 export const MAX_REFERENCE_PHOTOS = 5;
 export const MAX_TOTAL_QUANTITY = 10;
 // Distinct models/subjects allowed in one set. Matches the real packaging constraint discussed
@@ -133,6 +164,7 @@ const colorQuantitiesSchema = z
 // the `items` array when the customer clicks "セットに追加"; the top-level draft fields below
 // (subject, pose, sizeOption, ...) are just the in-progress builder for the item not yet added.
 const orderItemSchema = z.object({
+  subjectType: z.enum(SUBJECT_TYPE_OPTIONS),
   subject: z.string().min(1, "何を作りたいか入力してください"),
   furColorNote: z.string().max(200, "200文字以内で入力してください").optional(),
   breedNote: z.string().max(200, "200文字以内で入力してください").optional(),
@@ -145,10 +177,16 @@ const orderItemSchema = z.object({
   sizeOption: z.enum(SIZE_OPTIONS),
   colorQuantities: colorQuantitiesSchema,
   wantsHardware: z.boolean(),
+  hardwareColor: z.enum(HARDWARE_COLOR_OPTIONS),
   chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
+  // Engraved into the piece during hollowing -- see INITIAL_OPTIONS above.
+  initial: z.enum(INITIAL_OPTIONS),
   referenceImageUrls: z.array(z.string()),
   modelUrl: z.string().min(1, "3Dモデルが生成されていません"),
   finishedPreviewUrls: z.record(z.string(), z.string()),
+  // True when modelUrl came from the customer's own upload rather than AI generation --
+  // referenceImageUrls/finishedPreviewUrls are empty in that case, which is expected, not missing.
+  isCustomModel: z.boolean(),
 });
 
 export const orderFormSchema = z.object({
@@ -159,6 +197,7 @@ export const orderFormSchema = z.object({
   photos: z
     .array(imageFileSchema)
     .max(MAX_REFERENCE_PHOTOS, `写真は${MAX_REFERENCE_PHOTOS}枚までです`),
+  subjectType: z.enum(SUBJECT_TYPE_OPTIONS),
   subject: z.string(),
   furColorNote: z.string().max(200, "200文字以内で入力してください").optional(),
   breedNote: z.string().max(200, "200文字以内で入力してください").optional(),
@@ -171,7 +210,9 @@ export const orderFormSchema = z.object({
   sizeOption: z.enum(SIZE_OPTIONS, "サイズを選択してください"),
   colorQuantities: colorQuantitiesSchema,
   wantsHardware: z.boolean(),
+  hardwareColor: z.enum(HARDWARE_COLOR_OPTIONS),
   chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
+  initial: z.enum(INITIAL_OPTIONS, "イニシャルを選択してください"),
   generationCreditsUsed: z.number().int().min(0),
 
   // The real payload: every item added to the set.
@@ -229,6 +270,11 @@ export type OrderRecord = {
   // /admin/slips) -- tracked separately from production status since it's a packing-desk task,
   // not a fabrication one.
   insertPrinted: boolean;
+  // The Firebase Auth uid signed in at submission time, if any (checkout itself doesn't require
+  // login, but the 3D-generation step does, so most real orders have one). Used only to reset
+  // that account's free daily view-generation count once they've actually paid -- see
+  // resetFreeGenerations in src/lib/credits.ts.
+  uid: string | null;
 };
 
 // One physical piece to be printed/finished, fanned out from a paid order's `items[itemIndex]`.
@@ -247,6 +293,9 @@ export type OrderItemRecord = OrderItemDraft & {
   wallThicknessMm: number | null;
   sphereSegments: number | null;
   hasVentHole: boolean;
-  ventHoleSource: "auto" | "customer" | null;
+  // "manual" = admin hollowed/holed the model themselves outside this app (their own
+  // Blender/PrusaSlicer pipeline) and uploaded the result directly, skipping the Cloud
+  // Function entirely -- see /api/admin/order-items/[id]/upload-finished.
+  ventHoleSource: "auto" | "customer" | "manual" | null;
   createdAt: unknown;
 };

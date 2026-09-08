@@ -94,6 +94,10 @@ export async function submitOrder(values: OrderFormValues): Promise<string> {
     paidAt: null,
     stripeCheckoutSessionId: null,
     insertPrinted: false,
+    printed: false,
+    printedAt: null,
+    shipped: false,
+    shippedAt: null,
     uid: auth.currentUser?.uid ?? null,
   };
 

@@ -5,6 +5,7 @@ import { sendEmail } from "@/lib/email";
 import { buildOrderConfirmationEmail } from "@/lib/emailTemplates";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { upsertMarketingSubscriber } from "@/lib/marketing";
+import { getNextOrderNumber } from "@/lib/orderNumber";
 import { runOrderProcessing } from "@/lib/processOrder";
 import { stripe } from "@/lib/stripe";
 import type { OrderItemDraft } from "@/types/order";
@@ -47,8 +48,10 @@ export async function POST(request: NextRequest) {
         const draftSnap = await draftRef.get();
         if (draftSnap.exists) {
           const draftData = draftSnap.data();
+          const orderNumber = await getNextOrderNumber();
           await orderRef.set({
             ...draftData,
+            orderNumber,
             paymentStatus: "paid",
             paidAt: FieldValue.serverTimestamp(),
           });
@@ -79,11 +82,12 @@ export async function POST(request: NextRequest) {
                   customerName: string;
                   customerEmail: string;
                   agreeMarketingEmail?: boolean;
+                  orderNumber?: string;
                 }
               | undefined;
             if (!order) return;
 
-            const { subject, html } = buildOrderConfirmationEmail(orderId, order);
+            const { subject, html } = buildOrderConfirmationEmail(order.orderNumber ?? orderId, order);
             await sendEmail({ to: order.customerEmail, subject, html });
 
             if (order.agreeMarketingEmail) {

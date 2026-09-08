@@ -26,11 +26,24 @@ function PhotoThumbnail({
   slotLabel?: string;
   onRemove: () => void;
 }) {
-  const [previewUrl] = useState(() => URL.createObjectURL(file));
+  // Deliberately NOT `useState(() => URL.createObjectURL(file))` -- under React Strict Mode's
+  // dev-only mount/cleanup/remount double-invoke, that pattern creates the URL once during the
+  // state initializer, then the effect's cleanup revokes that same URL on the simulated
+  // unmount, leaving the still-mounted <img> pointing at an already-revoked blob URL (shows
+  // broken/blank). Creating the URL INSIDE the effect instead means the double-invoke's second
+  // mount creates a fresh, valid URL rather than reusing the one that just got revoked.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
+    const url = URL.createObjectURL(file);
+    // The object URL is a resource that must be created and revoked as a matching pair (see
+    // comment above), so the create-and-store has to happen together in the effect, not via
+    // useMemo (which would create an extra URL every Strict Mode double-invoke with no way to
+    // revoke the discarded one).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   return (
     <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">

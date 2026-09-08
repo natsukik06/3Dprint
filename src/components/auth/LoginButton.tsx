@@ -1,6 +1,7 @@
 "use client";
 
 import { LogIn, LogOut } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
@@ -39,6 +40,12 @@ export function LoginButton() {
       <span className="text-xs text-slate-600">
         残りクレジット: <span className="font-semibold">{credits ?? "…"}</span>
       </span>
+      <Link
+        href="/mypage"
+        className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+      >
+        マイページ
+      </Link>
       <button
         type="button"
         onClick={() => signOut()}

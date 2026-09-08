@@ -1,11 +1,21 @@
 "use client";
 
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ModelViewerElement } from "@google/model-viewer";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { downloadFileAs, sanitizeFilenamePart } from "@/lib/downloadFile";
 import { db } from "@/lib/firebase";
 import { MAGIC_COLOR_LABELS, POSE_LABELS, formatYen } from "@/lib/pricing";
 import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
@@ -20,6 +30,7 @@ import {
 } from "@/types/order";
 
 type OrderDetail = {
+  orderNumber?: string;
   items: OrderItemDraft[];
   estimatedPriceYen: number;
   shippingYen: number;
@@ -35,6 +46,8 @@ type OrderDetail = {
   createdAt: { toDate: () => Date } | null;
   paymentStatus: PaymentStatus;
   paidAt: { toDate: () => Date } | null;
+  shipped: boolean;
+  shippedAt: { toDate: () => Date } | null;
 };
 
 // Production data for one item, keyed by its position in order.items. Only exists once payment
@@ -63,11 +76,13 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function ItemCard({
   item,
   index,
+  orderNumber,
   production,
   onProductionChange,
 }: {
   item: OrderItemDraft;
   index: number;
+  orderNumber: string;
   production: ItemProduction | null;
   onProductionChange: (next: ItemProduction) => void;
 }) {
@@ -458,14 +473,18 @@ function ItemCard({
                           : "あり（自動追加・底面中心）"
                     }
                   />
-                  <a
-                    href={production.finishedModelUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadFileAs(
+                        production.finishedModelUrl!,
+                        `${sanitizeFilenamePart(production.customerName)}-${orderNumber}-${sanitizeFilenamePart(item.subject)}-中空化済み.stl`
+                      ).catch((err) => console.error("model download failed", err))
+                    }
                     className="mt-1 inline-block text-xs text-slate-800 underline underline-offset-2"
                   >
                     中空化済みSTLをダウンロード
-                  </a>
+                  </button>
                 </>
               )}
               <div className="mt-2 flex flex-wrap items-end gap-3">
@@ -618,6 +637,7 @@ function AdminOrderDetail({ id }: { id: string }) {
         }
         const data = snap.data();
         setOrder({
+          orderNumber: data.orderNumber,
           items: (data.items ?? []) as OrderItemDraft[],
           estimatedPriceYen: data.estimatedPriceYen ?? 0,
           shippingYen: data.shippingYen ?? 0,
@@ -633,6 +653,8 @@ function AdminOrderDetail({ id }: { id: string }) {
           createdAt: data.createdAt ?? null,
           paymentStatus: data.paymentStatus ?? "unpaid",
           paidAt: data.paidAt ?? null,
+          shipped: data.shipped ?? false,
+          shippedAt: data.shippedAt ?? null,
         });
 
         const itemsSnap = await getDocs(
@@ -666,6 +688,7 @@ function AdminOrderDetail({ id }: { id: string }) {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <InfoRow label="注文番号" value={order.orderNumber ?? id} />
         <InfoRow label="セット点数" value={`${order.items.length}点`} />
         <InfoRow
           label="送料"
@@ -688,6 +711,41 @@ function AdminOrderDetail({ id }: { id: string }) {
               : "未払い"
           }
         />
+        {order.paymentStatus === "paid" && (
+          <div className="flex items-center justify-between gap-4 py-1.5 text-sm">
+            <span className="text-slate-500">発送状況</span>
+            <div className="flex items-center gap-2">
+              <span className="text-right font-medium text-slate-900">
+                {order.shipped
+                  ? `発送済み${order.shippedAt ? `（${order.shippedAt.toDate().toLocaleString("ja-JP")}）` : ""}`
+                  : "未発送"}
+              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  const next = !order.shipped;
+                  setOrder({ ...order, shipped: next, shippedAt: null });
+                  try {
+                    await updateDoc(doc(db, "orders", id), {
+                      shipped: next,
+                      shippedAt: next ? serverTimestamp() : null,
+                    });
+                  } catch (error) {
+                    console.error("failed to toggle shipped", error);
+                    setOrder({ ...order, shipped: !next });
+                  }
+                }}
+                className={`rounded-lg px-2 py-1 text-xs font-semibold ${
+                  order.shipped
+                    ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    : "bg-slate-800 text-white hover:bg-slate-700"
+                }`}
+              >
+                {order.shipped ? "未発送に戻す" : "発送済みにする"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {order.items.map((item, index) => (
@@ -695,6 +753,7 @@ function AdminOrderDetail({ id }: { id: string }) {
           key={index}
           item={item}
           index={index}
+          orderNumber={order.orderNumber ?? id}
           production={productionByIndex[index] ?? null}
           onProductionChange={(next) =>
             setProductionByIndex((prev) => ({ ...prev, [index]: next }))

@@ -34,6 +34,9 @@ export function buildOrderConfirmationEmail(
     <ul style="padding-left:20px;">${itemRows}</ul>
     <p style="font-weight:bold;">合計金額：${formatYen(order.estimatedPriceYen)}</p>
     <p style="font-size:13px;color:#64748b;">注文番号：${escapeHtml(orderId)}</p>
+    <p style="font-size:12px;color:#b45309;background:#fffbeb;padding:8px 12px;border-radius:8px;">
+      3Dモデルのデータは、商品発送から7日後に自動的に削除されます。保存しておきたい方は、マイページから発送後お早めにダウンロードしてください。
+    </p>
   `);
 
   return { subject: "ご注文ありがとうございます", html };

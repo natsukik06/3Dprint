@@ -29,34 +29,71 @@ export async function POST(request: NextRequest) {
 
     const candidates = snap.docs.filter((d) => !!d.data().scaledModelUrl);
 
+    // Group by orderId first -- a customer's whole set (every design in one order) always lands
+    // in the same batch/plate together, never split across two, even if that means a batch runs
+    // over the normal MAX_CAPACITY target (the physical plate packing in plateLayout.ts handles
+    // any actual size overflow by spanning extra physical plates; this is just about keeping one
+    // order's paper work-sheet cells and hollow/hole handling together in one pass).
+    type CandidateGroup = { orderId: string; docs: typeof candidates };
+    const groupsByOrderId = new Map<string, CandidateGroup>();
+    const groupOrder: CandidateGroup[] = [];
+    for (const doc of candidates) {
+      const orderId = (doc.data().orderId as string) ?? doc.id;
+      let group = groupsByOrderId.get(orderId);
+      if (!group) {
+        group = { orderId, docs: [] };
+        groupsByOrderId.set(orderId, group);
+        groupOrder.push(group);
+      }
+      group.docs.push(doc);
+    }
+
     // Each order_item is one DESIGN, hollowed/hole-cut once -- but a customer can order several
     // physical copies of that same design (colorQuantities summing to >1), and each copy needs
     // its own spot on the print plate. Fill grid cells by physical unit count, not by design
-    // count, so a "10個" order actually reserves 10 cells instead of 1. Kept simple: a design
-    // that wouldn't fully fit in the remaining capacity is left for the next batch rather than
-    // split across two (its plate-layout would otherwise need to span two separate batches).
-    const gridSequence = buildGridSequence();
+    // count, so a "10個" order actually reserves 10 cells instead of 1.
+    function groupQuantity(group: CandidateGroup): number {
+      return group.docs.reduce(
+        (sum, doc) =>
+          sum + Math.max(1, getTotalQuantity(doc.data().colorQuantities as ColorQuantities)),
+        0
+      );
+    }
+
+    let plannedCells = 0;
+    const includedGroups: CandidateGroup[] = [];
+    for (const group of groupOrder) {
+      const quantity = groupQuantity(group);
+      // Always take the very first group even if it alone exceeds MAX_CAPACITY (a single
+      // oversized order should never be stuck waiting forever) -- every group after that only
+      // joins if it fully fits in what's left, same "don't split, skip and keep looking for a
+      // smaller one that fits" behavior as before, just applied per-order instead of per-design.
+      if (includedGroups.length > 0 && plannedCells + quantity > MAX_CAPACITY) continue;
+      includedGroups.push(group);
+      plannedCells += quantity;
+    }
+
+    const gridSequence = buildGridSequence(Math.max(MAX_CAPACITY, plannedCells));
     const entries: PrintBatchOrderEntry[] = [];
     let nextGridIndex = 0;
-    for (const doc of candidates) {
-      if (nextGridIndex >= MAX_CAPACITY) break;
-      const data = doc.data();
-      const quantity = Math.max(1, getTotalQuantity(data.colorQuantities as ColorQuantities));
-      if (nextGridIndex + quantity > MAX_CAPACITY) continue;
-
-      for (let i = 0; i < quantity; i++) {
-        entries.push({
-          itemId: doc.id,
-          orderId: data.orderId ?? "",
-          gridId: gridSequence[nextGridIndex],
-          customerName: data.customerName ?? "",
-          subject: data.subject ?? "",
-          sizeOption: (data.sizeOption ?? "S") as SizeOption,
-          colorSummary: summarizeColors(data.colorQuantities),
-          maxDimensionMm: data.maxDimensionMm ?? null,
-          initial: data.initial ?? "",
-        });
-        nextGridIndex++;
+    for (const group of includedGroups) {
+      for (const doc of group.docs) {
+        const data = doc.data();
+        const quantity = Math.max(1, getTotalQuantity(data.colorQuantities as ColorQuantities));
+        for (let i = 0; i < quantity; i++) {
+          entries.push({
+            itemId: doc.id,
+            orderId: data.orderId ?? "",
+            gridId: gridSequence[nextGridIndex],
+            customerName: data.customerName ?? "",
+            subject: data.subject ?? "",
+            sizeOption: (data.sizeOption ?? "S") as SizeOption,
+            colorSummary: summarizeColors(data.colorQuantities),
+            maxDimensionMm: data.maxDimensionMm ?? null,
+            initial: data.initial ?? "",
+          });
+          nextGridIndex++;
+        }
       }
     }
 

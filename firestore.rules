@@ -10,8 +10,23 @@ service cloud.firestore {
       // Only ever created by the Stripe webhook (Admin SDK, bypasses rules), once payment is
       // confirmed -- see order_drafts below for the pre-payment side of this.
       allow create: if false;
-      allow read: if isAdmin();
-      allow update, delete: if false;
+      // Admin sees everything; a signed-in customer sees only their own orders, matched by
+      // their VERIFIED auth email (request.auth.token.email, not client-supplied data) against
+      // customerEmail -- not by uid, since uid is only captured when the customer happened to be
+      // logged in at checkout time (see src/lib/orders.ts), while customerEmail is always
+      // present. Powers the customer-facing order-history page (/mypage).
+      allow read: if isAdmin() ||
+        (request.auth != null && resource.data.customerEmail == request.auth.token.email);
+      // Lets the admin toggle operational flags (insertPrinted, shipped) directly from the
+      // client -- same trust level as print_batches below. Still can't be created/deleted from
+      // the client.
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+    match /counters/{counterId} {
+      // Admin-SDK only (Stripe webhook's sequential order-number generator, see
+      // src/lib/orderNumber.ts) -- never touched by any client, admin included.
+      allow read, write: if false;
     }
     match /order_drafts/{draftId} {
       // Written by the order form before Stripe checkout; promoted into orders/{sameId} by the

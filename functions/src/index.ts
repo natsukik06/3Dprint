@@ -1,5 +1,6 @@
 import admin from "firebase-admin";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { FieldValue } from "firebase-admin/firestore";
 import { cutHoles, engraveText, hollowMesh, type HoleSpec } from "./lib/meshBoolean.js";
 import {
@@ -352,5 +353,111 @@ export const processJob = onDocumentCreated(
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
+  }
+);
+
+// -----------------------------------------------------------------------------------------
+// Storage lifecycle: 3D models are the single biggest storage cost this app has (a real
+// customer model was ~50MB of raw triangle data before scaling), so once a model has served
+// its purpose it gets deleted -- see the retention windows below. Firestore docs referencing a
+// deleted file are deliberately left in place (their URL just 404s from then on); rewriting
+// every order_items doc that ever pointed at a model isn't worth the extra writes for what's
+// otherwise dead data.
+const SHIPPED_MODEL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const UNUSED_MODEL_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
+
+function storagePathFromPublicUrl(url: string): string | null {
+  const match = url.match(/\/o\/([^?]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+async function deleteModelFile(url: string | null | undefined): Promise<void> {
+  if (!url) return;
+  const path = storagePathFromPublicUrl(url);
+  if (!path) return;
+  try {
+    await admin.storage().bucket().file(path).delete();
+  } catch (error) {
+    // Already gone (e.g. a retry after a partially-completed previous run) -- not a real failure.
+    const code = (error as { code?: number })?.code;
+    if (code !== 404) {
+      console.error(`failed to delete storage file ${path}`, error);
+    }
+  }
+}
+
+export const cleanupOldModels = onSchedule(
+  { schedule: "every 24 hours", timeZone: "Asia/Tokyo", ...JOB_RUNTIME_OPTS },
+  async () => {
+    const now = Date.now();
+
+    // 1) Orders shipped 7+ days ago: delete every model file tied to them (the customer has
+    // had the physical piece plus a full week to download the digital model if they wanted it).
+    const shippedSnap = await db.collection("orders").where("shipped", "==", true).get();
+    let shippedCleaned = 0;
+    for (const orderDoc of shippedSnap.docs) {
+      const data = orderDoc.data();
+      if (data.modelsDeleted) continue;
+      const shippedAt = data.shippedAt?.toDate?.() as Date | undefined;
+      if (!shippedAt || now - shippedAt.getTime() < SHIPPED_MODEL_RETENTION_MS) continue;
+
+      const items = (data.items ?? []) as { modelUrl?: string }[];
+      await Promise.all(items.map((item) => deleteModelFile(item.modelUrl)));
+
+      const itemDocsSnap = await db
+        .collection("order_items")
+        .where("orderId", "==", orderDoc.id)
+        .get();
+      await Promise.all(
+        itemDocsSnap.docs.map(async (itemDoc) => {
+          const itemData = itemDoc.data();
+          await Promise.all([
+            deleteModelFile(itemData.scaledModelUrl),
+            deleteModelFile(itemData.finishedModelUrl),
+          ]);
+        })
+      );
+
+      await orderDoc.ref.update({
+        modelsDeleted: true,
+        modelsDeletedAt: FieldValue.serverTimestamp(),
+      });
+      shippedCleaned++;
+    }
+
+    // 2) Models generated (via the AI flow's gallery, users/{uid}/models/{taskId}) 14+ days ago
+    // that were never actually added to any order/draft -- an abandoned generation nobody paid
+    // for. A model that WAS ordered is left alone here even past 14 days; rule 1 above already
+    // governs its lifetime once (if ever) that order ships.
+    const usedModelUrls = new Set<string>();
+    const [ordersSnap, draftsSnap] = await Promise.all([
+      db.collection("orders").get(),
+      db.collection("order_drafts").get(),
+    ]);
+    for (const snap of [ordersSnap, draftsSnap]) {
+      for (const d of snap.docs) {
+        const items = (d.data().items ?? []) as { modelUrl?: string }[];
+        for (const item of items) {
+          if (item.modelUrl) usedModelUrls.add(item.modelUrl);
+        }
+      }
+    }
+
+    const galleryModelsSnap = await db.collectionGroup("models").get();
+    let orphanedCleaned = 0;
+    for (const modelDoc of galleryModelsSnap.docs) {
+      const data = modelDoc.data();
+      const createdAt = data.createdAt?.toDate?.() as Date | undefined;
+      if (!createdAt || now - createdAt.getTime() < UNUSED_MODEL_RETENTION_MS) continue;
+      if (data.modelUrl && usedModelUrls.has(data.modelUrl)) continue;
+
+      await deleteModelFile(data.modelUrl as string | undefined);
+      await modelDoc.ref.delete();
+      orphanedCleaned++;
+    }
+
+    console.log(
+      `cleanupOldModels: cleaned ${shippedCleaned} shipped order(s), ${orphanedCleaned} orphaned generation(s)`
+    );
   }
 );

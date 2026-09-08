@@ -249,6 +249,11 @@ export type OrderItemDraft = z.infer<typeof orderItemSchema>;
 // across all items. Production tracking (scaling, hollowing, batching) happens per physical piece
 // in the separate `order_items` collection, created by fanning out `items` once payment succeeds.
 export type OrderRecord = {
+  // Human-facing sequential order number (A00000001, A00000002, ...) -- assigned once, by the
+  // Stripe webhook, when a draft is promoted to a real (paid) order; see getNextOrderNumber in
+  // src/lib/orderNumber.ts. Optional because orders created before this field existed don't have
+  // one -- callers should fall back to the Firestore document id for those.
+  orderNumber?: string;
   items: OrderItemDraft[];
   estimatedPriceYen: number;
   shippingYen: number;
@@ -270,6 +275,17 @@ export type OrderRecord = {
   // /admin/slips) -- tracked separately from production status since it's a packing-desk task,
   // not a fabrication one.
   insertPrinted: boolean;
+  // Whether every piece in this order has actually come off the printer -- tracked at order
+  // level (not per order_item) since a solo operation prints a whole order's items together in
+  // practice; toggled manually from /admin/production, same as shipped below (nothing in the
+  // pipeline can detect a physical print finishing on its own).
+  printed: boolean;
+  printedAt: unknown;
+  // Whether this order has actually been handed off for delivery (postbox/post office) --
+  // tracked separately from paymentStatus and order_items.status, neither of which say anything
+  // about the shipping step itself. Toggled from the admin order list.
+  shipped: boolean;
+  shippedAt: unknown;
   // The Firebase Auth uid signed in at submission time, if any (checkout itself doesn't require
   // login, but the 3D-generation step does, so most real orders have one). Used only to reset
   // that account's free daily view-generation count once they've actually paid -- see

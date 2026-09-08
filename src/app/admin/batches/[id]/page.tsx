@@ -4,9 +4,10 @@ import { arrayRemove, arrayUnion, doc, getDoc, updateDoc } from "firebase/firest
 import JSZip from "jszip";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ModelViewerElement } from "@google/model-viewer";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { buildGridSequence } from "@/lib/batches";
+import { buildGridSequence, MAX_CAPACITY } from "@/lib/batches";
 import { db } from "@/lib/firebase";
 import { PLATE_DEPTH_MM, PLATE_WIDTH_MM } from "@/lib/plateLayout";
 import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
@@ -30,11 +31,179 @@ type PlateResult = {
   items: { gridId: string; url: string }[];
 };
 
+// Same click-to-pick-on-the-3D-model interaction as the single-item order detail page
+// (admin/orders/[id]/page.tsx) -- shown one item at a time in a modal here instead of inline,
+// since a batch can hold many items and rendering that many live 3D viewers at once would be
+// heavy. Fetches its own model URL (batch entries don't carry one) and reports back a picked
+// X/Z fraction on confirm.
+function HolePickerModal({
+  itemId,
+  subject,
+  initialX,
+  initialZ,
+  onConfirm,
+  onClose,
+}: {
+  itemId: string;
+  subject: string;
+  initialX: number;
+  initialZ: number;
+  onConfirm: (x: number, z: number) => void;
+  onClose: () => void;
+}) {
+  const [modelSrc, setModelSrc] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pickedX, setPickedX] = useState(initialX);
+  const [pickedZ, setPickedZ] = useState(initialZ);
+  const modelViewerRef = useRef<ModelViewerElement | null>(null);
+  const [modelBounds, setModelBounds] = useState<{
+    min: { x: number; y: number; z: number };
+    max: { x: number; y: number; z: number };
+  } | null>(null);
+
+  useEffect(() => {
+    import("@google/model-viewer");
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDoc(doc(db, "order_items", itemId))
+      .then((snap) => {
+        if (cancelled) return;
+        const url = (snap.data()?.scaledModelUrl ?? snap.data()?.modelUrl) as string | undefined;
+        if (!url) {
+          setLoadError("3Dモデルが見つかりません");
+          return;
+        }
+        setModelSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("3Dモデルの読み込みに失敗しました");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [itemId]);
+
+  useEffect(() => {
+    const mv = modelViewerRef.current;
+    if (!mv) return;
+    function updateBounds() {
+      if (!mv!.loaded) return;
+      const dims = mv!.getDimensions();
+      const center = mv!.getBoundingBoxCenter();
+      setModelBounds({
+        min: { x: center.x - dims.x / 2, y: center.y - dims.y / 2, z: center.z - dims.z / 2 },
+        max: { x: center.x + dims.x / 2, y: center.y + dims.y / 2, z: center.z + dims.z / 2 },
+      });
+    }
+    updateBounds();
+    mv.addEventListener("load", updateBounds);
+    return () => mv.removeEventListener("load", updateBounds);
+  }, [modelSrc]);
+
+  function handleClick(e: React.MouseEvent<HTMLElement>) {
+    const mv = modelViewerRef.current;
+    if (!mv || !modelBounds) return;
+    const rect = mv.getBoundingClientRect();
+    const hit = mv.positionAndNormalFromPoint(e.clientX - rect.left, e.clientY - rect.top);
+    if (!hit) return;
+    const { min, max } = modelBounds;
+    const spanX = max.x - min.x || 1;
+    const spanZ = max.z - min.z || 1;
+    setPickedX(Math.min(1, Math.max(0, (hit.position.x - min.x) / spanX)));
+    setPickedZ(Math.min(1, Math.max(0, (hit.position.z - min.z) / spanZ)));
+  }
+
+  const hotspotPosition = modelBounds
+    ? `${modelBounds.min.x + pickedX * (modelBounds.max.x - modelBounds.min.x)} ${modelBounds.min.y} ${modelBounds.min.z + pickedZ * (modelBounds.max.z - modelBounds.min.z)}`
+    : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl bg-white p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="mb-2 text-sm font-semibold text-slate-900">{subject}の穴位置を指定</p>
+        <div className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+          {loadError ? (
+            <div className="flex h-full items-center justify-center text-xs text-red-600">
+              {loadError}
+            </div>
+          ) : modelSrc ? (
+            <model-viewer
+              ref={modelViewerRef}
+              src={modelSrc}
+              alt="3Dモデル"
+              camera-controls
+              shadow-intensity="1"
+              onClick={handleClick}
+              style={{ width: "100%", height: "100%", cursor: "crosshair" }}
+            >
+              {hotspotPosition && (
+                <button
+                  type="button"
+                  slot="hotspot-hole"
+                  data-position={hotspotPosition}
+                  data-normal="0 1 0"
+                  style={{
+                    width: "14px",
+                    height: "14px",
+                    borderRadius: "50%",
+                    background: "#ef4444",
+                    border: "2px solid white",
+                    boxShadow: "0 0 0 1px rgba(0,0,0,0.4)",
+                    padding: 0,
+                  }}
+                  aria-label="水抜き穴の位置"
+                />
+              )}
+            </model-viewer>
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs text-slate-400">
+              読み込み中...
+            </div>
+          )}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">
+          モデル上の狙いたい場所をクリックすると、その真下（底面）に穴が来るように指定されます。X={pickedX.toFixed(2)}
+          , Z={pickedZ.toFixed(2)}
+        </p>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-slate-300 bg-white py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(pickedX, pickedZ)}
+            className="flex-1 rounded-lg bg-slate-800 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+          >
+            この位置にする
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BatchGridDashboard({ id }: { id: string }) {
   const { user } = useAuth();
   const [batch, setBatch] = useState<BatchState>(undefined);
   const [printedAt] = useState(() => new Date());
-  const gridSequence = useMemo(() => buildGridSequence(), []);
+  // A batch can exceed the normal 30-cell target when it holds one oversized order kept whole
+  // (see generate/route.ts) -- extend the printed grid to cover every entry it actually has.
+  const gridSequence = useMemo(
+    () => buildGridSequence(Math.max(MAX_CAPACITY, batch?.entries.length ?? 0)),
+    [batch?.entries.length]
+  );
   const [plateResults, setPlateResults] = useState<PlateResult[] | null>(null);
   const [plateGenerating, setPlateGenerating] = useState(false);
   const [plateError, setPlateError] = useState<string | null>(null);
@@ -47,6 +216,8 @@ function BatchGridDashboard({ id }: { id: string }) {
   // bulk hollow step, so a whole batch's worth of items can be positioned in one pass instead of
   // visiting each order's own detail page.
   const [holeSettings, setHoleSettings] = useState<Record<string, HoleSetting>>({});
+  // itemId currently being positioned via the 3D click-to-pick modal, or null when closed.
+  const [pickerItemId, setPickerItemId] = useState<string | null>(null);
   // For admins who'd rather hollow/hole/support the models themselves (their own Blender/
   // PrusaSlicer setup -- see print-pipeline/) instead of running this app's own Cloud Function.
   const [downloadingRaw, setDownloadingRaw] = useState(false);
@@ -449,6 +620,13 @@ function BatchGridDashboard({ id }: { id: string }) {
                 <span className="min-w-0 flex-1 truncate text-slate-600">
                   {entry.customerName} / {entry.subject}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setPickerItemId(entry.itemId)}
+                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  🎯 3Dで指定
+                </button>
                 <label className="flex items-center gap-1 text-slate-500">
                   X
                   <input
@@ -674,6 +852,30 @@ function BatchGridDashboard({ id }: { id: string }) {
           })}
         </div>
       </div>
+
+      {pickerItemId &&
+        (() => {
+          const entry = uniqueEntries.find((e) => e.itemId === pickerItemId);
+          if (!entry) return null;
+          const hole = holeSettings[pickerItemId] ?? {
+            x: 0.5,
+            z: 0.5,
+            diameterMm: DEFAULT_HOLE_DIAMETER_MM,
+          };
+          return (
+            <HolePickerModal
+              itemId={pickerItemId}
+              subject={entry.subject}
+              initialX={hole.x}
+              initialZ={hole.z}
+              onClose={() => setPickerItemId(null)}
+              onConfirm={(x, z) => {
+                updateHoleSetting(pickerItemId, { x, z });
+                setPickerItemId(null);
+              }}
+            />
+          );
+        })()}
     </div>
   );
 }

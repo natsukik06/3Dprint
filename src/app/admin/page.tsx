@@ -1,6 +1,6 @@
 "use client";
 
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, doc, getDocs, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
@@ -9,11 +9,13 @@ import type { OrderItemDraft, PaymentStatus } from "@/types/order";
 
 type OrderListItem = {
   id: string;
+  orderNumber?: string;
   items: OrderItemDraft[];
   customerName: string;
   estimatedPriceYen: number;
   createdAt: { toDate: () => Date } | null;
   paymentStatus: PaymentStatus;
+  shipped: boolean;
 };
 
 function AdminOrderList() {
@@ -32,11 +34,13 @@ function AdminOrderList() {
           const data = d.data();
           return {
             id: d.id,
+            orderNumber: data.orderNumber,
             items: (data.items ?? []) as OrderItemDraft[],
             customerName: data.customerName ?? "",
             estimatedPriceYen: data.estimatedPriceYen ?? 0,
             createdAt: data.createdAt ?? null,
             paymentStatus: (data.paymentStatus ?? "unpaid") as PaymentStatus,
+            shipped: data.shipped ?? false,
           };
         })
       );
@@ -47,6 +51,24 @@ function AdminOrderList() {
       cancelled = true;
     };
   }, []);
+
+  async function toggleShipped(orderId: string, next: boolean) {
+    setOrders((prev) =>
+      prev?.map((o) => (o.id === orderId ? { ...o, shipped: next } : o)) ?? prev
+    );
+    try {
+      await updateDoc(doc(db, "orders", orderId), {
+        shipped: next,
+        shippedAt: next ? serverTimestamp() : null,
+      });
+    } catch (error) {
+      console.error("failed to toggle shipped", error);
+      // Roll back the optimistic update if the write failed.
+      setOrders((prev) =>
+        prev?.map((o) => (o.id === orderId ? { ...o, shipped: !next } : o)) ?? prev
+      );
+    }
+  }
 
   if (orders === null) {
     return <p className="text-sm text-slate-500">読み込み中...</p>;
@@ -103,7 +125,7 @@ function AdminOrderList() {
                 </span>
               </p>
               <p className="truncate text-xs text-slate-500">
-                {order.customerName}
+                {order.orderNumber ?? order.id} ・ {order.customerName}
               </p>
             </div>
             <div className="shrink-0 text-right">
@@ -114,6 +136,23 @@ function AdminOrderList() {
                 <p className="text-xs text-slate-400">
                   {order.createdAt.toDate().toLocaleDateString("ja-JP")}
                 </p>
+              )}
+              {order.paymentStatus === "paid" && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleShipped(order.id, !order.shipped);
+                  }}
+                  className={`mt-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                    order.shipped
+                      ? "bg-sky-100 text-sky-700"
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  }`}
+                >
+                  {order.shipped ? "発送済み" : "未発送"}
+                </button>
               )}
             </div>
           </Link>
@@ -129,6 +168,12 @@ export default function AdminPage() {
       <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-slate-900">注文一覧</h1>
         <div className="flex gap-3 text-sm">
+          <Link
+            href="/admin/production"
+            className="text-slate-600 underline underline-offset-2"
+          >
+            製作・発送の進捗
+          </Link>
           <Link
             href="/admin/batches"
             className="text-slate-600 underline underline-offset-2"

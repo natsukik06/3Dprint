@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { consumeCredit, refundCredit } from "@/lib/credits";
+import { addDiscountableCredit, consumeCredit, refundCredit } from "@/lib/credits";
 import { VIEWS, type ImagePayload } from "@/lib/gemini";
 import { createMultiviewTask, uploadImageToTripo } from "@/lib/tripo";
+import { guardTripoCapacity } from "@/lib/tripoCapacity";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 
 function isImagePayload(value: unknown): value is ImagePayload {
@@ -25,6 +26,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
   }
 
+  // Paused (503) while the Tripo account is out of credits -- see guardTripoCapacity.
+  const paused = await guardTripoCapacity();
+  if (paused) return paused;
+
   const body = await request.json().catch(() => null);
   const views = body?.views;
   if (!views || !VIEWS.every((view) => isImagePayload(views[view]))) {
@@ -41,7 +46,6 @@ export async function POST(request: NextRequest) {
       { status: 402 }
     );
   }
-
   try {
     const viewTokenEntries = await Promise.all(
       VIEWS.map(async (view) => {
@@ -65,6 +69,10 @@ export async function POST(request: NextRequest) {
       back: viewTokens.back,
       right: viewTokens.right,
     });
+
+    // Only once the (paid) Tripo task is actually successfully queued -- a failed attempt below
+    // refunds the spent credit and should not also grant discount eligibility for nothing.
+    await addDiscountableCredit(user.uid);
 
     return NextResponse.json({ taskId });
   } catch (error) {

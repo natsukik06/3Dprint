@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { MAX_DISCOUNTABLE_CREDITS } from "@/lib/creditPacks";
 import { adminDb } from "@/lib/firebaseAdmin";
 
 const FREE_SIGNUP_CREDITS = 1;
@@ -107,6 +108,103 @@ export async function refundFreeGeneration(uid: string): Promise<void> {
 export async function resetFreeGenerations(uid: string): Promise<void> {
   await userRef(uid).set(
     { freeGenerationDate: todayInJst(), freeGenerationCount: 0 },
+    { merge: true }
+  );
+}
+
+// A separate, much cheaper credit pool from the main (paid) 3D-reconstruction credits above --
+// for customers who want to try several poses' shape previews in one sitting, past the free daily
+// allowance, without committing to a full 3D model for each one. See PREVIEW_CREDIT_PRICE_YEN in
+// creditPacks.ts.
+export async function consumePreviewCredit(uid: string): Promise<boolean> {
+  const ref = userRef(uid);
+  return adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const previewCredits = (snap.data()?.previewCredits as number) ?? 0;
+    if (previewCredits <= 0) return false;
+    tx.update(ref, { previewCredits: previewCredits - 1 });
+    return true;
+  });
+}
+
+export async function addPreviewCredits(uid: string, amount: number): Promise<void> {
+  await userRef(uid).set(
+    { previewCredits: FieldValue.increment(amount) },
+    { merge: true }
+  );
+}
+
+/**
+ * Tries today's free preview allowance first, then falls back to a paid preview credit -- the
+ * single gate /api/generate-model should call instead of checkAndConsumeFreeGeneration directly,
+ * now that there are two ways to be "allowed". `usedPreviewCredit` tells the caller which pool to
+ * refund from if generation then fails (see refundGenerationAllowance below).
+ */
+export async function checkAndConsumeGenerationAllowance(
+  uid: string
+): Promise<{ allowed: boolean; usedPreviewCredit: boolean }> {
+  if (await checkAndConsumeFreeGeneration(uid)) {
+    return { allowed: true, usedPreviewCredit: false };
+  }
+  const usedPreviewCredit = await consumePreviewCredit(uid);
+  return { allowed: usedPreviewCredit, usedPreviewCredit };
+}
+
+export async function refundGenerationAllowance(
+  uid: string,
+  usedPreviewCredit: boolean
+): Promise<void> {
+  if (usedPreviewCredit) {
+    await addPreviewCredits(uid, 1);
+  } else {
+    await refundFreeGeneration(uid);
+  }
+}
+
+// Durable, account-level balance of "paid a real generation, haven't spent the resulting discount
+// yet" -- unlike the in-progress cart's own generationCreditsUsed counter (plain React state, gone
+// the moment the tab closes), this survives across sessions/days until actually redeemed at
+// checkout. Mirrors referralDiscountAvailable's shape/lifecycle (see referral.ts): earned here,
+// read live on mypage, consumed transactionally in /api/order-checkout.
+export async function addDiscountableCredit(uid: string): Promise<void> {
+  try {
+    await userRef(uid).set(
+      {
+        generationCreditsAvailable: FieldValue.increment(1),
+        // Drives the unread-notification dot on マイページ (see AuthNavButton.tsx) -- a bare
+        // balance increment has no "when" for the dot to compare against lastSeenNotificationsAt.
+        couponUpdatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    // Worst case here is losing track of up to CREDIT_PRICE_YEN of discount eligibility -- not
+    // worth failing the (already-charged) generation request over.
+    console.error(`addDiscountableCredit failed for ${uid}`, error);
+  }
+}
+
+/** Atomically applies up to MAX_DISCOUNTABLE_CREDITS from the balance and returns how many were
+ * actually applied (0 for a signed-out checkout, same as consumeReferralDiscount). */
+export async function consumeDiscountableCredits(uid: string | null): Promise<number> {
+  if (!uid) return 0;
+  const ref = userRef(uid);
+  return adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const available = (snap.data()?.generationCreditsAvailable as number) ?? 0;
+    const applied = Math.min(available, MAX_DISCOUNTABLE_CREDITS);
+    if (applied <= 0) return 0;
+    tx.update(ref, { generationCreditsAvailable: available - applied });
+    return applied;
+  });
+}
+
+/** Gives back a consumeDiscountableCredits() withdrawal after a failed checkout (e.g. Stripe
+ * session creation error) -- mirrors the referral-discount rollback right next to it. */
+export async function refundDiscountableCredits(uid: string, amount: number): Promise<void> {
+  if (amount <= 0) return;
+  await userRef(uid).set(
+    { generationCreditsAvailable: FieldValue.increment(amount) },
     { merge: true }
   );
 }

@@ -10,6 +10,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import {
+  AlertTriangle,
   Box,
   Download,
   Loader2,
@@ -23,21 +24,26 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { signInWithGoogle } from "@/lib/auth";
+import { PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
+import { clearDraftSlice, loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
 import { db } from "@/lib/firebase";
 import { uploadCustomModel } from "@/lib/orders";
+import { CHARO_PREMADE_MODEL } from "@/lib/premadeModels";
+import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
 import { MAGIC_COLOR_LABELS } from "@/lib/pricing";
 import {
   MAGIC_COLOR_OPTIONS,
   MAX_CUSTOM_MODEL_SIZE_BYTES,
   type ColorQuantities,
   type MagicColor,
+  type ModelStyle,
   type OrderFormValues,
   type PetDetails,
   type Pose,
   type SubjectType,
 } from "@/types/order";
 import type { ModelViewerElement } from "@google/model-viewer";
-import type { ImagePayload, View } from "@/lib/gemini";
+import type { ImagePayload, ShapeRiskAssessment, View } from "@/lib/gemini";
 
 // Mirrors gemini.ts's VIEWS/View — re-declared locally (not imported) so this client component
 // never pulls in gemini.ts's server-only deps (@google/genai, sharp) into the browser bundle.
@@ -85,16 +91,27 @@ type GeneratedResult = {
   finishedPreviewUrls: FinishedPreviewUrls;
   referenceImageUrls: string[];
   isCustomModel?: boolean;
+  // True when this result comes from picking an already-existing model (Charo, or a past
+  // generation) rather than a brand-new AI generation -- no credit was spent, so the caller
+  // shouldn't count it toward the credit-usage discount.
+  isReselect?: boolean;
 };
 
 type PreviewPanelProps = {
+  mode: "ai" | "custom" | "reuse";
   photos: File[];
   subject: string;
   subjectType: SubjectType;
   pose: Pose;
+  modelStyle: ModelStyle;
+  wantsSelfStanding: boolean;
   colorQuantities: ColorQuantities;
   petDetails: PetDetails;
   onGenerated: (result: GeneratedResult | null) => void;
+  // Set only in "reuse" mode -- a specific past model to hydrate to instead of the default
+  // (Charo). Left null/omitted in normal use; PreviewPanel's own gallery already covers picking
+  // a different one after mount (see handleSelectGalleryItem).
+  initialModel?: GeneratedModel | null;
 };
 
 function appendPetDetails(formData: FormData, petDetails: PetDetails) {
@@ -105,7 +122,7 @@ function appendPetDetails(formData: FormData, petDetails: PetDetails) {
     formData.append("bodyFeatureNote", petDetails.bodyFeatureNote);
 }
 
-type GeneratedModel = {
+export type GeneratedModel = {
   taskId: string;
   modelUrl: string;
   renderedImageUrl: string | null;
@@ -130,12 +147,33 @@ type ModelState =
       referenceImageUrls: string[];
       finishedPreviewUrls: FinishedPreviewUrls;
       confirming: boolean;
+      riskAssessment: ShapeRiskAssessment | null;
+      riskAcknowledged: boolean;
     }
   | { phase: "polling"; progress: number }
   | { phase: "success"; modelUrl: string }
-  | { phase: "error"; message: string };
+  | { phase: "error"; message: string; freeGenerationLimitReached?: boolean };
 
 const POLL_INTERVAL_MS = 4000;
+
+// What IndexedDB persistence (src/lib/draftStorage.ts) needs to fully restore an in-progress
+// generation across a page reload -- ModelState's own "polling" variant only carries `progress`
+// (see pollStatus's closure), so the taskId/URLs it needs to resume have to be tracked alongside
+// it separately (see pollContextRef below).
+type SavedPreviewDraft =
+  | {
+      phase: "reviewingViews";
+      views: Record<View, ImagePayload>;
+      referenceImageUrls: string[];
+      finishedPreviewUrls: FinishedPreviewUrls;
+      riskAssessment: ShapeRiskAssessment | null;
+    }
+  | {
+      phase: "polling";
+      taskId: string;
+      finishedPreviewUrls: FinishedPreviewUrls;
+      referenceImageUrls: string[];
+    };
 
 // Flat alpha blending just makes the model look like semi-see-through
 // plastic, not real clear resin/crystal. Real transparency needs light to
@@ -204,31 +242,64 @@ function applyMaterialAppearance(
 }
 
 export function PreviewPanel({
+  mode,
   photos,
   subject,
   subjectType,
   pose,
+  modelStyle,
+  wantsSelfStanding,
   colorQuantities,
   petDetails,
   onGenerated,
+  initialModel,
 }: PreviewPanelProps) {
   const purchasedColors = MAGIC_COLOR_OPTIONS.filter(
     (color) => (colorQuantities[color] ?? 0) > 0
   );
 
+  // In "reuse" mode, falling back to the premade Charo mascot when no specific past model was
+  // passed in means this panel always opens with SOMETHING selected -- no empty/idle state to
+  // click through first, matching the "最初はちゃろが選択済み" default from the product-page
+  // redesign.
+  const effectiveInitialModel = mode === "reuse" ? (initialModel ?? CHARO_PREMADE_MODEL) : null;
+
   const [previewsByColor, setPreviewsByColor] = useState<
     Partial<Record<MagicColor, ColorPreviewState>>
-  >({});
-  const [activeColor, setActiveColor] = useState<MagicColor>(
-    purchasedColors[0] ?? MAGIC_COLOR_OPTIONS[0]
+  >(() => {
+    if (!effectiveInitialModel) return {};
+    const restored: Partial<Record<MagicColor, ColorPreviewState>> = {};
+    for (const [color, url] of Object.entries(effectiveInitialModel.finishedPreviewUrls)) {
+      if (url) restored[color as MagicColor] = { phase: "success", previewUrl: url };
+    }
+    return restored;
+  });
+  const [activeColor, setActiveColor] = useState<MagicColor>(() => {
+    if (effectiveInitialModel) {
+      const firstColor = Object.keys(effectiveInitialModel.finishedPreviewUrls)[0] as
+        | MagicColor
+        | undefined;
+      if (firstColor) return firstColor;
+    }
+    return purchasedColors[0] ?? MAGIC_COLOR_OPTIONS[0];
+  });
+  const [modelState, setModelState] = useState<ModelState>(() =>
+    effectiveInitialModel
+      ? { phase: "success", modelUrl: effectiveInitialModel.modelUrl }
+      : { phase: "idle" }
   );
-  const [modelState, setModelState] = useState<ModelState>({ phase: "idle" });
-  const [mode, setMode] = useState<"ai" | "custom">("ai");
   const [customUpload, setCustomUpload] = useState<
     { phase: "idle" } | { phase: "uploading" } | { phase: "error"; message: string }
   >({ phase: "idle" });
-  const [gallery, setGallery] = useState<GeneratedModel[]>([]);
+  const [gallery, setGallery] = useState<GeneratedModel[]>(
+    mode === "reuse" ? [CHARO_PREMADE_MODEL] : []
+  );
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // Tripo's renderedImageUrl is a signed, expiring URL -- an old past model's thumbnail can
+  // start failing to load once it expires (the modelUrl itself is fine; it's re-hosted
+  // permanently, see /api/generate-model/[taskId]). Tracks which ones have failed so the gallery
+  // falls back to the plain icon instead of showing a broken-image glyph.
+  const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
   const [isClearMaterial, setIsClearMaterial] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [expandedView, setExpandedView] = useState<"model" | "preview" | null>(
@@ -238,6 +309,19 @@ export function PreviewPanel({
   const modelViewerRef = useRef<ModelViewerElement | null>(null);
   const modalModelViewerRef = useRef<ModelViewerElement | null>(null);
   const suppressResetRef = useRef(false);
+  // The first magic-color completion the customer successfully generated for this draft --
+  // once set, never overwritten (even by later colors or regenerations of this same color). Used
+  // as the visual reference for the 4-direction turnaround/3D shape below, so the shape the
+  // customer actually gets matches the finished look they already approved, instead of the 3D
+  // step running its own independent (and stylistically different) generation off the raw photo.
+  const firstPreviewRef = useRef<{ color: MagicColor; previewUrl: string } | null>(null);
+  // Companion data for whichever taskId modelState is currently "polling" -- see
+  // SavedPreviewDraft above for why this can't just live inside ModelState itself.
+  const pollContextRef = useRef<{
+    taskId: string;
+    finishedPreviewUrls: FinishedPreviewUrls;
+    referenceImageUrls: string[];
+  } | null>(null);
 
   const { user } = useAuth();
   const credits = useCredits();
@@ -282,12 +366,92 @@ export function PreviewPanel({
     };
   }, []);
 
+  // Reports the default-hydrated model (Charo, or an explicit initialModel) up to the parent
+  // once on mount -- otherwise the parent's own generatedModelUrl/etc state (used to enable
+  // "カートに追加") would stay empty even though this panel is already showing a selected model.
+  // Runs once per mount only, matching this component's key-based remount-per-draft pattern.
+  useEffect(() => {
+    if (effectiveInitialModel) {
+      setValue("subject", effectiveInitialModel.subject, { shouldValidate: true });
+      setValue("pose", effectiveInitialModel.pose);
+      setSelectedTaskId(effectiveInitialModel.taskId);
+      onGenerated({
+        modelUrl: effectiveInitialModel.modelUrl,
+        finishedPreviewUrls: effectiveInitialModel.finishedPreviewUrls,
+        referenceImageUrls: effectiveInitialModel.referenceImageUrls,
+        isReselect: true,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Restore an in-progress (unconfirmed reviewingViews, or still-polling) generation from
+  // IndexedDB on mount -- "reuse" mode never enters either phase (its gallery picks an
+  // already-hosted model directly), so it has nothing worth persisting here. hasRestored gates
+  // the save effect below so it can't race ahead and clear/overwrite the saved slice with the
+  // pre-restore "idle" default before this async load has actually run.
+  const [hasRestored, setHasRestored] = useState(mode === "reuse");
+  useEffect(() => {
+    if (mode === "reuse") return;
+    let cancelled = false;
+    (async () => {
+      const saved = await loadDraftSlice<SavedPreviewDraft>("previewDraft");
+      if (cancelled) return;
+      if (saved?.phase === "reviewingViews") {
+        setModelState({
+          phase: "reviewingViews",
+          views: saved.views,
+          referenceImageUrls: saved.referenceImageUrls,
+          finishedPreviewUrls: saved.finishedPreviewUrls,
+          confirming: false,
+          riskAssessment: saved.riskAssessment,
+          riskAcknowledged: false,
+        });
+      } else if (saved?.phase === "polling") {
+        setModelState({ phase: "polling", progress: 0 });
+        pollStatus(saved.taskId, saved.finishedPreviewUrls, saved.referenceImageUrls);
+      }
+      setHasRestored(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ...and keep it saved while there's still something to resume; clear it once the generation
+  // reaches a terminal (success/error) or not-yet-started state, so a stale entry never gets
+  // restored into an unrelated later draft.
+  useEffect(() => {
+    if (mode === "reuse" || !hasRestored) return;
+    if (modelState.phase === "reviewingViews") {
+      saveDraftSlice<SavedPreviewDraft>("previewDraft", {
+        phase: "reviewingViews",
+        views: modelState.views,
+        referenceImageUrls: modelState.referenceImageUrls,
+        finishedPreviewUrls: modelState.finishedPreviewUrls,
+        riskAssessment: modelState.riskAssessment,
+      });
+    } else if (modelState.phase === "polling" && pollContextRef.current) {
+      saveDraftSlice<SavedPreviewDraft>("previewDraft", {
+        phase: "polling",
+        ...pollContextRef.current,
+      });
+    } else if (modelState.phase !== "starting") {
+      clearDraftSlice("previewDraft");
+    }
+  }, [mode, modelState, hasRestored]);
+
   const [prevInputs, setPrevInputs] = useState({ photos, subject, subjectType, pose });
   if (
-    prevInputs.photos !== photos ||
-    prevInputs.subject !== subject ||
-    prevInputs.subjectType !== subjectType ||
-    prevInputs.pose !== pose
+    // In "reuse" mode there's no regeneration tied to these fields (no photos, model already
+    // made) -- editing the subject label or pose afterward is purely cosmetic and shouldn't
+    // wipe out the hydrated model/preview state.
+    mode !== "reuse" &&
+    (prevInputs.photos !== photos ||
+      prevInputs.subject !== subject ||
+      prevInputs.subjectType !== subjectType ||
+      prevInputs.pose !== pose)
   ) {
     setPrevInputs({ photos, subject, subjectType, pose });
     if (suppressResetRef.current) {
@@ -295,6 +459,7 @@ export function PreviewPanel({
     } else {
       setPreviewsByColor({});
       setModelState({ phase: "idle" });
+      firstPreviewRef.current = null;
     }
   }
 
@@ -322,14 +487,18 @@ export function PreviewPanel({
           pose: data.pose ?? "auto",
         };
       });
-      setGallery(entries);
+      // Charo stays pinned first regardless of mode -- in "ai"/"custom" mode this row is the
+      // customer's own generation history only (see the mode checks below it never renders
+      // there), so the extra entry is harmless; in "reuse" mode it keeps the mascot alongside
+      // the customer's own past models in one switchable list.
+      setGallery(mode === "reuse" ? [CHARO_PREMADE_MODEL, ...entries] : entries);
     }
 
     loadGallery();
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, mode]);
 
   useEffect(() => {
     if (!currentModelUrl) return;
@@ -362,6 +531,8 @@ export function PreviewPanel({
       formData.append("subject", subject);
       formData.append("subjectType", subjectType);
       formData.append("pose", pose);
+      formData.append("modelStyle", modelStyle);
+      formData.append("wantsSelfStanding", String(wantsSelfStanding));
       formData.append("magicColor", activeColor);
       appendPetDetails(formData, petDetails);
 
@@ -377,6 +548,9 @@ export function PreviewPanel({
         ...prev,
         [activeColor]: { phase: "success", previewUrl: json.previewUrl },
       }));
+      if (!firstPreviewRef.current) {
+        firstPreviewRef.current = { color: activeColor, previewUrl: json.previewUrl };
+      }
     } catch (err) {
       setPreviewsByColor((prev) => ({
         ...prev,
@@ -393,13 +567,17 @@ export function PreviewPanel({
     finishedPreviewUrls: FinishedPreviewUrls,
     referenceImageUrls: string[]
   ) {
+    pollContextRef.current = { taskId, finishedPreviewUrls, referenceImageUrls };
+    let consecutiveFailures = 0;
     async function tick() {
       try {
         const res = await fetch(`/api/generate-model/${taskId}`);
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "ステータス取得に失敗しました");
+        consecutiveFailures = 0;
 
         if (json.status === "success") {
+          pollContextRef.current = null;
           const entry: GeneratedModel = {
             taskId,
             modelUrl: json.modelUrl,
@@ -432,9 +610,15 @@ export function PreviewPanel({
           setModelState({ phase: "polling", progress: json.progress ?? 0 });
           pollTimerRef.current = setTimeout(tick, POLL_INTERVAL_MS);
         } else {
+          pollContextRef.current = null;
           setModelState({ phase: "error", message: "モデル生成に失敗しました" });
         }
       } catch (err) {
+        if (++consecutiveFailures < MAX_CONSECUTIVE_POLL_FAILURES) {
+          pollTimerRef.current = setTimeout(tick, POLL_INTERVAL_MS);
+          return;
+        }
+        pollContextRef.current = null;
         setModelState({
           phase: "error",
           message:
@@ -476,6 +660,12 @@ export function PreviewPanel({
       formData.append("subject", subject);
       formData.append("subjectType", subjectType);
       formData.append("pose", pose);
+      formData.append("modelStyle", modelStyle);
+      formData.append("wantsSelfStanding", String(wantsSelfStanding));
+      formData.append("checkHollowFill", String((colorQuantities.furCavity ?? 0) > 0));
+      if (firstPreviewRef.current) {
+        formData.append("referenceFinishedImageUrl", firstPreviewRef.current.previewUrl);
+      }
       appendPetDetails(formData, petDetails);
 
       const res = await fetch("/api/generate-model", {
@@ -484,7 +674,14 @@ export function PreviewPanel({
         body: formData,
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "生成開始に失敗しました");
+      if (!res.ok) {
+        setModelState({
+          phase: "error",
+          message: json.error ?? "生成開始に失敗しました",
+          freeGenerationLimitReached: json.freeGenerationLimitReached === true,
+        });
+        return;
+      }
 
       setModelState({
         phase: "reviewingViews",
@@ -492,12 +689,34 @@ export function PreviewPanel({
         referenceImageUrls: (json.referenceImageUrls as string[]) ?? [],
         finishedPreviewUrls,
         confirming: false,
+        riskAssessment: (json.riskAssessment as ShapeRiskAssessment | null) ?? null,
+        riskAcknowledged: false,
       });
     } catch (err) {
       setModelState({
         phase: "error",
         message: err instanceof Error ? err.message : "生成開始に失敗しました",
       });
+    }
+  }
+
+  const [purchasingPreview, setPurchasingPreview] = useState(false);
+  async function handleBuyPreviewCredit() {
+    if (!user || purchasingPreview) return;
+    setPurchasingPreview(true);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "preview" }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) throw new Error(json.error ?? "決済ページの作成に失敗しました");
+      window.location.assign(json.url as string);
+    } catch (err) {
+      console.error("preview credit purchase failed", err);
+      setPurchasingPreview(false);
     }
   }
 
@@ -529,10 +748,14 @@ export function PreviewPanel({
     }
   }
 
-  function handleModeChange(next: "ai" | "custom") {
-    if (next === mode) return;
+  // The AI-vs-custom-model choice is now made a step earlier (see OrderForm's mode-selection
+  // step) and passed in as a prop; this just clears out any in-progress generation/upload state
+  // when the customer goes back and switches their choice for the item they're building. Same
+  // derived-state-during-render pattern as the prevInputs check below, for the same reason.
+  const [prevMode, setPrevMode] = useState(mode);
+  if (prevMode !== mode) {
+    setPrevMode(mode);
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-    setMode(next);
     setModelState({ phase: "idle" });
     setCustomUpload({ phase: "idle" });
     setValue("chainPositionNote", "");
@@ -620,6 +843,7 @@ export function PreviewPanel({
       modelUrl: entry.modelUrl,
       finishedPreviewUrls: entry.finishedPreviewUrls,
       referenceImageUrls: entry.referenceImageUrls,
+      isReselect: true,
     });
   }
 
@@ -629,27 +853,6 @@ export function PreviewPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2 rounded-lg bg-slate-100 p-1 text-xs font-medium">
-        <button
-          type="button"
-          onClick={() => handleModeChange("ai")}
-          className={`flex-1 rounded-md py-1.5 transition-colors ${
-            mode === "ai" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-          }`}
-        >
-          AIで生成する
-        </button>
-        <button
-          type="button"
-          onClick={() => handleModeChange("custom")}
-          className={`flex-1 rounded-md py-1.5 transition-colors ${
-            mode === "custom" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-          }`}
-        >
-          自分の3Dモデルを持ち込む
-        </button>
-      </div>
-
       <div className="grid grid-cols-2 gap-2">
         <div className="relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-3 text-center">
           {modelState.phase === "success" && (
@@ -704,7 +907,21 @@ export function PreviewPanel({
             />
           )}
           {modelState.phase === "error" && (
-            <p className="text-xs text-red-600">{modelState.message}</p>
+            <>
+              <p className="text-xs text-red-600">{modelState.message}</p>
+              {modelState.freeGenerationLimitReached && (
+                <button
+                  type="button"
+                  onClick={handleBuyPreviewCredit}
+                  disabled={purchasingPreview}
+                  className="mt-1 rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {purchasingPreview
+                    ? "準備中..."
+                    : `¥${PREVIEW_CREDIT_PRICE_YEN}で追加のプレビューを生成する`}
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -731,7 +948,11 @@ export function PreviewPanel({
               {activePreview.phase === "idle" && (
                 <>
                   <Sparkles className="h-10 w-10 text-slate-300" strokeWidth={1.5} />
-                  <p className="text-xs text-slate-400">完成イメージ（未生成）</p>
+                  <p className="text-xs text-slate-400">
+                    {mode === "reuse"
+                      ? "この色の完成イメージはありません（以前生成した色のみ表示されます）"
+                      : "完成イメージ（未生成）"}
+                  </p>
                 </>
               )}
               {activePreview.phase === "generating" && (
@@ -798,7 +1019,7 @@ export function PreviewPanel({
         </div>
       )}
 
-      {mode === "ai" && purchasedColors.length > 1 && (
+      {(mode === "ai" || mode === "reuse") && purchasedColors.length > 1 && (
         <div className="flex justify-center gap-2">
           {purchasedColors.map((color) => (
             <button
@@ -882,6 +1103,36 @@ export function PreviewPanel({
               </div>
             ))}
           </div>
+          {(modelState.riskAssessment?.fragileRisk || modelState.riskAssessment?.hollowFillRisk) && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
+              <p className="flex items-start gap-1.5 text-xs font-medium text-amber-800">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                この形状には注意点があります
+              </p>
+              {modelState.riskAssessment.fragileRisk && (
+                <p className="mt-1 text-xs text-amber-700">
+                  {modelState.riskAssessment.fragileReason || "細い部分が折れやすい可能性があります。"}
+                </p>
+              )}
+              {modelState.riskAssessment.hollowFillRisk && (
+                <p className="mt-1 text-xs text-amber-700">
+                  {modelState.riskAssessment.hollowFillReason ||
+                    "途中の細い部分より奥までレジンが届かない可能性があります。"}
+                </p>
+              )}
+              <label className="mt-2 flex items-start gap-2 text-xs text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={modelState.riskAcknowledged}
+                  onChange={(e) =>
+                    setModelState({ ...modelState, riskAcknowledged: e.target.checked })
+                  }
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-amber-700"
+                />
+                上記を理解し、破損・未充填のリスクがあってもこの形状で進めます
+              </label>
+            </div>
+          )}
           <div className="mt-3 flex gap-2">
             <button
               type="button"
@@ -894,7 +1145,12 @@ export function PreviewPanel({
             <button
               type="button"
               onClick={handleConfirmViews}
-              disabled={!hasCredits || modelState.confirming}
+              disabled={
+                !hasCredits ||
+                modelState.confirming ||
+                ((modelState.riskAssessment?.fragileRisk || modelState.riskAssessment?.hollowFillRisk) &&
+                  !modelState.riskAcknowledged)
+              }
               className="flex-1 rounded-lg bg-slate-800 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {modelState.confirming ? "作成中..." : "この形状でOK・3Dモデルを作成（1クレジット）"}
@@ -951,7 +1207,7 @@ export function PreviewPanel({
         </div>
       )}
 
-      {mode === "ai" && gallery.length > 1 && (
+      {(mode === "ai" || mode === "reuse") && gallery.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {gallery.map((entry) => (
             <button
@@ -964,12 +1220,15 @@ export function PreviewPanel({
                   : "border-slate-200 hover:border-slate-400"
               }`}
             >
-              {entry.renderedImageUrl ? (
+              {entry.renderedImageUrl && !failedThumbnails.has(entry.taskId) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={entry.renderedImageUrl}
                   alt="生成済みモデル"
                   className="h-full w-full object-cover"
+                  onError={() =>
+                    setFailedThumbnails((prev) => new Set(prev).add(entry.taskId))
+                  }
                 />
               ) : (
                 <Box className="m-auto h-6 w-6 text-slate-300" />

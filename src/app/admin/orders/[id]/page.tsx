@@ -6,8 +6,6 @@ import {
   getDoc,
   getDocs,
   query,
-  serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import Link from "next/link";
@@ -15,14 +13,18 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ModelViewerElement } from "@google/model-viewer";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { CopyCommandRow } from "@/components/admin/CopyCommandRow";
+import { PrintLabelSetButton } from "@/components/admin/PrintLabelSetButton";
 import { downloadFileAs, sanitizeFilenamePart } from "@/lib/downloadFile";
 import { db } from "@/lib/firebase";
 import { MAGIC_COLOR_LABELS, POSE_LABELS, formatYen } from "@/lib/pricing";
+import { buildLabelPrintCommands } from "@/lib/labelCommands";
 import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
 import { estimateRemaining } from "@/lib/eta";
 import {
   HARDWARE_COLOR_LABELS,
   MAGIC_COLOR_OPTIONS,
+  MODEL_STYLE_LABELS,
   ORDER_STATUS_LABELS,
   type OrderItemDraft,
   type OrderItemRecord,
@@ -104,6 +106,8 @@ function ItemCard({
   const [bottomHoleDiameterMm, setBottomHoleDiameterMm] = useState(2);
   // Lets the admin click directly on the model instead of guessing X/Z fractions blindly.
   const [pickMode, setPickMode] = useState(false);
+  const [downloadingRawStl, setDownloadingRawStl] = useState(false);
+  const [rawStlError, setRawStlError] = useState<string | null>(null);
   const rawModelViewerRef = useRef<ModelViewerElement | null>(null);
   const [modelBounds, setModelBounds] = useState<{
     min: { x: number; y: number; z: number };
@@ -195,6 +199,37 @@ function ItemCard({
       setReprocessError(err instanceof Error ? err.message : "処理に失敗しました");
     } finally {
       setReprocessing(false);
+    }
+  }
+
+  // Same /raw-stl conversion route the batch page's ZIP download uses (see handleDownloadRawZip
+  // in admin/batches/[id]/page.tsx) -- lets the admin grab a pre-hollow model for their slicer
+  // without first having to batch the order. Needs the auth header, so downloadFileAs (a plain
+  // unauthenticated fetch, used below for the already-STL finishedModelUrl) doesn't apply here.
+  async function handleDownloadRawStl() {
+    if (!user || !production) return;
+    setDownloadingRawStl(true);
+    setRawStlError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/order-items/${production.id}/raw-stl`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? "ダウンロードに失敗しました");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sanitizeFilenamePart(production.customerName)}-${orderNumber}-${sanitizeFilenamePart(item.subject)}-元モデル.stl`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setRawStlError(err instanceof Error ? err.message : "ダウンロードに失敗しました");
+    } finally {
+      setDownloadingRawStl(false);
     }
   }
 
@@ -397,6 +432,14 @@ function ItemCard({
           <InfoRow label="ポーズ" value={POSE_LABELS[item.pose]} />
         )}
         <InfoRow
+          label="仕上がりスタイル"
+          value={MODEL_STYLE_LABELS[item.modelStyle] ?? "デフォルメ（かわいいトイ風）"}
+        />
+        <InfoRow
+          label="自立させる"
+          value={item.wantsSelfStanding ? "はい（足元の安定を優先して生成）" : "いいえ"}
+        />
+        <InfoRow
           label="カラー・個数"
           value={MAGIC_COLOR_OPTIONS.filter((c) => (item.colorQuantities[c] ?? 0) > 0)
             .map((c) => `${MAGIC_COLOR_LABELS[c]} ×${item.colorQuantities[c]}`)
@@ -414,6 +457,12 @@ function ItemCard({
         />
         {item.wantsHardware && (
           <InfoRow label="金具の色" value={HARDWARE_COLOR_LABELS[item.hardwareColor]} />
+        )}
+        {item.wantsEngraving && (
+          <>
+            <InfoRow label="刻印文字" value={item.engravingText || "（未入力）"} />
+            <InfoRow label="刻印フォント" value={item.engravingFont} />
+          </>
         )}
       </div>
 
@@ -450,6 +499,19 @@ function ItemCard({
                 {reprocessError && (
                   <p className="mt-1 text-xs text-red-600">{reprocessError}</p>
                 )}
+              </div>
+            )}
+            {production.scaledModelUrl && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadRawStl}
+                  disabled={downloadingRawStl}
+                  className="text-xs text-slate-800 underline underline-offset-2 disabled:opacity-60"
+                >
+                  {downloadingRawStl ? "準備中..." : "元モデルをSTLでダウンロード"}
+                </button>
+                {rawStlError && <p className="mt-1 text-xs text-red-600">{rawStlError}</p>}
               </div>
             )}
             <div className="mt-2 border-t border-slate-200 pt-2">
@@ -619,6 +681,7 @@ function ItemCard({
 }
 
 function AdminOrderDetail({ id }: { id: string }) {
+  const { user } = useAuth();
   const [order, setOrder] = useState<OrderDetail | null | undefined>(undefined);
   const [productionByIndex, setProductionByIndex] = useState<
     Record<number, ItemProduction>
@@ -723,13 +786,20 @@ function AdminOrderDetail({ id }: { id: string }) {
               <button
                 type="button"
                 onClick={async () => {
+                  if (!user) return;
                   const next = !order.shipped;
                   setOrder({ ...order, shipped: next, shippedAt: null });
                   try {
-                    await updateDoc(doc(db, "orders", id), {
-                      shipped: next,
-                      shippedAt: next ? serverTimestamp() : null,
+                    const idToken = await user.getIdToken();
+                    const res = await fetch(`/api/admin/orders/${id}/ship`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${idToken}`,
+                      },
+                      body: JSON.stringify({ shipped: next }),
                     });
+                    if (!res.ok) throw new Error("failed");
                   } catch (error) {
                     console.error("failed to toggle shipped", error);
                     setOrder({ ...order, shipped: !next });
@@ -780,6 +850,23 @@ function AdminOrderDetail({ id }: { id: string }) {
             value={order.createdAt.toDate().toLocaleString("ja-JP")}
           />
         )}
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-semibold text-slate-900">ラベル印刷</p>
+        <p className="text-xs text-slate-500">
+          ボタンひとつで、注文内容ラベル・ロゴ・ご注文の感謝文を1セットで印刷します。宛先・差出人は配送業者側の公式ラベル/送り状に既に載るため、ここでは作っていません。
+        </p>
+        <PrintLabelSetButton
+          orders={[{ orderNumber: order.orderNumber ?? id, items: order.items }]}
+          buttonLabel="ラベルを一式印刷（内容物＋ロゴ＋感謝文）"
+        />
+        <details className="text-xs text-slate-500">
+          <summary className="cursor-pointer">印刷サーバーを使わず、コマンドで印刷する場合</summary>
+          <div className="mt-2">
+            <CopyCommandRow label="注文内容ラベル" command={buildLabelPrintCommands(order).contents} />
+          </div>
+        </details>
       </div>
     </div>
   );

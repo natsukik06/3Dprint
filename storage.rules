@@ -1,21 +1,44 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // Reference photos uploaded during ordering (see uploadReferencePhotos in src/lib/orders.ts,
+    // called from /api/generate-model[-duo] using the client SDK from a Node server context --
+    // there's no Firebase Auth session there, so these writes can't require request.auth without
+    // breaking that flow. Bounded by size/type instead, matching MAX_IMAGE_SIZE_BYTES /
+    // ACCEPTED_IMAGE_TYPES in src/types/order.ts so the client-side limits can't be bypassed by
+    // calling the Storage API directly.
     match /orders/{fileName} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
+    // Generated/uploaded 3D models (GLB) -- same "no auth context available" reasoning as above.
     match /models/{fileName} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.resource.size < 50 * 1024 * 1024;
     }
+    // AI-generated preview images.
     match /previews/{fileName} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
+    // Print-batch STL files -- admin-only in practice. The admin's own uploads either go through
+    // the Admin SDK (bypasses these rules entirely) or happen from the logged-in admin's browser
+    // session, so requiring auth here only blocks everyone else, never legitimate use.
     match /batches/{allPaths=**} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.auth != null && request.resource.size < 50 * 1024 * 1024;
+    }
+    // Admin-uploaded color swatch photos (see /admin/colors) -- unlike batches above, this is
+    // reachable from any signed-in customer's browser (both share the same Storage bucket), so
+    // this one actually checks for the admin's own email, not just "signed in".
+    match /colors/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        request.auth.token.email == 'natsukik0616@gmail.com' &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
     }
   }
 }

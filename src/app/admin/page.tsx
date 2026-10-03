@@ -1,8 +1,10 @@
 "use client";
 
-import { collection, doc, getDocs, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { TripoBalanceBanner } from "@/components/admin/TripoBalanceBanner";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { db } from "@/lib/firebase";
 import { formatYen, getTotalQuantity } from "@/lib/pricing";
 import type { OrderItemDraft, PaymentStatus } from "@/types/order";
@@ -19,6 +21,7 @@ type OrderListItem = {
 };
 
 function AdminOrderList() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<OrderListItem[] | null>(null);
 
   useEffect(() => {
@@ -53,14 +56,21 @@ function AdminOrderList() {
   }, []);
 
   async function toggleShipped(orderId: string, next: boolean) {
+    if (!user) return;
     setOrders((prev) =>
       prev?.map((o) => (o.id === orderId ? { ...o, shipped: next } : o)) ?? prev
     );
     try {
-      await updateDoc(doc(db, "orders", orderId), {
-        shipped: next,
-        shippedAt: next ? serverTimestamp() : null,
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/orders/${orderId}/ship`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ shipped: next }),
       });
+      if (!res.ok) throw new Error("failed");
     } catch (error) {
       console.error("failed to toggle shipped", error);
       // Roll back the optimistic update if the write failed.
@@ -175,6 +185,12 @@ export default function AdminPage() {
             製作・発送の進捗
           </Link>
           <Link
+            href="/admin/spec-list"
+            className="text-slate-600 underline underline-offset-2"
+          >
+            製作仕様一覧
+          </Link>
+          <Link
             href="/admin/batches"
             className="text-slate-600 underline underline-offset-2"
           >
@@ -193,13 +209,14 @@ export default function AdminPage() {
             お知らせメール
           </Link>
           <Link
-            href="/admin/slips"
+            href="/admin/colors"
             className="text-slate-600 underline underline-offset-2"
           >
-            同梱シート印刷
+            カラー設定
           </Link>
         </div>
       </div>
+      <TripoBalanceBanner />
       <AdminOrderList />
     </main>
   );

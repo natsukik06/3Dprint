@@ -2,7 +2,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import { calculateEstimate } from "@/lib/pricing";
-import type { OrderFormValues, OrderRecord } from "@/types/order";
+import type { MagicColor, OrderFormValues, OrderRecord, SizeOption } from "@/types/order";
 
 function buildImagePath(file: File): string {
   const extension = file.name.split(".").pop() ?? "jpg";
@@ -42,6 +42,27 @@ export async function uploadGeneratedModel(
   return getDownloadURL(modelRef);
 }
 
+// Tripo's own renderedImageUrl is a signed, expiring URL -- left as-is, a gallery thumbnail
+// saved from it would silently break once the signature expires. Re-hosted the same way as the
+// model itself (uploadGeneratedModel above) so it stays valid indefinitely.
+export async function getHostedRenderedImageUrl(taskId: string): Promise<string | null> {
+  try {
+    return await getDownloadURL(ref(storage, `previews/rendered-${taskId}.webp`));
+  } catch {
+    return null;
+  }
+}
+
+export async function uploadRenderedImage(
+  buffer: Buffer,
+  taskId: string,
+  contentType: string
+): Promise<string> {
+  const imageRef = ref(storage, `previews/rendered-${taskId}.webp`);
+  await uploadBytes(imageRef, new Uint8Array(buffer), { contentType });
+  return getDownloadURL(imageRef);
+}
+
 // Customer-provided model (bring-your-own), as opposed to AI-generated -- lands in the same
 // `models/` path so it flows through the exact same server-side scaling/hollowing pipeline.
 export async function uploadCustomModel(file: File): Promise<string> {
@@ -69,10 +90,17 @@ export async function uploadFinishedPreview(
 // admin panel) once Stripe confirms payment, via the webhook copying it over. This keeps
 // abandoned/failed checkouts (someone fills the form, submits, then never completes payment) out
 // of the admin's order list entirely, rather than leaving permanent "unpaid" clutter there.
-export async function submitOrder(values: OrderFormValues): Promise<string> {
+export async function submitOrder(
+  values: OrderFormValues,
+  colorPriceYen: Partial<Record<MagicColor, Partial<Record<SizeOption, number>>>> = {}
+): Promise<string> {
+  // Display-only estimate written into the draft -- /api/order-checkout recomputes (and this
+  // colorPriceYen argument lets it match) the authoritative charge amount server-side before
+  // Stripe is ever involved, same as the rest of this figure.
   const { totalPriceYen, shippingYen, discountYen } = calculateEstimate({
     items: values.items,
     generationCreditsUsed: values.generationCreditsUsed,
+    colorPriceYen,
   });
 
   const order: OrderRecord = {
@@ -80,6 +108,7 @@ export async function submitOrder(values: OrderFormValues): Promise<string> {
     estimatedPriceYen: totalPriceYen,
     shippingYen,
     discountYen,
+    generationCreditsUsed: values.generationCreditsUsed,
     shippingMethod: null,
     customerName: values.customerName,
     customerEmail: values.customerEmail,

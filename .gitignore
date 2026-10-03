@@ -53,3 +53,12 @@ deepresarch.txt
 # native tool (PrusaSlicer/UVtools) still has one open/locked when Turbopack tries to read it.
 /print-pipeline/output/
 /print-pipeline/tools/
+
+.vercel
+.env*
+
+# label printer output, local media, scratch posts
+label-pipeline/output/
+__pycache__/
+/music/
+/ig-post-*.png

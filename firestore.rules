@@ -56,9 +56,37 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update, delete: if false;
     }
+    match /product_likes/{productId} {
+      // Public "気になる！" tap on the lineup -- no login, so this is a low-stakes interest
+      // signal, not authenticated data. Rules only allow the count to move by exactly +-1 per
+      // write and never below zero, so a client can write directly without an API route while
+      // still being unable to set an arbitrary count.
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['count']) &&
+        request.resource.data.count == 1;
+      allow update: if request.resource.data.keys().hasOnly(['count']) &&
+        ((request.resource.data.count == resource.data.count + 1) ||
+         (request.resource.data.count == resource.data.count - 1 && resource.data.count > 0));
+      allow delete: if false;
+    }
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false;
+      // referralDiscountAvailable (and anything else server-managed) must never be
+      // client-writable -- only these specific customer-profile fields, and only the doc's own
+      // owner. Backs the account-linked 注文者情報 flow (src/lib/customerProfile.ts): a signed-in
+      // customer can save their name/address/phone once (at checkout, or from /mypage) instead
+      // of retyping it every order.
+      allow create: if request.auth != null && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['customerName', 'postalCode', 'address', 'phoneNumber']);
+      // lastSeenNotificationsAt is the one server-managed-adjacent field a client CAN write
+      // itself: it just marks "I've looked at /mypage as of now" (see AuthNavButton's unread-dot
+      // logic, driven off it vs. couponUpdatedAt / the latest users/{uid}/models doc) -- writing
+      // an arbitrary/future timestamp there only lets a customer dismiss their own notification
+      // dot early, not gain or spoof anything of value.
+      allow update: if request.auth != null && request.auth.uid == uid &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['customerName', 'postalCode', 'address', 'phoneNumber', 'lastSeenNotificationsAt']);
+      allow delete: if false;
 
       match /models/{taskId} {
         allow read, create: if request.auth != null && request.auth.uid == uid;

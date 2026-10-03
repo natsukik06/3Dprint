@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { getTotalQuantity } from "@/lib/pricing";
 import type { OrderItemDraft, OrderItemRecord, PaymentStatus } from "@/types/order";
 
@@ -28,6 +28,11 @@ type ProductionOrder = {
   printedAt: { toDate: () => Date } | null;
   shipped: boolean;
   shippedAt: { toDate: () => Date } | null;
+  // Set by the Stripe webhook (or /api/process-order) when post-payment processing (model
+  // download/scaling/fan-out into order_items) throws -- without this, a stuck-but-paid order had
+  // no visible trace anywhere in the admin UI, only a server log line.
+  processingFailed: boolean;
+  processingError: string | null;
 };
 
 // Auto-derived from order_items -- this app already tracks these facts (scaledModelUrl,
@@ -102,6 +107,8 @@ function ProductionRow({
     0
   );
 
+  const [retrying, setRetrying] = useState(false);
+
   async function toggle(field: "printed" | "shipped") {
     const next = !order[field];
     onUpdate({ [field]: next, [`${field}At`]: null } as Partial<ProductionOrder>);
@@ -113,6 +120,28 @@ function ProductionRow({
     } catch (error) {
       console.error(`failed to toggle ${field}`, error);
       onUpdate({ [field]: !next } as Partial<ProductionOrder>);
+    }
+  }
+
+  async function retryProcessing() {
+    setRetrying(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/process-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "再処理に失敗しました");
+      onUpdate({ processingFailed: false, processingError: null });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "再処理に失敗しました");
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -132,6 +161,21 @@ function ProductionRow({
           </p>
         </div>
       </div>
+      {order.processingFailed && (
+        <div className="mb-2 flex items-start justify-between gap-2 rounded-lg border border-red-200 bg-red-50 p-2">
+          <p className="min-w-0 flex-1 text-xs text-red-700">
+            処理に失敗しています{order.processingError ? `：${order.processingError}` : ""}
+          </p>
+          <button
+            type="button"
+            onClick={retryProcessing}
+            disabled={retrying}
+            className="shrink-0 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+          >
+            {retrying ? "再処理中..." : "再処理する"}
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5">
         <StageDot done label="支払い済み" />
         <StageDot done={auto.modelDone} label="3Dモデル生成" />
@@ -185,6 +229,8 @@ function ProductionTracker() {
           printedAt: data.printedAt ?? null,
           shipped: data.shipped ?? false,
           shippedAt: data.shippedAt ?? null,
+          processingFailed: data.processingFailed ?? false,
+          processingError: data.processingError ?? null,
         };
       });
       setOrders(loaded);

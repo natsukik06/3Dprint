@@ -42,6 +42,20 @@ export function ConsentSection() {
         <p className="text-sm text-red-600">{errors.agreeRisk.message}</p>
       )}
 
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          {...register("agreeAiAccuracy")}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-slate-800"
+        />
+        <span className="text-sm text-slate-700">
+          AIが生成する3Dモデルは、実際の写真やイメージと完全に一致しない場合があります。生成後のプレビュー画面でご確認・作り直しいただけますので、表示された形状にご納得のうえでご注文ください。生成結果の見た目（似ているかどうか）を理由とした返品・返金はお受けできません
+        </span>
+      </label>
+      {errors.agreeAiAccuracy && (
+        <p className="text-sm text-red-600">{errors.agreeAiAccuracy.message}</p>
+      )}
+
       <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
         <input
           type="checkbox"

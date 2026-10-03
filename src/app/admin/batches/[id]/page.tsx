@@ -1,18 +1,42 @@
 "use client";
 
-import { arrayRemove, arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  arrayRemove,
+  arrayUnion,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import JSZip from "jszip";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelViewerElement } from "@google/model-viewer";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { CopyCommandRow } from "@/components/admin/CopyCommandRow";
+import { PrintLabelSetButton } from "@/components/admin/PrintLabelSetButton";
 import { buildGridSequence, MAX_CAPACITY } from "@/lib/batches";
+import { buildBatchSummaryPdfBlob, downloadBatchSummaryPdf } from "@/lib/batchPdf";
+import { buildClickpostCsvRow, CLICKPOST_CSV_HEADERS } from "@/lib/clickpost";
+import { downloadCsvShiftJis, encodeShiftJis, toCsv } from "@/lib/csv";
+import {
+  canSaveToFolder,
+  downloadFilesAsZip,
+  pickFolder,
+  writeFilesToFolder,
+  type BundleFile,
+} from "@/lib/saveFiles";
 import { db } from "@/lib/firebase";
+import { buildBatchLabelPrintCommand } from "@/lib/labelCommands";
 import { PLATE_DEPTH_MM, PLATE_WIDTH_MM } from "@/lib/plateLayout";
 import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
 import { estimateRemaining } from "@/lib/eta";
 import type { PrintBatchRecord } from "@/types/batch";
+import type { OrderItemDraft } from "@/types/order";
 import styles from "./print.module.css";
 
 // Matches DEFAULT_WALL_THICKNESS_MM / DEFAULT_SPHERE_SEGMENTS in the finish-mesh API route and
@@ -196,7 +220,10 @@ function HolePickerModal({
 
 function BatchGridDashboard({ id }: { id: string }) {
   const { user } = useAuth();
+  const router = useRouter();
   const [batch, setBatch] = useState<BatchState>(undefined);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
   const [printedAt] = useState(() => new Date());
   // A batch can exceed the normal 30-cell target when it holds one oversized order kept whole
   // (see generate/route.ts) -- extend the printed grid to cover every entry it actually has.
@@ -221,7 +248,29 @@ function BatchGridDashboard({ id }: { id: string }) {
   // For admins who'd rather hollow/hole/support the models themselves (their own Blender/
   // PrusaSlicer setup -- see print-pipeline/) instead of running this app's own Cloud Function.
   const [downloadingRaw, setDownloadingRaw] = useState(false);
+  const [bundleSaving, setBundleSaving] = useState(false);
+  const [bundleError, setBundleError] = useState<string | null>(null);
+  const [bundleResult, setBundleResult] = useState<string | null>(null);
+  // "あとから追加" -- extra copies of a failed design / late pending orders added to THIS batch
+  // after it was created (see /api/admin/batches/[id]/add).
+  const [reloadKey, setReloadKey] = useState(0);
+  const [extraCopies, setExtraCopies] = useState<Record<string, number>>({});
+  const [pendingGroups, setPendingGroups] = useState<
+    { orderId: string; customerName: string; itemIds: string[]; subjects: string[] }[] | null
+  >(null);
+  const [selectedPendingOrders, setSelectedPendingOrders] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [addResult, setAddResult] = useState<string | null>(null);
   const [rawDownloadError, setRawDownloadError] = useState<string | null>(null);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [deletingModels, setDeletingModels] = useState(false);
+  const [deleteModelsError, setDeleteModelsError] = useState<string | null>(null);
+  const [deleteModelsResult, setDeleteModelsResult] = useState<{
+    deletedFiles: number;
+    clearedItems: number;
+  } | null>(null);
   const [uploadingFinished, setUploadingFinished] = useState(false);
   const [uploadResults, setUploadResults] = useState<Record<string, string>>({});
   const [bulkRunning, setBulkRunning] = useState(false);
@@ -257,6 +306,8 @@ function BatchGridDashboard({ id }: { id: string }) {
         totalCount: data.totalCount ?? 0,
         completedCells: data.completedCells ?? [],
         createdAt: data.createdAt ?? null,
+        completed: data.completed ?? false,
+        completedAt: data.completedAt ?? null,
       });
       setHoleSettings((prev) => {
         const next = { ...prev };
@@ -276,7 +327,144 @@ function BatchGridDashboard({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
+
+  // Still-unbatched order items (those that already went through processing), offered in the
+  // "あとから追加" card -- reloaded after every add so what was just added disappears from the list.
+  useEffect(() => {
+    let cancelled = false;
+    getDocs(query(collection(db, "order_items"), where("status", "==", "pending"))).then((snap) => {
+      if (cancelled) return;
+      const byOrder = new Map<
+        string,
+        { orderId: string; customerName: string; itemIds: string[]; subjects: string[] }
+      >();
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (!data.scaledModelUrl) continue;
+        const orderId = (data.orderId as string) ?? d.id;
+        const group = byOrder.get(orderId) ?? {
+          orderId,
+          customerName: (data.customerName as string) ?? "",
+          itemIds: [],
+          subjects: [],
+        };
+        group.itemIds.push(d.id);
+        group.subjects.push((data.subject as string) ?? "");
+        byOrder.set(orderId, group);
+      }
+      setPendingGroups([...byOrder.values()]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  // Fetched separately from batch.entries above -- entries only carry the per-piece summary
+  // fields needed for the work-sheet grid, not the full item list each order's own label command
+  // needs (colorQuantities, hardware, engraving -- see summarizeOrderItemForLabel), nor the
+  // shipping fields the batch-scoped クリックポストCSV export needs.
+  const [ordersById, setOrdersById] = useState<
+    Record<
+      string,
+      {
+        orderNumber?: string;
+        items: OrderItemDraft[];
+        customerName?: string;
+        postalCode?: string;
+        address?: string;
+        shippingMethod?: string;
+        shipped?: boolean;
+      }
+    >
+  >({});
+  useEffect(() => {
+    if (!batch) return;
+    const orderIds = [...new Set(batch.entries.map((e) => e.orderId))];
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        orderIds.map(async (orderId) => {
+          const snap = await getDoc(doc(db, "orders", orderId));
+          const data = snap.data();
+          return [
+            orderId,
+            {
+              orderNumber: data?.orderNumber,
+              items: (data?.items ?? []) as OrderItemDraft[],
+              customerName: data?.customerName,
+              postalCode: data?.postalCode,
+              address: data?.address,
+              shippingMethod: data?.shippingMethod,
+              shipped: data?.shipped,
+            },
+          ] as const;
+        })
+      );
+      if (cancelled) return;
+      setOrdersById(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [batch]);
+
+  // Auto-completes the batch once every one of its orders is marked shipped -- one-directional
+  // only (never auto-reverts to incomplete if a checkbox later gets unchecked); the explicit
+  // "完了/未完了を切り替え" button below is the only way back, so a manual override always wins.
+  useEffect(() => {
+    if (!batch || batch.completed) return;
+    const orderIds = [...new Set(batch.entries.map((e) => e.orderId))];
+    if (orderIds.length === 0) return;
+    const orders = orderIds.map((oid) => ordersById[oid]).filter((o) => o != null);
+    if (orders.length !== orderIds.length) return;
+    if (orders.every((o) => o.shipped === true)) {
+      setBatchCompleted(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch, ordersById]);
+
+  // Same `orders.shipped` field the order-list and production-tracker toggles already write
+  // (src/app/admin/page.tsx, src/app/admin/production/page.tsx) -- scoped here to just this
+  // batch's orders so the admin can run down a shipping checklist without leaving the batch page.
+  async function toggleOrderShipped(orderId: string, nextShipped: boolean) {
+    if (!user) return;
+    setOrdersById((prev) => ({
+      ...prev,
+      [orderId]: { ...prev[orderId], shipped: nextShipped },
+    }));
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/orders/${orderId}/ship`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ shipped: nextShipped }),
+      });
+      if (!res.ok) throw new Error("failed");
+    } catch (error) {
+      console.error("failed to toggle shipped", error);
+      setOrdersById((prev) => ({
+        ...prev,
+        [orderId]: { ...prev[orderId], shipped: !nextShipped },
+      }));
+    }
+  }
+
+  async function setBatchCompleted(nextCompleted: boolean) {
+    if (!batch) return;
+    setBatch({ ...batch, completed: nextCompleted, completedAt: nextCompleted ? new Date() : null });
+    try {
+      await updateDoc(doc(db, "print_batches", id), {
+        completed: nextCompleted,
+        completedAt: nextCompleted ? new Date() : null,
+      });
+    } catch (error) {
+      console.error("failed to toggle batch completion", error);
+    }
+  }
 
   async function toggleCell(gridId: string) {
     if (!batch) return;
@@ -363,47 +551,171 @@ function BatchGridDashboard({ id }: { id: string }) {
   // grid cell -- a quantity > 1 design only needs hollowing once (see uniqueEntries above); the
   // same finished file gets reused for all of its duplicate cells automatically at plate-layout
   // time.
+  // One plain STL + hole.txt per unique design -- shared by the zip download, the save-to-folder
+  // button and the all-in-one bundle (handleSaveBundle) below, so all three stay identical.
+  async function collectRawFiles(idToken: string): Promise<BundleFile[]> {
+    const perEntry = await Promise.all(
+      uniqueEntries.map(async (entry): Promise<BundleFile[]> => {
+        const res = await fetch(`/api/admin/order-items/${entry.itemId}/raw-stl`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error ?? `${entry.itemId}のダウンロードに失敗しました`);
+        }
+        // Per-item drain-hole position, from the same X/Z fields used by the bulk
+        // Cloud-Function flow above -- a fixed position applied to every item in the
+        // batch would land in a bad spot (a leg, an ear, too-thin a wall) on anything
+        // but a symmetric shape, so hollow_batch.bat reads this back per file instead
+        // of using one hardcoded position for the whole folder.
+        const hole = holeSettings[entry.itemId] ?? {
+          x: 0.5,
+          z: 0.5,
+          diameterMm: DEFAULT_HOLE_DIAMETER_MM,
+        };
+        return [
+          { name: `${entry.itemId}.stl`, data: await res.blob() },
+          { name: `${entry.itemId}.hole.txt`, data: `${hole.x} ${hole.z} ${hole.diameterMm}` },
+        ];
+      })
+    );
+    return perEntry.flat();
+  }
+
   async function handleDownloadRawZip() {
     if (!user || !batch) return;
     setDownloadingRaw(true);
     setRawDownloadError(null);
     try {
-      const idToken = await user.getIdToken();
-      const zip = new JSZip();
-      await Promise.all(
-        uniqueEntries.map(async (entry) => {
-          const res = await fetch(`/api/admin/order-items/${entry.itemId}/raw-stl`, {
-            headers: { Authorization: `Bearer ${idToken}` },
-          });
-          if (!res.ok) {
-            const json = await res.json().catch(() => ({}));
-            throw new Error(json.error ?? `${entry.itemId}のダウンロードに失敗しました`);
-          }
-          zip.file(`${entry.itemId}.stl`, await res.arrayBuffer());
-          // Per-item drain-hole position, from the same X/Z fields used by the bulk
-          // Cloud-Function flow above -- a fixed position applied to every item in the
-          // batch would land in a bad spot (a leg, an ear, too-thin a wall) on anything
-          // but a symmetric shape, so hollow_batch.bat reads this back per file instead
-          // of using one hardcoded position for the whole folder.
-          const hole = holeSettings[entry.itemId] ?? {
-            x: 0.5,
-            z: 0.5,
-            diameterMm: DEFAULT_HOLE_DIAMETER_MM,
-          };
-          zip.file(`${entry.itemId}.hole.txt`, `${hole.x} ${hole.z} ${hole.diameterMm}`);
-        })
-      );
-      const blob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${batch.id}-raw.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const files = await collectRawFiles(await user.getIdToken());
+      await downloadFilesAsZip(`${batch.id}-raw.zip`, null, files);
     } catch (err) {
       setRawDownloadError(err instanceof Error ? err.message : "ダウンロードに失敗しました");
     } finally {
       setDownloadingRaw(false);
+    }
+  }
+
+  // Same source files as handleDownloadRawZip, but written straight into an admin-chosen folder via
+  // the File System Access API instead of a zip -- skips the extract-the-zip step entirely. Chromium
+  // only, so callers must feature-detect showDirectoryPicker before showing this option.
+  async function handleSaveRawToFolder() {
+    if (!user || !batch) return;
+    setDownloadingRaw(true);
+    setRawDownloadError(null);
+    try {
+      const dirHandle = await pickFolder();
+      const files = await collectRawFiles(await user.getIdToken());
+      await writeFilesToFolder(dirHandle, null, files);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setRawDownloadError(err instanceof Error ? err.message : "保存に失敗しました");
+    } finally {
+      setDownloadingRaw(false);
+    }
+  }
+
+  // Adds the chosen late orders and/or extra copies (failed prints) to this batch, then reloads it.
+  async function handleAddToBatch() {
+    if (!user || !batch) return;
+    const itemIds = (pendingGroups ?? [])
+      .filter((g) => selectedPendingOrders.has(g.orderId))
+      .flatMap((g) => g.itemIds);
+    const copies = Object.entries(extraCopies)
+      .filter(([, count]) => count > 0)
+      .map(([itemId, count]) => ({ itemId, count }));
+    if (itemIds.length === 0 && copies.length === 0) return;
+    setAdding(true);
+    setAddError(null);
+    setAddResult(null);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/batches/${batch.id}/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ itemIds, copies }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "追加に失敗しました");
+      setAddResult(`${json.added}マス分をこのバッチに追加しました（合計${json.totalCount}マス）`);
+      setExtraCopies({});
+      setSelectedPendingOrders(new Set());
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "追加に失敗しました");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  // Everything needed to start production AND ship this batch, in ONE folder (or one zip): the raw
+  // model STLs + hole.txt files (what hollow_batch.bat reads), the batch-scoped クリックポスト CSV
+  // (Shift-JIS, ready for clickpost.jp's まとめ申込) and the order-summary PDF. In folder mode the
+  // files land in a "batch-<id>" subfolder of whatever folder gets picked, so batches never mix.
+  async function handleSaveBundle(mode: "folder" | "zip") {
+    if (!user || !batch) return;
+    setBundleSaving(true);
+    setBundleError(null);
+    setBundleResult(null);
+    try {
+      // Picked first, synchronously from the click: the browser only allows the folder picker
+      // while the click's user activation is still alive (it expires across the awaits below).
+      const dirHandle = mode === "folder" ? await pickFolder() : null;
+
+      const files: BundleFile[] = await collectRawFiles(await user.getIdToken());
+      const modelCount = files.filter((f) => f.name.endsWith(".stl")).length;
+
+      let csvIncluded = false;
+      if (batchClickpostOrders.length > 0) {
+        const rows = batchClickpostOrders.map((o) =>
+          buildClickpostCsvRow({
+            customerName: o.customerName ?? "",
+            postalCode: o.postalCode ?? "",
+            address: o.address ?? "",
+          })
+        );
+        files.push({
+          name: `clickpost-batch-${id}.csv`,
+          data: encodeShiftJis(toCsv([...CLICKPOST_CSV_HEADERS], rows)),
+        });
+        csvIncluded = true;
+      }
+
+      let pdfIncluded = false;
+      let pdfWarning = "";
+      if (batchOrdersWithId.length > 0) {
+        try {
+          const createdAtLabel =
+            batch && typeof batch.createdAt === "object" && batch.createdAt !== null && "toDate" in batch.createdAt
+              ? (batch.createdAt as { toDate: () => Date }).toDate().toLocaleString("ja-JP")
+              : "";
+          files.push({
+            name: `batch-${id}-summary.pdf`,
+            data: await buildBatchSummaryPdfBlob(id, createdAtLabel, batchOrdersWithId),
+          });
+          pdfIncluded = true;
+        } catch (err) {
+          // The models and CSV are what production/shipping actually need -- don't lose them over
+          // a failed PDF render, just say so.
+          pdfWarning = `（まとめPDFだけ作成に失敗しました: ${err instanceof Error ? err.message : "不明なエラー"}）`;
+        }
+      }
+
+      const folderName = `batch-${id}`;
+      if (dirHandle) {
+        await writeFilesToFolder(dirHandle, folderName, files);
+      } else {
+        await downloadFilesAsZip(`${folderName}.zip`, folderName, files);
+      }
+      setBundleResult(
+        `${folderName} に保存しました：モデルSTL ${modelCount}点` +
+          `${csvIncluded ? "＋発送CSV" : ""}${pdfIncluded ? "＋まとめPDF" : ""}${pdfWarning}`
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setBundleError(err instanceof Error ? err.message : "保存に失敗しました");
+    } finally {
+      setBundleSaving(false);
     }
   }
 
@@ -513,16 +825,147 @@ function BatchGridDashboard({ id }: { id: string }) {
   for (const e of batch.entries) {
     gridIdsByItemId.set(e.itemId, [...(gridIdsByItemId.get(e.itemId) ?? []), e.gridId]);
   }
+  const orderIdsInBatch = [...new Set(batch.entries.map((e) => e.orderId))];
+  const batchOrders = orderIdsInBatch.map((oid) => ordersById[oid]).filter((o) => o != null);
+  // Same rows as batchOrders, but keeping the orderId alongside -- needed for the shipping
+  // checklist (which order to toggle) and the PDF summary (BatchPdfOrder.orderId), unlike
+  // batchOrders' other consumers (label command, クリックポストCSV) which never need it.
+  const batchOrdersWithId = orderIdsInBatch
+    .map((oid) => (ordersById[oid] ? { orderId: oid, ...ordersById[oid] } : null))
+    .filter((o): o is NonNullable<typeof o> => o != null);
+  const batchLabelCommand =
+    batchOrders.length > 0 ? buildBatchLabelPrintCommand(batchOrders) : "";
+  // Same まとめ申込CSV as admin/shipping, but scoped to just this batch's orders instead of
+  // every unshipped クリックポスト order site-wide -- lets the admin ship a batch as soon as it's
+  // done without waiting on (or accidentally re-including) unrelated batches.
+  const batchClickpostOrders = batchOrders.filter(
+    // !== true (not === false) so older orders created before the `shipped` field existed --
+    // where it's undefined rather than explicitly false -- still count as "not yet shipped"
+    // instead of silently dropping out of the batch CSV.
+    (o) => o.shippingMethod === "クリックポスト" && o.shipped !== true
+  );
+  function handleBatchClickpostExport() {
+    const rows = batchClickpostOrders.map((o) =>
+      buildClickpostCsvRow({
+        customerName: o.customerName ?? "",
+        postalCode: o.postalCode ?? "",
+        address: o.address ?? "",
+      })
+    );
+    downloadCsvShiftJis(`clickpost-batch-${id}-${Date.now()}.csv`, toCsv([...CLICKPOST_CSV_HEADERS], rows));
+  }
+
+  async function handleDownloadPdf() {
+    setPdfGenerating(true);
+    setPdfError(null);
+    try {
+      const createdAtLabel =
+        batch && typeof batch.createdAt === "object" && batch.createdAt !== null && "toDate" in batch.createdAt
+          ? (batch.createdAt as { toDate: () => Date }).toDate().toLocaleString("ja-JP")
+          : "";
+      await downloadBatchSummaryPdf(id, createdAtLabel, batchOrdersWithId);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : "PDFの生成に失敗しました");
+    } finally {
+      setPdfGenerating(false);
+    }
+  }
+
+  async function handleDeleteModels() {
+    if (!user) return;
+    if (
+      !window.confirm(
+        "USB等に3Dモデルを退避済みですか？\n\nこのバッチの生産用モデルファイル（scaledModelUrl/finishedModelUrl）をFirebase Storageから完全に削除します。元に戻せません。\n\n元モデル（お客様マイページ表示用）と注文記録は削除されません。"
+      )
+    ) {
+      return;
+    }
+    setDeletingModels(true);
+    setDeleteModelsError(null);
+    setDeleteModelsResult(null);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/batches/${id}/delete-models`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "削除に失敗しました");
+      setDeleteModelsResult(json);
+    } catch (err) {
+      setDeleteModelsError(err instanceof Error ? err.message : "削除に失敗しました");
+    } finally {
+      setDeletingModels(false);
+    }
+  }
+
+  async function handleUndoBatch() {
+    if (!user || !batch) return;
+    const workDoneWarning =
+      batch.completedCells.length > 0
+        ? `\n\n（${batch.completedCells.length}個のセルが完了チェック済みです。取り消すとこのチェックも失われます）`
+        : "";
+    if (
+      !window.confirm(
+        `このバッチを削除して、含まれる${orderIdsInBatch.length}件の注文を「未バッチ」に戻します。よろしいですか？${workDoneWarning}`
+      )
+    ) {
+      return;
+    }
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/batches/${id}/undo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "取り消しに失敗しました");
+      router.push("/admin/batches");
+    } catch (err) {
+      setUndoError(err instanceof Error ? err.message : "取り消しに失敗しました");
+      setUndoing(false);
+    }
+  }
 
   return (
     <div className={styles.page}>
       <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 ${styles.noPrint}`}>
-        <Link
-          href="/admin/batches"
-          className="text-sm text-slate-600 underline underline-offset-2"
-        >
-          ← バッチ一覧に戻る
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/batches"
+            className="text-sm text-slate-600 underline underline-offset-2"
+          >
+            ← バッチ一覧に戻る
+          </Link>
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              batch.completed
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            {batch.completed ? "完了" : "進行中"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setBatchCompleted(!batch.completed)}
+            className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700"
+          >
+            {batch.completed ? "未完了に戻す" : "手動で完了にする"}
+          </button>
+          {!batch.completed && (
+            <button
+              type="button"
+              onClick={handleUndoBatch}
+              disabled={undoing}
+              className="text-xs text-red-600 underline underline-offset-2 hover:text-red-800 disabled:opacity-50"
+            >
+              {undoing ? "取り消し中..." : "間違えて作成した場合：このバッチを取り消す"}
+            </button>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {plateGenerating && plateProgress && (
             <p className="text-xs text-slate-500">
@@ -555,6 +998,316 @@ function BatchGridDashboard({ id }: { id: string }) {
             🖨️ 作業シートを印刷
           </button>
         </div>
+      </div>
+      {undoError && <p className={`mb-4 text-sm text-red-600 ${styles.noPrint}`}>{undoError}</p>}
+
+      <div className={`mb-4 rounded-xl border-2 border-slate-800 bg-white p-4 ${styles.noPrint}`}>
+        <p className="mb-1 text-sm font-semibold text-slate-900">
+          バッチ一式を同じフォルダに保存（モデル＋発送CSV＋まとめPDF）
+        </p>
+        <p className="mb-3 text-xs text-slate-600">
+          元モデルSTL（穴位置の<code>.hole.txt</code>つき）・クリックポスト発送CSV（このバッチの未発送分）・注文まとめPDFを、
+          <code>batch-{id}</code> フォルダにまとめて保存します。そのまま <code>hollow_batch.bat</code> の対象フォルダに使えます。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {canSaveToFolder() && (
+            <button
+              type="button"
+              onClick={() => handleSaveBundle("folder")}
+              disabled={bundleSaving || uniqueEntries.length === 0}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            >
+              {bundleSaving ? "保存中..." : "フォルダを選んで一式を保存"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => handleSaveBundle("zip")}
+            disabled={bundleSaving || uniqueEntries.length === 0}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {bundleSaving ? "準備中..." : "一式をZIPでダウンロード"}
+          </button>
+        </div>
+        {bundleError && <p className="mt-2 text-sm text-red-600">{bundleError}</p>}
+        {bundleResult && <p className="mt-2 text-xs text-emerald-700">{bundleResult}</p>}
+      </div>
+
+      <div className={`mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 ${styles.noPrint}`}>
+        <p className="mb-1 text-sm font-semibold text-slate-900">
+          あとから追加する（印刷に失敗した分の再印刷・遅れて入った注文）
+        </p>
+        {batch.completed ? (
+          <p className="text-xs text-slate-600">
+            完了済みのバッチには追加できません。追加したい場合は、先に「未完了に戻す」を押してください。
+          </p>
+        ) : (
+          <>
+            <p className="mb-3 text-[11px] text-slate-500">
+              バッチを作ったあとでも、失敗したピースの再印刷や、あとから入った注文をこのバッチに足せます。足した分は新しいマスが追加され、再印刷は「再」と表示されます。モデルは元のものを使い回すので、中空化のやり直しは不要です。
+            </p>
+
+            <p className="mb-1 text-xs font-semibold text-slate-700">失敗したピースを再印刷用に追加</p>
+            <div className="mb-3 divide-y divide-amber-100 rounded-lg border border-amber-200 bg-white">
+              {uniqueEntries.map((entry) => {
+                const have = batch.entries.filter((e) => e.itemId === entry.itemId).length;
+                const extra = extraCopies[entry.itemId] ?? 0;
+                return (
+                  <div key={entry.itemId} className="flex items-center gap-3 px-3 py-2">
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-900">
+                      {entry.initial && (
+                        <span className="mr-1 rounded bg-indigo-100 px-1 text-[10px] font-bold text-indigo-700">
+                          {entry.initial}
+                        </span>
+                      )}
+                      {entry.subject}（{entry.customerName}様）
+                      <span className="ml-1 text-xs text-slate-400">現在{have}個</span>
+                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExtraCopies((prev) => ({ ...prev, [entry.itemId]: Math.max(0, extra - 1) }))
+                        }
+                        disabled={extra <= 0 || adding}
+                        aria-label="減らす"
+                        className="h-7 w-7 rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center text-sm tabular-nums">+{extra}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExtraCopies((prev) => ({ ...prev, [entry.itemId]: Math.min(30, extra + 1) }))
+                        }
+                        disabled={adding}
+                        aria-label="増やす"
+                        className="h-7 w-7 rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                      >
+                        ＋
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="mb-1 text-xs font-semibold text-slate-700">未バッチの注文をこのバッチに追加</p>
+            {pendingGroups === null ? (
+              <p className="mb-3 text-xs text-slate-400">読み込み中...</p>
+            ) : pendingGroups.length === 0 ? (
+              <p className="mb-3 text-xs text-slate-400">未バッチの注文はありません</p>
+            ) : (
+              <div className="mb-3 divide-y divide-amber-100 rounded-lg border border-amber-200 bg-white">
+                {pendingGroups.map((group) => (
+                  <label key={group.orderId} className="flex cursor-pointer items-center gap-3 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedPendingOrders.has(group.orderId)}
+                      onChange={() =>
+                        setSelectedPendingOrders((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(group.orderId)) next.delete(group.orderId);
+                          else next.add(group.orderId);
+                          return next;
+                        })
+                      }
+                      className="h-4 w-4 shrink-0 accent-slate-800"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-900">
+                      {group.customerName}様　{group.subjects.join(" / ")}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleAddToBatch}
+              disabled={
+                adding ||
+                (selectedPendingOrders.size === 0 &&
+                  Object.values(extraCopies).every((count) => count <= 0))
+              }
+              className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+            >
+              {adding ? "追加中..." : "選んだ内容をこのバッチに追加"}
+            </button>
+            {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
+            {addResult && <p className="mt-2 text-xs text-emerald-700">{addResult}</p>}
+          </>
+        )}
+      </div>
+
+      {batchLabelCommand && (
+        <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
+          <p className="mb-1 text-sm font-semibold text-slate-900">
+            バッチ内の注文のラベルをまとめて印刷
+          </p>
+          <p className="mb-2 text-[11px] text-slate-400">
+            このバッチに含まれる注文（{batchOrders.length}件）ぶんを、注文ごとに「内容物ラベル→ロゴ→感謝文」のセットで順番に印刷します。
+          </p>
+          <PrintLabelSetButton
+            orders={batchOrders.map((o) => ({ orderNumber: o.orderNumber ?? "", items: o.items }))}
+            buttonLabel={`バッチ内${batchOrders.length}件のラベルを一式印刷`}
+          />
+          <details className="mt-3 text-[11px] text-slate-400">
+            <summary className="cursor-pointer">印刷サーバーを使わず、コマンドで印刷する場合</summary>
+            <div className="mt-2">
+              <p className="mb-2">
+                <code>diy-figure-app</code>フォルダを開いたターミナルにコピーして貼り付けてEnterを押すと、注文ごとに1枚ずつ順番に印刷されます（内容物ラベルのみ）。
+              </p>
+              <CopyCommandRow label="内容物ラベル（バッチ内全注文）" command={batchLabelCommand} />
+            </div>
+          </details>
+        </div>
+      )}
+
+      {batchClickpostOrders.length > 0 && (
+        <div className={`mb-4 rounded-xl border border-emerald-300 bg-emerald-50 p-4 ${styles.noPrint}`}>
+          <p className="mb-1 text-sm font-medium text-slate-900">
+            クリックポスト まとめ申込用CSV（このバッチのみ）
+          </p>
+          <p className="mb-3 text-xs text-slate-600">
+            このバッチ内の未発送クリックポスト分（{batchClickpostOrders.length}件）だけをCSV出力します。clickpost.jpの「まとめ申込」にそのままアップロードできます。
+          </p>
+          <button
+            type="button"
+            onClick={handleBatchClickpostExport}
+            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+          >
+            クリックポストCSVダウンロード（バッチ内）
+          </button>
+        </div>
+      )}
+
+      {batchOrdersWithId.length > 0 && (
+        <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
+          <p className="mb-1 text-sm font-semibold text-slate-900">発送チェックリスト</p>
+          <p className="mb-2 text-[11px] text-slate-400">
+            全注文にチェックが入ると、このバッチは自動で「完了」に切り替わります。
+          </p>
+          <div className="divide-y divide-slate-100">
+            {batchOrdersWithId.map((order) => (
+              <label
+                key={order.orderId}
+                className="flex cursor-pointer items-center gap-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  checked={order.shipped === true}
+                  onChange={(e) => toggleOrderShipped(order.orderId, e.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-emerald-700"
+                />
+                <span className="flex-1 text-sm text-slate-900">
+                  {order.orderNumber ?? order.orderId}　{order.customerName}様
+                </span>
+                <span className="text-xs text-slate-400">{order.shippingMethod ?? ""}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
+        <p className="mb-1 text-sm font-semibold text-slate-900">
+          バッチのデータをUSBに退避して整理する
+        </p>
+        <p className="mb-3 text-[11px] text-slate-400">
+          注文まとめPDFと「①元モデルをまとめてダウンロード(ZIP)」（下のカード）を一緒にUSB等へ保存してから、モデルファイルを削除してStorage容量を空けられます。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={pdfGenerating || batchOrdersWithId.length === 0}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {pdfGenerating ? "生成中..." : "注文まとめPDFをダウンロード"}
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteModels}
+            disabled={!batch.completed || deletingModels}
+            title={batch.completed ? undefined : "発送チェックリストが完了するとモデル削除ができます"}
+            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {deletingModels ? "削除中..." : "モデルファイルを削除（Storage容量整理）"}
+          </button>
+        </div>
+        {pdfError && <p className="mt-2 text-sm text-red-600">{pdfError}</p>}
+        {deleteModelsError && <p className="mt-2 text-sm text-red-600">{deleteModelsError}</p>}
+        {deleteModelsResult && (
+          <p className="mt-2 text-xs text-emerald-700">
+            {deleteModelsResult.clearedItems}件のアイテムから、計{deleteModelsResult.deletedFiles}
+            個のモデルファイルを削除しました。
+          </p>
+        )}
+      </div>
+
+      <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
+        <p className="mb-1 text-sm font-semibold text-slate-900">
+          自分の環境で中空化・穴あけ・サポートをする場合
+        </p>
+        <p className="mb-2 text-[11px] text-slate-400">
+          上の一括処理を使わず、Blenderなど自分の環境で中空化・穴あけ・サポートを済ませてから、その結果をここに戻すこともできます。上のリストで各アイテムのX/Z（穴位置）を先に調整しておくと、ZIPに一緒に入るので
+          <code>hollow_batch.bat</code>
+          側でもその位置がアイテムごとに反映されます（全アイテム共通の1点になってしまうことはありません）。①元モデル（中空化前）をZIPでダウンロード
+          →
+          ②自分の環境で処理（ファイル名<code>&lt;アイテムID&gt;.stl</code>は変えない）
+          → ③できたSTLをまとめてアップロード。同じデザインが複数個ある場合も1ファイルで済みます（プレート配置時に自動で使い回されます）。
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleDownloadRawZip}
+            disabled={downloadingRaw || uniqueEntries.length === 0}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {downloadingRaw ? "準備中..." : "① 元モデルをまとめてダウンロード(ZIP)"}
+          </button>
+          {typeof window !== "undefined" && "showDirectoryPicker" in window && (
+            <button
+              type="button"
+              onClick={handleSaveRawToFolder}
+              disabled={downloadingRaw || uniqueEntries.length === 0}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {downloadingRaw ? "準備中..." : "① フォルダに直接保存(ZIP解凍不要)"}
+            </button>
+          )}
+          <label className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 cursor-pointer">
+            {uploadingFinished ? "アップロード中..." : "③ 仕上がったSTLをまとめてアップロード"}
+            <input
+              type="file"
+              accept=".stl"
+              multiple
+              disabled={uploadingFinished}
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  handleUploadFinishedFiles(e.target.files);
+                }
+                e.target.value = "";
+              }}
+              className="hidden"
+            />
+          </label>
+        </div>
+        {rawDownloadError && <p className="mt-2 text-xs text-red-600">{rawDownloadError}</p>}
+        {Object.keys(uploadResults).length > 0 && (
+          <div className="mt-2 space-y-0.5 text-xs">
+            {Object.entries(uploadResults).map(([key, result]) => (
+              <p
+                key={key}
+                className={result.startsWith("✓") ? "text-emerald-600" : "text-red-600"}
+              >
+                {key}: {result}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
@@ -687,59 +1440,6 @@ function BatchGridDashboard({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
-        <p className="mb-1 text-sm font-semibold text-slate-900">
-          自分の環境で中空化・穴あけ・サポートをする場合
-        </p>
-        <p className="mb-2 text-[11px] text-slate-400">
-          上の一括処理を使わず、Blenderなど自分の環境で中空化・穴あけ・サポートを済ませてから、その結果をここに戻すこともできます。上のリストで各アイテムのX/Z（穴位置）を先に調整しておくと、ZIPに一緒に入るので
-          <code>hollow_batch.bat</code>
-          側でもその位置がアイテムごとに反映されます（全アイテム共通の1点になってしまうことはありません）。①元モデル（中空化前）をZIPでダウンロード
-          →
-          ②自分の環境で処理（ファイル名<code>&lt;アイテムID&gt;.stl</code>は変えない）
-          → ③できたSTLをまとめてアップロード。同じデザインが複数個ある場合も1ファイルで済みます（プレート配置時に自動で使い回されます）。
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleDownloadRawZip}
-            disabled={downloadingRaw || uniqueEntries.length === 0}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {downloadingRaw ? "準備中..." : "① 元モデルをまとめてダウンロード(ZIP)"}
-          </button>
-          <label className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 cursor-pointer">
-            {uploadingFinished ? "アップロード中..." : "③ 仕上がったSTLをまとめてアップロード"}
-            <input
-              type="file"
-              accept=".stl"
-              multiple
-              disabled={uploadingFinished}
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  handleUploadFinishedFiles(e.target.files);
-                }
-                e.target.value = "";
-              }}
-              className="hidden"
-            />
-          </label>
-        </div>
-        {rawDownloadError && <p className="mt-2 text-xs text-red-600">{rawDownloadError}</p>}
-        {Object.keys(uploadResults).length > 0 && (
-          <div className="mt-2 space-y-0.5 text-xs">
-            {Object.entries(uploadResults).map(([key, result]) => (
-              <p
-                key={key}
-                className={result.startsWith("✓") ? "text-emerald-600" : "text-red-600"}
-              >
-                {key}: {result}
-              </p>
-            ))}
-          </div>
-        )}
-      </div>
-
       {(plateError || plateResults) && (
         <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-4 ${styles.noPrint}`}>
           {plateError && <p className="text-sm text-red-600">{plateError}</p>}
@@ -823,6 +1523,11 @@ function BatchGridDashboard({ id }: { id: string }) {
                   {entry?.initial && (
                     <span className="ml-1 rounded bg-indigo-100 px-1 text-[10px] font-bold text-indigo-700">
                       刻印:{entry.initial}
+                    </span>
+                  )}
+                  {entry?.reprint && (
+                    <span className="ml-1 rounded bg-amber-200 px-1 text-[10px] font-bold text-amber-800">
+                      再
                     </span>
                   )}
                 </p>

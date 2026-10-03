@@ -3,9 +3,12 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import Link from "next/link";
 import { useState } from "react";
+import { buildClickpostCsvRow, CLICKPOST_CSV_HEADERS } from "@/lib/clickpost";
+import { downloadCsv, downloadCsvShiftJis, toCsv } from "@/lib/csv";
 import { db } from "@/lib/firebase";
-import { downloadCsv, toCsv } from "@/lib/csv";
 import { SHIPPING_METHOD_BY_SIZE, type OrderItemDraft } from "@/types/order";
+
+const CLICKPOST_METHOD = "クリックポスト";
 
 const CSV_HEADERS = [
   "注文ID",
@@ -69,6 +72,102 @@ function ShippingExportButton({ method }: { method: string }) {
   );
 }
 
+// クリックポストの「まとめ申込」にそのままアップロードできる形式 -- 郵便番号・氏名・敬称・住所
+// 1〜4行目・内容品の列、Shift_JISエンコードで出力する（一般的なCSV出力とは別ボタン）。未発送
+// (shipped=false)のクリックポスト案件だけを対象にして、発送済み分を毎回含めないようにしてる。
+function ClickpostExportButton() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [count, setCount] = useState<number | null>(null);
+
+  async function handleExport() {
+    setLoading(true);
+    setError(null);
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, "orders"),
+          where("shippingMethod", "==", CLICKPOST_METHOD),
+          where("shipped", "==", false)
+        )
+      );
+      const rows = snap.docs.map((d) => {
+        const data = d.data();
+        return buildClickpostCsvRow({
+          customerName: data.customerName ?? "",
+          postalCode: data.postalCode ?? "",
+          address: data.address ?? "",
+        });
+      });
+      setCount(rows.length);
+      downloadCsvShiftJis(
+        `clickpost-${Date.now()}.csv`,
+        toCsv([...CLICKPOST_CSV_HEADERS], rows)
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "CSV出力に失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4">
+      <p className="mb-1 text-sm font-medium text-slate-900">
+        クリックポスト まとめ申込用CSV
+      </p>
+      <p className="mb-3 text-xs text-slate-600">
+        未発送のクリックポスト分のみ。clickpost.jpの「まとめ申込」にそのままアップロードできます（住所は自動で20文字ずつ4行に分割、敬称「様」・内容品「アクセサリー」は固定で入ります）。
+      </p>
+      <button
+        type="button"
+        onClick={handleExport}
+        disabled={loading}
+        className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+      >
+        {loading ? "出力中..." : "クリックポストCSVダウンロード"}
+      </button>
+      {count !== null && !error && (
+        <p className="mt-2 text-xs text-slate-500">{count}件を出力しました</p>
+      )}
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      <ol className="mt-4 space-y-1.5 border-t border-emerald-200 pt-3 text-xs text-slate-600">
+        <li>
+          <strong>1.</strong> 上のボタンでCSVをダウンロード
+        </li>
+        <li>
+          <strong>2.</strong>{" "}
+          <a
+            href="https://clickpost.jp"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-emerald-700"
+          >
+            clickpost.jp
+          </a>{" "}
+          にログイン(Yahoo! JAPAN IDかAmazonアカウント)
+        </li>
+        <li>
+          <strong>3.</strong> 「まとめ申込」からダウンロードしたCSVをアップロード
+        </li>
+        <li>
+          <strong>4.</strong> 内容を確認して支払い(登録済みのカードで決済)
+        </li>
+        <li>
+          <strong>5.</strong> ラベルをA6サイズ・倍率100%・モノクロで印刷
+        </li>
+        <li>
+          <strong>6.</strong> 荷物に貼ってポストに投函(窓口持込は2026年10月1日で廃止)
+        </li>
+      </ol>
+      <p className="mt-2 text-[11px] text-amber-700">
+        ※ラベルの有効期限は支払い翌日から7日間。早めに印刷・投函してください。
+      </p>
+    </div>
+  );
+}
+
 export default function AdminShippingPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
@@ -80,6 +179,7 @@ export default function AdminShippingPage() {
       </Link>
       <h1 className="mb-6 text-xl font-bold text-slate-900">発送CSV</h1>
       <div className="space-y-3">
+        <ClickpostExportButton />
         {SHIPPING_METHODS.map((method) => (
           <ShippingExportButton key={method} method={method} />
         ))}

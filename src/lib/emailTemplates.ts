@@ -1,4 +1,4 @@
-import { formatYen } from "@/lib/pricing";
+import { formatYen, REFERRAL_DISCOUNT_RATE } from "@/lib/pricing";
 import type { OrderItemDraft } from "@/types/order";
 
 function escapeHtml(value: string): string {
@@ -15,6 +15,38 @@ function wrapEmail(bodyHtml: string): string {
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1e293b;">
       ${bodyHtml}
       <p style="margin-top:32px;font-size:12px;color:#94a3b8;">LUMINA CHARO</p>
+    </div>
+  `;
+}
+
+// Sent as part of the order confirmation email (not the physical insert -- that ships with the
+// product weeks later, far too late to serve as a receipt). Issued at payment-confirmation time,
+// which is exactly when buildOrderConfirmationEmail already fires from the Stripe webhook.
+// No issuer address on purpose -- kept consistent with the 特定商取引法 page's "開示は請求時のみ"
+// stance for the same solo-operator privacy reason; the brand name + email is enough for "who
+// issued this" without publishing a home address on every receipt sent out.
+function buildReceiptSection(
+  orderId: string,
+  customerName: string,
+  totalPriceYen: number,
+  issuedAt: Date
+): string {
+  const dateLabel = issuedAt.toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  return `
+    <div style="margin-top:24px;border:1px solid #cbd5e1;border-radius:8px;padding:16px;">
+      <h2 style="font-size:15px;margin:0 0 12px;">領収書</h2>
+      <p style="margin:4px 0;font-size:13px;color:#64748b;">発行日：${escapeHtml(dateLabel)}</p>
+      <p style="margin:4px 0;font-size:14px;">${escapeHtml(customerName)} 様</p>
+      <p style="margin:12px 0;font-size:20px;font-weight:bold;">${formatYen(totalPriceYen)}</p>
+      <p style="margin:4px 0;font-size:14px;">但し書き：キーホルダー代として</p>
+      <p style="margin:4px 0;font-size:13px;color:#64748b;">注文番号：${escapeHtml(orderId)}</p>
+      <p style="margin:16px 0 0;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:10px;">
+        発行者：LUMINA CHARO（natsuki.ko006@gmail.com）
+      </p>
     </div>
   `;
 }
@@ -37,9 +69,50 @@ export function buildOrderConfirmationEmail(
     <p style="font-size:12px;color:#b45309;background:#fffbeb;padding:8px 12px;border-radius:8px;">
       3Dモデルのデータは、商品発送から7日後に自動的に削除されます。保存しておきたい方は、マイページから発送後お早めにダウンロードしてください。
     </p>
+    ${buildReceiptSection(orderId, order.customerName, order.estimatedPriceYen, new Date())}
   `);
 
   return { subject: "ご注文ありがとうございます", html };
+}
+
+// Fired once, exactly when an order's `shipped` flag actually flips false->true (see
+// /api/admin/orders/[id]/ship) -- not on every admin toggle, so correcting a mis-click never
+// re-sends this. referralUrl is null for a guest checkout (no uid captured at submission time),
+// in which case the referral block is simply omitted rather than pointing at a broken link.
+export function buildShippedNotificationEmail(
+  orderId: string,
+  order: { customerName: string; items: OrderItemDraft[] },
+  referralUrl: string | null
+): { subject: string; html: string } {
+  const subjectSummary = order.items.map((item) => item.subject).filter(Boolean).join(" / ");
+  const referralPercent = Math.round(REFERRAL_DISCOUNT_RATE * 100);
+
+  const referralSection = referralUrl
+    ? `
+      <div style="margin-top:20px;border:1px solid #cbd5e1;border-radius:8px;padding:16px;">
+        <h2 style="font-size:14px;margin:0 0 8px;">お友達紹介</h2>
+        <p style="margin:0 0 10px;font-size:13px;color:#475569;">
+          このリンクから友達が新規登録すると、お互い次回のご注文が${referralPercent}%オフになります。
+        </p>
+        <p style="margin:0;font-size:13px;word-break:break-all;">
+          <a href="${escapeHtml(referralUrl)}" style="color:#0369a1;">${escapeHtml(referralUrl)}</a>
+        </p>
+      </div>
+    `
+    : "";
+
+  const html = wrapEmail(`
+    <h1 style="font-size:18px;">発送のお知らせ</h1>
+    <p>${escapeHtml(order.customerName)} 様</p>
+    <p>ご注文いただいた${subjectSummary ? `「${escapeHtml(subjectSummary)}」` : "商品"}を発送いたしました。到着まで今しばらくお待ちください。</p>
+    <p style="font-size:13px;color:#64748b;">注文番号：${escapeHtml(orderId)}</p>
+    ${referralSection}
+    <p style="margin-top:20px;font-size:13px;color:#64748b;">
+      よろしければ、お手元に届いた様子を <a href="https://instagram.com/lumina_charo" style="color:#0369a1;">@lumina_charo</a> をタグ付けしてSNSに投稿していただけると励みになります（任意です）。
+    </p>
+  `);
+
+  return { subject: "発送のお知らせ", html };
 }
 
 // Appended to every marketing send -- required for opt-in email under Japan's 特定電子メール法.

@@ -1,16 +1,173 @@
 "use client";
 
-import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, Copy, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { signInWithGoogle } from "@/lib/auth";
+import { CustomerProfileSettings } from "@/components/account/CustomerProfileSettings";
+import { signInWithGoogle, signOut } from "@/lib/auth";
+import { loadDraftSlice } from "@/lib/draftStorage";
 import { downloadFileAs, sanitizeFilenamePart } from "@/lib/downloadFile";
 import { db } from "@/lib/firebase";
-import { formatYen, getTotalQuantity } from "@/lib/pricing";
+import {
+  CREDIT_PRICE_YEN,
+  GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN,
+  MAX_DISCOUNTABLE_CREDITS,
+} from "@/lib/creditPacks";
+import { formatYen, getTotalQuantity, REFERRAL_DISCOUNT_RATE } from "@/lib/pricing";
+import type { SavedOrderDraft } from "@/components/order/OrderForm";
 import type { OrderItemDraft, PaymentStatus } from "@/types/order";
+
+// "続きから" -- surfaces the in-progress /order draft (saved to IndexedDB, see
+// src/lib/draftStorage.ts and OrderForm.tsx's restore/save effects) so a customer who wandered
+// off to check /mypage mid-build has an obvious way back, instead of just the generic "注文ページ
+// に戻る" link above (which now silently resumes it, but gives no hint that there's anything TO
+// resume). Only shown when the saved draft actually has something in it -- every /order visit
+// saves *something*, even an untouched default draft.
+function InProgressDraftSection() {
+  const [draft, setDraft] = useState<SavedOrderDraft | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadDraftSlice<SavedOrderDraft>("orderDraft").then((saved) => {
+      if (cancelled) return;
+      setDraft(saved ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!draft) return null;
+  const hasContent =
+    draft.formValues.items.length > 0 ||
+    draft.formValues.photos.length > 0 ||
+    draft.generatedModelUrl !== null ||
+    draft.createMode !== null;
+  if (!hasContent) return null;
+
+  const itemCount = draft.formValues.items.length;
+  const subject = draft.formValues.subject?.trim();
+  const summary =
+    itemCount > 0
+      ? `カートに${itemCount}点${subject ? `（${subject} ほか）` : ""}`
+      : subject
+        ? subject
+        : "作成中のモデル";
+
+  return (
+    <div className="mb-4 rounded-xl border border-teal-300 bg-teal-50 p-4">
+      <p className="text-sm font-semibold text-slate-900">作りかけの注文があります</p>
+      <p className="mt-1 text-xs text-slate-600">{summary}</p>
+      <Link
+        href="/order"
+        className="mt-2 inline-block rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800"
+      >
+        続きから
+      </Link>
+    </div>
+  );
+}
+
+function ReferralSection({ uid }: { uid: string }) {
+  const [discountAvailable, setDiscountAvailable] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const referralUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/?ref=${uid}` : "";
+
+  useEffect(() => {
+    return onSnapshot(doc(db, "users", uid), (snap) => {
+      setDiscountAvailable(snap.data()?.referralDiscountAvailable === true);
+    });
+  }, [uid]);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard API unavailable -- the link is still selectable/visible in the input below
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-900">お友達紹介</p>
+      <p className="mt-1 text-xs text-slate-500">
+        このリンクから友達が新規登録すると、お互い次回の注文が{Math.round(REFERRAL_DISCOUNT_RATE * 100)}
+        %オフになります。
+      </p>
+      <div className="mt-2 flex gap-2">
+        <input
+          type="text"
+          readOnly
+          value={referralUrl}
+          onFocus={(e) => e.target.select()}
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600"
+        />
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex shrink-0 items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? "コピーしました" : "コピー"}
+        </button>
+      </div>
+      {discountAvailable && (
+        <p className="mt-2 text-xs font-medium text-emerald-600">
+          ✓ 次回のご注文で{Math.round(REFERRAL_DISCOUNT_RATE * 100)}%オフが適用されます
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Durable "coupon" balance -- one earned every time a paid AI生成(3Dモデル化) is actually completed
+// (see addDiscountableCredit in src/lib/credits.ts), redeemed automatically (up to
+// MAX_DISCOUNTABLE_CREDITS) at whatever order the customer eventually places, even if that's days
+// later or in a different browser session. Same live-read pattern as ReferralSection above.
+function CouponSection({ uid }: { uid: string }) {
+  const [available, setAvailable] = useState(0);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, "users", uid), (snap) => {
+      setAvailable((snap.data()?.generationCreditsAvailable as number) ?? 0);
+    });
+  }, [uid]);
+
+  if (available <= 0) return null;
+
+  const applicable = Math.min(available, MAX_DISCOUNTABLE_CREDITS);
+
+  return (
+    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-900">クーポン</p>
+      <p className="mt-1 text-xs text-slate-500">
+        3Dモデルを作成するたびに自動でたまり、商品代金が
+        {formatYen(GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN)}以上のご注文で自動的に割引が適用されます（上限
+        {MAX_DISCOUNTABLE_CREDITS}回分）。
+      </p>
+      <p className="mt-2 text-xs font-medium text-emerald-600">
+        ✓ 商品代金{formatYen(GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN)}以上のご注文で、
+        {formatYen(applicable * CREDIT_PRICE_YEN)}オフが適用されます
+      </p>
+    </div>
+  );
+}
 
 // 3Dモデルの保存期間 -- 発送後の削除までの猶予日数（Cloud Functionsのcleanup​OldModelsと合わせる）。
 const MODEL_RETENTION_DAYS_AFTER_SHIPPING = 7;
@@ -213,6 +370,15 @@ function OrderHistory({ email }: { email: string }) {
 export default function MyPage() {
   const { user, isLoading } = useAuth();
 
+  // Marks "everything as read" for AuthNavButton's unread dot -- every visit here, not just the
+  // first, so re-opening /mypage after a NEW model finishes clears the dot again too.
+  useEffect(() => {
+    if (!user) return;
+    updateDoc(doc(db, "users", user.uid), { lastSeenNotificationsAt: serverTimestamp() }).catch(
+      () => {}
+    );
+  }, [user]);
+
   return (
     <div className="min-h-full bg-slate-50">
       <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-6">
@@ -223,6 +389,7 @@ export default function MyPage() {
           <ArrowLeft className="h-4 w-4" />
           注文ページに戻る
         </Link>
+        <InProgressDraftSection />
         <header className="mb-6 text-center">
           <h1 className="mx-auto">
             <Image
@@ -257,7 +424,20 @@ export default function MyPage() {
           </div>
         ) : (
           <>
-            <p className="mb-3 text-xs text-slate-500">{user.email}でログイン中</p>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs text-slate-500">{user.email}でログイン中</p>
+              <button
+                type="button"
+                onClick={() => signOut()}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+              >
+                <LogOut className="h-3 w-3" />
+                ログアウト
+              </button>
+            </div>
+            <CustomerProfileSettings uid={user.uid} />
+            <ReferralSection uid={user.uid} />
+            <CouponSection uid={user.uid} />
             <OrderHistory email={user.email ?? ""} />
           </>
         )}

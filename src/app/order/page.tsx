@@ -44,6 +44,9 @@ export default async function OrderPage() {
           <p className="mt-2 text-sm text-slate-600">
             ペットや大切なものの写真から、魔法のカラーで輝くクリスタルフィギュアを作成・注文できます。
           </p>
+          <p className="mt-2 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+            3Dモデルの生成・プレビューまでは無料です。仕上がりを確認してからご注文いただけます
+          </p>
         </header>
         {orderingOpen ? (
           <Suspense fallback={null}>
@@ -52,11 +55,11 @@ export default async function OrderPage() {
         ) : (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">
-              今月の受付は終了しました
+              今週の受付は終了しました
             </h2>
             <p className="mt-2 text-sm text-slate-600">
-              一人で製作しているため、月ごとにご注文数の上限を設けております。
-              大変申し訳ございませんが、来月の受付開始までお待ちください。
+              一人で製作しているため、週ごとにご注文数の上限を設けております。
+              大変申し訳ございませんが、来週の受付開始までお待ちください。
             </p>
           </div>
         )}

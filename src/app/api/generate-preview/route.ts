@@ -1,13 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getColorSettings } from "@/lib/colorSettingsAdmin";
+import { DEFAULT_COLOR_IMAGE_SRC } from "@/lib/colorSwatches";
 import { generateFinishedPreview, type ImagePayload } from "@/lib/gemini";
 import { uploadFinishedPreview } from "@/lib/orders";
 import { readPetDetails } from "@/lib/petDetails";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 import {
   MAGIC_COLOR_OPTIONS,
+  MODEL_STYLE_OPTIONS,
   POSE_OPTIONS,
   SUBJECT_TYPE_OPTIONS,
   type MagicColor,
+  type ModelStyle,
   type Pose,
   type SubjectType,
 } from "@/types/order";
@@ -19,6 +23,34 @@ function isImageFile(value: FormDataEntryValue | null): value is File {
 async function toImagePayload(file: File): Promise<ImagePayload> {
   const buffer = Buffer.from(await file.arrayBuffer());
   return { data: buffer.toString("base64"), mimeType: file.type };
+}
+
+// What the shop owner set up for this color in /admin/colors so the AI image can match the real
+// product: a custom material description, and the swatch photo (the real finished material) as a
+// reference. Best-effort -- any failure just falls back to the built-in description.
+async function loadColorHints(
+  color: MagicColor,
+  origin: string
+): Promise<{ phrase?: string; swatch?: ImagePayload } | undefined> {
+  try {
+    const setting = (await getColorSettings())[color];
+    const hints: { phrase?: string; swatch?: ImagePayload } = {};
+    if (setting.previewPrompt) hints.phrase = setting.previewPrompt;
+    const swatchUrl = setting.imageUrl ?? DEFAULT_COLOR_IMAGE_SRC[color];
+    if (swatchUrl) {
+      const res = await fetch(new URL(swatchUrl, origin));
+      if (res.ok) {
+        const mimeType = res.headers.get("content-type") ?? "image/jpeg";
+        if (mimeType.startsWith("image/")) {
+          hints.swatch = { data: Buffer.from(await res.arrayBuffer()).toString("base64"), mimeType };
+        }
+      }
+    }
+    return hints.phrase || hints.swatch ? hints : undefined;
+  } catch (error) {
+    console.error("loadColorHints failed", error);
+    return undefined;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -38,6 +70,11 @@ export async function POST(request: NextRequest) {
   )
     ? (subjectTypeRaw as SubjectType)
     : "pet";
+  const modelStyleRaw = formData.get("modelStyle");
+  const modelStyle: ModelStyle = MODEL_STYLE_OPTIONS.includes(modelStyleRaw as ModelStyle)
+    ? (modelStyleRaw as ModelStyle)
+    : "deformed";
+  const wantsSelfStanding = formData.get("wantsSelfStanding") === "true";
 
   if (photoFiles.length === 0) {
     return NextResponse.json(
@@ -70,13 +107,17 @@ export async function POST(request: NextRequest) {
   try {
     const referencePhotos = await Promise.all(photoFiles.map(toImagePayload));
     const petDetails = readPetDetails(formData);
+    const colorHints = await loadColorHints(magicColor as MagicColor, request.nextUrl.origin);
     const finishedPreview = await generateFinishedPreview(
       referencePhotos,
       subject,
       pose as Pose,
       magicColor as MagicColor,
       petDetails,
-      subjectType
+      subjectType,
+      modelStyle,
+      wantsSelfStanding,
+      colorHints
     );
 
     const previewId = crypto.randomUUID();

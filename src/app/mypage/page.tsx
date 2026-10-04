@@ -393,11 +393,11 @@ export default function MyPage() {
         <header className="mb-6 text-center">
           <h1 className="mx-auto">
             <Image
-              src="/logo-full.png"
+              src="/logo-charo3d.png"
               alt="Charo 3D"
-              width={1569}
-              height={1034}
-              className="mx-auto h-auto w-40"
+              width={817}
+              height={985}
+              className="mx-auto h-auto w-28"
             />
           </h1>
           <p className="mt-2 text-lg font-bold text-slate-900">マイページ</p>

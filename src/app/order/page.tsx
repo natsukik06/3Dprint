@@ -34,12 +34,12 @@ export default async function OrderPage() {
         <header className="mb-6 text-center">
           <h1 className="mx-auto">
             <Image
-              src="/logo-full.png"
+              src="/logo-charo3d.png"
               alt="Charo 3D"
-              width={1569}
-              height={1034}
+              width={817}
+              height={985}
               priority
-              className="mx-auto h-auto w-56 sm:w-64 lg:w-72"
+              className="mx-auto h-auto w-36 sm:w-40 lg:w-44"
             />
           </h1>
           <p className="mt-2 text-sm text-slate-600">

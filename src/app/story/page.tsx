@@ -21,7 +21,7 @@ const STORY_STEPS = [
   {
     num: "03",
     title: "クリスタル",
-    body: "レジンとラメに包み、色と光を宿して — ひとつだけの石になる。",
+    body: "レジンに包み、色と光を宿して — ひとつだけの石になる。",
   },
 ];
 
@@ -49,10 +49,10 @@ export default function StoryPage() {
             >
               一枚の写真が、
               <br />
-              光る石になるまで。
+              ひとつだけの石になるまで。
             </h1>
             <p className="mt-4 max-w-md text-sm leading-8 text-[#6b5c40] dark:text-[#9fb0ae]">
-              AIがその子の輪郭と表情をすくい上げ、3Dプリントで形にする。レジンとラメに封じ込め、最後は手作業で仕上げる
+              AIがその子の輪郭と表情をすくい上げ、3Dプリントで形にする。レジンに封じ込め、最後は手作業で仕上げる
               —
               すべて、あなたの手のひらに収まるひとつの石になるために。
             </p>
@@ -137,7 +137,7 @@ export default function StoryPage() {
                 手のひらの上で。
               </h2>
               <p className="mt-4 max-w-sm text-sm leading-8 text-[#6b5c40] dark:text-[#9fb0ae]">
-                3Dプリントも、レジンの封入も、色とラメの調合も —
+                3Dプリントも、レジンの封入も、色の調合も —
                 すべて一人の手で行っています。だからこそ、量産品にはない温度を込められると思っています。
               </p>
               <ul className="mt-5 space-y-2.5 text-xs text-[#6b5c40] dark:text-[#9fb0ae]">
@@ -155,7 +155,7 @@ export default function StoryPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#0f766e] dark:text-[#7fd8cb]">✦</span>
-                  キーホルダー金具・コルク台座までセットでお届け
+                  ご希望の方には、キーホルダー用の金具穴（+¥50）もお付けできます
                 </li>
               </ul>
             </div>

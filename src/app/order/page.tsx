@@ -6,6 +6,7 @@ import { CreditPurchase } from "@/components/auth/CreditPurchase";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { OrderForm } from "@/components/order/OrderForm";
 import { isOrderingOpen } from "@/lib/orderCap";
+import { CREDIT_PRICE_YEN } from "@/lib/creditPacks";
 
 // Must be checked fresh on every request -- the monthly order-cap count would otherwise be
 // baked in once at build time and never re-checked.
@@ -45,7 +46,7 @@ export default async function OrderPage() {
             ペットや大切なものの写真から、魔法のカラーで輝くクリスタルフィギュアを作成・注文できます。
           </p>
           <p className="mt-2 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-            3Dモデルの生成・プレビューまでは無料です。仕上がりを確認してからご注文いただけます
+            形状のプレビューは1日2回まで無料です。3Dモデルの作成は1回¥{CREDIT_PRICE_YEN}（初回は無料）で、仕上がりを確認してからご注文いただけます
           </p>
         </header>
         {orderingOpen ? (

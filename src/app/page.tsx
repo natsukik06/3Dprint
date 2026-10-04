@@ -140,7 +140,7 @@ export default function Home() {
                 ちゃろができるまで
               </h2>
               <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#6b5c40] dark:text-[#9fb0ae]">
-                写真いちまいから、世界にひとつだけの光る結晶フィギュアへ。ブランドマスコット「ちゃろ」を例に、4つの工程をご紹介します。
+                写真いちまいから、世界にひとつだけの透きとおる結晶フィギュアへ。ブランドマスコット「ちゃろ」を例に、4つの工程をご紹介します。
               </p>
             </div>
 
@@ -223,7 +223,7 @@ export default function Home() {
                   4方向のスケッチから、ほんものの3Dモデルが立ち上がります。3D化には¥{CREDIT_PRICE_YEN}かかります（初回は無料クレジット付き）。
                 </p>
                 <p className="mt-1.5 inline-block rounded-full bg-emerald-600/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
-                  ✓ 商品代金が{GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文なら、かかった分がそのまま割引されます
+                  ✓ 商品代金が{GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文なら、かかった分（最大2回分）が割引されます
                 </p>
               </div>
             </div>
@@ -253,7 +253,7 @@ export default function Home() {
                 料金・ラインナップ
               </h2>
               <p className="mt-2 text-sm leading-7 text-[#6b5c40] dark:text-[#9fb0ae]">
-                全5サイズの価格と、今作れるもの・近日公開のラインナップをまとめて見られます。
+                全3サイズの価格と、今作れるもの・近日公開のラインナップをまとめて見られます。
               </p>
               <span className="mt-3 inline-block text-sm font-semibold text-[#0f766e] group-hover:underline dark:text-[#7fd8cb]">
                 見てみる →
@@ -273,7 +273,7 @@ export default function Home() {
                 ものがたり・こだわり
               </h2>
               <p className="mt-2 text-sm leading-7 text-[#6b5c40] dark:text-[#9fb0ae]">
-                一枚の写真が光る石になるまでの工程と、一人で手作りしていることへのこだわりです。
+                一枚の写真がひとつだけの石になるまでの工程と、一人で手作りしていることへのこだわりです。
               </p>
               <span className="mt-3 inline-block text-sm font-semibold text-[#0f766e] group-hover:underline dark:text-[#7fd8cb]">
                 読んでみる →
@@ -283,7 +283,7 @@ export default function Home() {
 
           <div className="mt-10 text-center">
             <p className="mb-2 text-xs text-[#8a7c5e] dark:text-[#6d7c79]">
-              3Dモデルの生成・プレビューまでは無料です。仕上がりイメージを見てから注文をご検討いただけます
+              形状のプレビューは1日2回まで無料です。3Dモデルの作成は1回¥{CREDIT_PRICE_YEN}（初回は無料）で、仕上がりを確認してからご注文をご検討いただけます
             </p>
             <Link
               href="/order"

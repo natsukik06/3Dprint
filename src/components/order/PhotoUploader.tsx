@@ -4,6 +4,7 @@ import { ImageUp, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { downscaleImage } from "@/lib/imageResize";
 import { MAX_REFERENCE_PHOTOS } from "@/types/order";
 
 type PhotoUploaderProps = {
@@ -76,12 +77,22 @@ function PhotoThumbnail({
 export function PhotoUploader({ photos, onChange, error }: PhotoUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function handleFilesSelected(files: FileList | null) {
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  async function handleFilesSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
     const remaining = MAX_REFERENCE_PHOTOS - photos.length;
-    const additions = Array.from(files).slice(0, remaining);
-    onChange([...photos, ...additions]);
+    const selected = Array.from(files).slice(0, remaining);
     if (inputRef.current) inputRef.current.value = "";
+    // Large phone photos are shrunk here so they fit the server's request-size limit -- see
+    // downscaleImage in src/lib/imageResize.ts.
+    setIsProcessing(true);
+    try {
+      const additions = await Promise.all(selected.map(downscaleImage));
+      onChange([...photos, ...additions]);
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   function handleRemove(index: number) {
@@ -123,11 +134,12 @@ export function PhotoUploader({ photos, onChange, error }: PhotoUploaderProps) {
         {photos.length < MAX_REFERENCE_PHOTOS && (
           <button
             type="button"
+            disabled={isProcessing}
             onClick={() => inputRef.current?.click()}
             className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-slate-400 hover:bg-slate-100"
           >
             <ImageUp className="h-5 w-5" />
-            <span className="text-[10px]">追加</span>
+            <span className="text-[10px]">{isProcessing ? "処理中" : "追加"}</span>
           </button>
         )}
       </div>

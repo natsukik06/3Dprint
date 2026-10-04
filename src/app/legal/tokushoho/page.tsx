@@ -1,5 +1,10 @@
 import { LegalBackLink } from "@/components/site/LegalBackLink";
 import {
+  CREDIT_PRICE_YEN,
+  GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN,
+  MAX_DISCOUNTABLE_CREDITS,
+} from "@/lib/creditPacks";
+import {
   ENGRAVING_PRICE_YEN,
   FREE_SHIPPING_SUBTOTAL_YEN,
   HARDWARE_ADDON_PRICE_YEN,
@@ -29,6 +34,11 @@ const ROWS: Row[] = [
   {
     label: "商品代金以外の必要料金",
     value: `送料 ${SHIPPING_FEE_YEN.toLocaleString()}円（税込）。同一注文で合計${FREE_SHIPPING_SUBTOTAL_YEN.toLocaleString()}円以上ご注文の場合は送料無料。ストラップ・キーホルダー用金具穴の追加は+${HARDWARE_ADDON_PRICE_YEN.toLocaleString()}円/個（税込・任意）。名前・メッセージの刻印追加は+${ENGRAVING_PRICE_YEN.toLocaleString()}円/個（税込・任意）。決済手数料はかかりません。`,
+  },
+  {
+    label: "3Dモデル作成クレジット",
+    value:
+      `3Dモデルの作成は1回${CREDIT_PRICE_YEN.toLocaleString()}円（税込）で、初回は無料クレジットが付いています。形状のプレビューは1日2回まで無料です。ご利用済みのクレジットの返金はできません。3Dモデルの作成に失敗した場合は、使用したクレジットをお返しします。商品代金が${GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文では、使用した3Dモデル作成代（最大${MAX_DISCOUNTABLE_CREDITS}回分）がご注文時に割引されます。`,
   },
   { label: "お支払い方法", value: "クレジットカード決済・PayPay（Stripe）" },
   { label: "お支払い時期", value: "ご注文時に全額前払いとなります。" },

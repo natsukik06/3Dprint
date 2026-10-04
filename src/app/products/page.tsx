@@ -15,6 +15,7 @@ import {
   SOLID_PRICE_YEN,
 } from "@/lib/pricing";
 import { SIZE_TARGET_MM } from "@/types/order";
+import { CREDIT_PRICE_YEN } from "@/lib/creditPacks";
 
 // `image: null` renders a "準備中" placeholder tile instead of a broken <Image> -- for lineup
 // items that are decided but don't have a product photo yet. Swap in a real path (and drop the
@@ -192,7 +193,7 @@ export default function ProductsPage() {
 
         <div className="mt-2 text-center">
           <p className="mb-2 text-xs text-[#8a7c5e] dark:text-[#6d7c79]">
-            3Dモデルの生成・プレビューまでは無料です。仕上がりイメージを見てから注文をご検討いただけます
+            形状のプレビューは1日2回まで無料です。3Dモデルの作成は1回¥{CREDIT_PRICE_YEN}（初回は無料）で、仕上がりを確認してからご注文をご検討いただけます
           </p>
           <Link
             href="/order"

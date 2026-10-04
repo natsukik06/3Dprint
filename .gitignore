@@ -67,6 +67,6 @@ __pycache__/
 /company/
 
 # Personal photos/notes and the AI-company agent files stay out of the (public) repo
-/�ʐ^/
+/写真/
 /.claude/agents/
 /*.txt

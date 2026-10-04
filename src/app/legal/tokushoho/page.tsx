@@ -6,7 +6,7 @@ import {
   SHIPPING_FEE_YEN,
   SOLID_PRICE_YEN,
 } from "@/lib/pricing";
-import { WEEKLY_HOLLOW_PIECE_CAP, WEEKLY_SOLID_PIECE_CAP } from "@/lib/orderCap";
+import { WEEKLY_SOLID_PIECE_CAP } from "@/lib/orderCap";
 
 type Row = { label: string; value: string };
 
@@ -49,7 +49,7 @@ const ROWS: Row[] = [
   },
   {
     label: "販売数量の制限",
-    value: `一人で製作しているため、週間の製作数に上限を設けております（Mサイズ：週${WEEKLY_HOLLOW_PIECE_CAP.toLocaleString()}個、小・中・6cm・10cmサイズ：合計週${WEEKLY_SOLID_PIECE_CAP.toLocaleString()}個）。上限に達した場合、当週の注文受付を締め切り、翌週まで新規注文をお待ちいただきます。`,
+    value: `一人で製作しているため、週間の製作数に上限を設けております（30〜40mmサイズ：合計週${WEEKLY_SOLID_PIECE_CAP.toLocaleString()}個）。上限に達した場合、当週の注文受付を締め切り、翌週まで新規注文をお待ちいただきます。`,
   },
 ];
 

@@ -1010,7 +1010,7 @@ export function PreviewPanel({
           )}
           {modelState.phase === "success" && customUpload.phase === "idle" && (
             <p className="text-xs text-emerald-600">
-              ✓ アップロード済み。サイズはS/Mサイズの指定に合わせて調整されます。
+              ✓ アップロード済み。サイズはご指定のサイズに合わせて調整されます。
             </p>
           )}
           <p className="text-[10px] text-slate-400">

@@ -162,11 +162,25 @@ export async function POST(request: NextRequest) {
       const uid = session.metadata?.uid;
       const credits = Number(session.metadata?.credits ?? 0);
       const previewCredits = Number(session.metadata?.previewCredits ?? 0);
-      if (uid && credits > 0) {
-        await addCredits(uid, credits);
-      }
-      if (uid && previewCredits > 0) {
-        await addPreviewCredits(uid, previewCredits);
+      // Stripe may deliver the same event more than once -- claim the event id first so a repeat
+      // can't grant the purchased credits twice (and give the claim back if granting fails, so a
+      // retry can still succeed).
+      const eventRef = adminDb.collection("processed_stripe_events").doc(event.id);
+      const firstDelivery = await eventRef
+        .create({ type: event.type, at: FieldValue.serverTimestamp() })
+        .then(() => true)
+        .catch((error: { code?: number }) => {
+          if (error?.code === 6) return false; // ALREADY_EXISTS
+          throw error;
+        });
+      if (firstDelivery) {
+        try {
+          if (uid && credits > 0) await addCredits(uid, credits);
+          if (uid && previewCredits > 0) await addPreviewCredits(uid, previewCredits);
+        } catch (error) {
+          await eventRef.delete().catch(() => {});
+          throw error;
+        }
       }
     }
   }

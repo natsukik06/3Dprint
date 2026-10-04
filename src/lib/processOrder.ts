@@ -80,6 +80,10 @@ async function scaleOneItem(
     hasVentHole: false,
     ventHoleSource: null,
     createdAt: FieldValue.serverTimestamp(),
+  }).catch((error: { code?: number }) => {
+    // ALREADY_EXISTS: a duplicate/overlapping delivery of the same payment event registered this
+    // item first. That is exactly the outcome we want, so it is not a failure.
+    if (error?.code !== 6) throw error;
   });
 }
 

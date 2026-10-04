@@ -590,7 +590,7 @@ export function SpecOptions({
                 htmlFor="engravingText"
                 className="block text-xs font-medium text-slate-700"
               >
-                刻印する文字（{MAX_ENGRAVING_TEXT_LENGTH}文字以内）
+                刻印する文字（半角の英数字・{MAX_ENGRAVING_TEXT_LENGTH}文字以内）
               </label>
               <input
                 id="engravingText"

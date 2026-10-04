@@ -346,6 +346,9 @@ export const orderItemSchema = z
     engravingText: z
       .string()
       .max(MAX_ENGRAVING_TEXT_LENGTH, `${MAX_ENGRAVING_TEXT_LENGTH}文字以内で入力してください`)
+      // The slicer's 3D-text tool can only cut Latin letters/digits from its recommended fonts (see
+      // ENGRAVING_FONT_OPTIONS) -- Japanese, emoji or markup characters would fail at production time.
+      .regex(/^[A-Za-z0-9 .,!&'\-]*$/, "刻印は半角の英数字（A〜Z・0〜9・スペースなど）で入力してください")
       .optional(),
     engravingFont: z.enum(ENGRAVING_FONT_OPTIONS),
     referenceImageUrls: z.array(z.string()),
@@ -394,6 +397,9 @@ export const orderFormSchema = z
   engravingText: z
     .string()
     .max(MAX_ENGRAVING_TEXT_LENGTH, `${MAX_ENGRAVING_TEXT_LENGTH}文字以内で入力してください`)
+      // The slicer's 3D-text tool can only cut Latin letters/digits from its recommended fonts (see
+      // ENGRAVING_FONT_OPTIONS) -- Japanese, emoji or markup characters would fail at production time.
+      .regex(/^[A-Za-z0-9 .,!&'\-]*$/, "刻印は半角の英数字（A〜Z・0〜9・スペースなど）で入力してください")
     .optional(),
   engravingFont: z.enum(ENGRAVING_FONT_OPTIONS),
   generationCreditsUsed: z.number().int().min(0),

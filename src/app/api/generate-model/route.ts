@@ -92,7 +92,17 @@ export async function POST(request: NextRequest) {
   }
 
   const checkHollowFill = formData.get("checkHollowFill") === "true";
+  // The server downloads this URL, so it must be one of this shop's own stored images -- never an
+  // arbitrary address a caller chose.
+  const ownStorage = `https://firebasestorage.googleapis.com/v0/b/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}/o/`;
   const referenceFinishedImageUrlRaw = formData.get("referenceFinishedImageUrl");
+  if (
+    typeof referenceFinishedImageUrlRaw === "string" &&
+    referenceFinishedImageUrlRaw &&
+    !referenceFinishedImageUrlRaw.startsWith(ownStorage)
+  ) {
+    return NextResponse.json({ error: "参照画像が正しくありません" }, { status: 400 });
+  }
   const referenceFinishedImageUrl =
     typeof referenceFinishedImageUrlRaw === "string" && referenceFinishedImageUrlRaw
       ? referenceFinishedImageUrlRaw

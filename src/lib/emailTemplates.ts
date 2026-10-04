@@ -1,5 +1,5 @@
-import { formatYen, REFERRAL_DISCOUNT_RATE } from "@/lib/pricing";
-import { sizeShortLabel, type OrderItemDraft } from "@/types/order";
+import { formatYen, MAGIC_COLOR_LABELS, REFERRAL_DISCOUNT_RATE } from "@/lib/pricing";
+import { HARDWARE_COLOR_LABELS, sizeShortLabel, type MagicColor, type OrderItemDraft } from "@/types/order";
 
 function escapeHtml(value: string): string {
   return value
@@ -55,15 +55,31 @@ export function buildOrderConfirmationEmail(
   orderId: string,
   order: { items: OrderItemDraft[]; estimatedPriceYen: number; customerName: string }
 ): { subject: string; html: string } {
+  // Everything the customer chose, so they can catch a mistake (e.g. a misspelled engraving) while
+  // there is still time -- color x quantity, strap, engraving.
   const itemRows = order.items
-    .map((item) => `<li>${escapeHtml(item.subject)}（${escapeHtml(sizeShortLabel(item.sizeOption))}サイズ）</li>`)
+    .map((item) => {
+      const colors = Object.entries(item.colorQuantities)
+        .filter(([, qty]) => (qty ?? 0) > 0)
+        .map(([color, qty]) => `${MAGIC_COLOR_LABELS[color as MagicColor]}×${qty}`)
+        .join("・");
+      const details = [
+        colors,
+        item.wantsHardware ? `金具穴：${HARDWARE_COLOR_LABELS[item.hardwareColor]}` : "",
+        item.wantsEngraving && item.engravingText ? `名前刻印：「${item.engravingText}」` : "",
+      ]
+        .filter(Boolean)
+        .join(" ／ ");
+      return `<li>${escapeHtml(item.subject)}（${escapeHtml(sizeShortLabel(item.sizeOption))}サイズ）<br><span style="font-size:13px;color:#475569;">${escapeHtml(details)}</span></li>`;
+    })
     .join("");
 
   const html = wrapEmail(`
     <h1 style="font-size:18px;">ご注文ありがとうございます</h1>
     <p>${escapeHtml(order.customerName)} 様</p>
-    <p>以下の内容でご注文を承りました。お支払いが確認できましたら製作を開始いたします。</p>
+    <p>以下の内容でご注文を承り、お支払いを確認いたしました。これから製作を進めます。発送の目安は、お支払い完了後 1週間〜1か月ほどです。</p>
     <ul style="padding-left:20px;">${itemRows}</ul>
+    <p style="font-size:13px;color:#475569;">内容に間違いがある場合は、製作が始まる前にできるだけお早めに、このメールへの返信または natsuki.ko006@gmail.com までご連絡ください（キャンセルのご相談も同じ宛先です）。</p>
     <p style="font-weight:bold;">合計金額：${formatYen(order.estimatedPriceYen)}</p>
     <p style="font-size:13px;color:#64748b;">注文番号：${escapeHtml(orderId)}</p>
     <p style="font-size:12px;color:#b45309;background:#fffbeb;padding:8px 12px;border-radius:8px;">

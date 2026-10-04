@@ -35,7 +35,7 @@ const MODEL_STYLE_EXAMPLE_IMAGE: Record<ModelStyle, string> = {
 // a dog photo and got back a rabbit. object's value IS still used as the generation prompt's
 // description, since an arbitrary item can genuinely be ambiguous from a photo alone.
 const SUBJECT_TYPE_LABEL_TEXT: Record<(typeof SUBJECT_TYPE_OPTIONS)[number], string> = {
-  pet: "お名前（任意・管理用）",
+  pet: "お名前（必須・注文管理用）",
   object: "何を作りますか？",
 };
 const SUBJECT_TYPE_PLACEHOLDER: Record<(typeof SUBJECT_TYPE_OPTIONS)[number], string> = {

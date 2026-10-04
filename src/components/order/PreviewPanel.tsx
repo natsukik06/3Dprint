@@ -1034,7 +1034,7 @@ export function PreviewPanel({
       )}
       {mode === "ai" && modelState.phase !== "success" && photos.length > 0 && !subject.trim() && (
         <p className="text-center text-xs text-slate-400">
-          「何を作りますか？」を入力してください
+          「お名前」または「何を作りますか？」の欄を入力してください
         </p>
       )}
       {mode === "ai" && user && modelState.phase === "reviewingViews" && !hasCredits && (

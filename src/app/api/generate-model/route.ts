@@ -4,7 +4,7 @@ import {
   refundGenerationAllowance,
 } from "@/lib/credits";
 import { analyzeShapeRisk, generateWhiteClayViews, type ImagePayload } from "@/lib/gemini";
-import { uploadReferencePhotos } from "@/lib/orders";
+import { uploadReferencePhotos } from "@/lib/storageServer";
 import { readPetDetails } from "@/lib/petDetails";
 import { guardTripoCapacity } from "@/lib/tripoCapacity";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";

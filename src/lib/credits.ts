@@ -100,6 +100,36 @@ export async function refundFreeGeneration(uid: string): Promise<void> {
   });
 }
 
+// The finished-color preview (/api/generate-preview) is one paid Gemini image call per request and
+// is re-run whenever the customer tries another color -- generous for real use, but a hard daily
+// ceiling per account so a script (or a pile of throwaway Google accounts' worth of effort per
+// account) can't run the shop's AI bill up without limit.
+export const FINISHED_PREVIEWS_PER_DAY = 40;
+
+export async function consumeFinishedPreviewAllowance(uid: string): Promise<boolean> {
+  const ref = userRef(uid);
+  const today = todayInJst();
+  return adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data();
+    const used = data?.finishedPreviewDate === today ? ((data?.finishedPreviewCount as number) ?? 0) : 0;
+    if (used >= FINISHED_PREVIEWS_PER_DAY) return false;
+    tx.set(ref, { finishedPreviewDate: today, finishedPreviewCount: used + 1 }, { merge: true });
+    return true;
+  });
+}
+
+/** Gives one back after a failed Gemini call, so a hiccup doesn't eat into the daily ceiling. */
+export async function refundFinishedPreviewAllowance(uid: string): Promise<void> {
+  const ref = userRef(uid);
+  const today = todayInJst();
+  await adminDb.runTransaction(async (tx) => {
+    const data = (await tx.get(ref)).data();
+    if (data?.finishedPreviewDate !== today) return;
+    tx.update(ref, { finishedPreviewCount: Math.max(0, ((data?.finishedPreviewCount as number) ?? 0) - 1) });
+  });
+}
+
 /**
  * Called once a draft is promoted to a real (paid) order -- see the Stripe webhook -- so a
  * customer who already used up today's free previews before ordering isn't then locked out of

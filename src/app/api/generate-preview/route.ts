@@ -1,12 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getColorSettings } from "@/lib/colorSettingsAdmin";
+import { consumeFinishedPreviewAllowance, refundFinishedPreviewAllowance } from "@/lib/credits";
 import { DEFAULT_COLOR_IMAGE_SRC } from "@/lib/colorSwatches";
 import { generateFinishedPreview, type ImagePayload } from "@/lib/gemini";
-import { uploadFinishedPreview } from "@/lib/orders";
+import { uploadFinishedPreview } from "@/lib/storageServer";
 import { readPetDetails } from "@/lib/petDetails";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 import {
+  ACCEPTED_IMAGE_TYPES,
   MAGIC_COLOR_OPTIONS,
+  MAX_IMAGE_SIZE_BYTES,
+  MAX_REFERENCE_PHOTOS,
   MODEL_STYLE_OPTIONS,
   POSE_OPTIONS,
   SUBJECT_TYPE_OPTIONS,
@@ -82,6 +86,14 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+  if (photoFiles.length > MAX_REFERENCE_PHOTOS) {
+    return NextResponse.json(
+      { error: `写真は${MAX_REFERENCE_PHOTOS}枚までです`}, { status: 400 }
+    );
+  }
+  if (photoFiles.some((f) => f.size > MAX_IMAGE_SIZE_BYTES || !(ACCEPTED_IMAGE_TYPES as readonly string[]).includes(f.type))) {
+    return NextResponse.json({ error: "写真の形式またはサイズが対応していません" }, { status: 400 });
+  }
   if (typeof subject !== "string" || subject.trim().length === 0) {
     return NextResponse.json(
       { error: "何を作りたいか入力してください" },
@@ -101,6 +113,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "魔法のカラーを選択してください" },
       { status: 400 }
+    );
+  }
+
+  // Daily ceiling per account on this paid AI call (see FINISHED_PREVIEWS_PER_DAY).
+  if (!(await consumeFinishedPreviewAllowance(user.uid))) {
+    return NextResponse.json(
+      { error: "本日の完成イメージの作成回数の上限に達しました。明日またお試しください。" },
+      { status: 429 }
     );
   }
 
@@ -129,6 +149,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ previewUrl });
   } catch (error) {
     console.error("generate-preview failed", error);
+    await refundFinishedPreviewAllowance(user.uid).catch(() => {});
     return NextResponse.json(
       { error: "完成イメージの生成に失敗しました" },
       { status: 502 }

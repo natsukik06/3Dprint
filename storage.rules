@@ -1,38 +1,40 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Reference photos uploaded during ordering (see uploadReferencePhotos in src/lib/orders.ts,
-    // called from /api/generate-model[-duo] using the client SDK from a Node server context --
-    // there's no Firebase Auth session there, so these writes can't require request.auth without
-    // breaking that flow. Bounded by size/type instead, matching MAX_IMAGE_SIZE_BYTES /
-    // ACCEPTED_IMAGE_TYPES in src/types/order.ts so the client-side limits can't be bypassed by
-    // calling the Storage API directly.
+    // Files the SERVER writes (reference photos, generated models, preview images). The server
+    // uses the Admin SDK (see src/lib/storageServer.ts), which bypasses these rules, so nothing
+    // needs to be writable from the outside -- previously these folders accepted uploads from any
+    // anonymous visitor on the internet. Reads stay public: the app shows these images/models by URL.
     match /orders/{fileName} {
       allow read: if true;
-      allow write: if request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow write: if false;
     }
-    // Generated/uploaded 3D models (GLB) -- same "no auth context available" reasoning as above.
     match /models/{fileName} {
       allow read: if true;
-      allow write: if request.resource.size < 50 * 1024 * 1024;
+      allow write: if false;
     }
-    // AI-generated preview images.
     match /previews/{fileName} {
       allow read: if true;
-      allow write: if request.resource.size < 20 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow write: if false;
     }
-    // Print-batch STL files -- admin-only in practice. The admin's own uploads either go through
-    // the Admin SDK (bypasses these rules entirely) or happen from the logged-in admin's browser
-    // session, so requiring auth here only blocks everyone else, never legitimate use.
+    // A customer's own bring-your-own 3D model (see uploadCustomModel in src/lib/orders.ts),
+    // uploaded from their browser. Only the signed-in owner of the folder may write, and only a GLB
+    // under 50MB.
+    match /custom-models/{uid}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid &&
+        request.resource.size < 50 * 1024 * 1024 &&
+        request.resource.contentType == 'model/gltf-binary';
+    }
+    // Print-batch STL files -- admin only. (Admin SDK uploads bypass these rules; this covers
+    // uploads from the admin's own signed-in browser.) Previously "any signed-in user" could write.
     match /batches/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null && request.resource.size < 50 * 1024 * 1024;
+      allow write: if request.auth != null &&
+        request.auth.token.email == 'natsukik0616@gmail.com' &&
+        request.resource.size < 50 * 1024 * 1024;
     }
-    // Admin-uploaded color swatch photos (see /admin/colors) -- unlike batches above, this is
-    // reachable from any signed-in customer's browser (both share the same Storage bucket), so
-    // this one actually checks for the admin's own email, not just "signed in".
+    // Admin-uploaded color swatch photos (see /admin/colors).
     match /colors/{fileName} {
       allow read: if true;
       allow write: if request.auth != null &&

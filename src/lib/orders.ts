@@ -4,86 +4,20 @@ import { auth, db, storage } from "@/lib/firebase";
 import { calculateEstimate } from "@/lib/pricing";
 import type { MagicColor, OrderFormValues, OrderRecord, SizeOption } from "@/types/order";
 
-function buildImagePath(file: File): string {
-  const extension = file.name.split(".").pop() ?? "jpg";
-  const uniqueId =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `orders/${uniqueId}.${extension}`;
-}
-
-export async function uploadReferencePhoto(file: File): Promise<string> {
-  const imageRef = ref(storage, buildImagePath(file));
-  await uploadBytes(imageRef, file);
-  return getDownloadURL(imageRef);
-}
-
-export async function uploadReferencePhotos(files: File[]): Promise<string[]> {
-  return Promise.all(files.map(uploadReferencePhoto));
-}
-
-export async function getHostedModelUrl(taskId: string): Promise<string | null> {
-  try {
-    return await getDownloadURL(ref(storage, `models/${taskId}.glb`));
-  } catch {
-    return null;
-  }
-}
-
-export async function uploadGeneratedModel(
-  buffer: Buffer,
-  taskId: string
-): Promise<string> {
-  const modelRef = ref(storage, `models/${taskId}.glb`);
-  await uploadBytes(modelRef, new Uint8Array(buffer), {
-    contentType: "model/gltf-binary",
-  });
-  return getDownloadURL(modelRef);
-}
-
-// Tripo's own renderedImageUrl is a signed, expiring URL -- left as-is, a gallery thumbnail
-// saved from it would silently break once the signature expires. Re-hosted the same way as the
-// model itself (uploadGeneratedModel above) so it stays valid indefinitely.
-export async function getHostedRenderedImageUrl(taskId: string): Promise<string | null> {
-  try {
-    return await getDownloadURL(ref(storage, `previews/rendered-${taskId}.webp`));
-  } catch {
-    return null;
-  }
-}
-
-export async function uploadRenderedImage(
-  buffer: Buffer,
-  taskId: string,
-  contentType: string
-): Promise<string> {
-  const imageRef = ref(storage, `previews/rendered-${taskId}.webp`);
-  await uploadBytes(imageRef, new Uint8Array(buffer), { contentType });
-  return getDownloadURL(imageRef);
-}
-
-// Customer-provided model (bring-your-own), as opposed to AI-generated -- lands in the same
-// `models/` path so it flows through the exact same server-side scaling/hollowing pipeline.
+// Customer-provided model (bring-your-own), as opposed to AI-generated. Uploaded straight from the
+// browser into the signed-in customer's OWN folder (Storage rules only allow writes there by that
+// user, size-capped) -- it still flows through the same server-side scaling pipeline afterwards,
+// which reads it by URL. The closed models/ folder is written by the server only.
 export async function uploadCustomModel(file: File): Promise<string> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("ログインが必要です");
   const uniqueId =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const modelRef = ref(storage, `models/custom-${uniqueId}.glb`);
+  const modelRef = ref(storage, `custom-models/${uid}/custom-${uniqueId}.glb`);
   await uploadBytes(modelRef, file, { contentType: "model/gltf-binary" });
   return getDownloadURL(modelRef);
-}
-
-export async function uploadFinishedPreview(
-  buffer: Buffer,
-  taskId: string
-): Promise<string> {
-  const previewRef = ref(storage, `previews/${taskId}.png`);
-  await uploadBytes(previewRef, new Uint8Array(buffer), {
-    contentType: "image/png",
-  });
-  return getDownloadURL(previewRef);
 }
 
 // Writes to `order_drafts`, NOT `orders` -- a draft only becomes a real order (visible in the

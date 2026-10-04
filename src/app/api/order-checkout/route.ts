@@ -67,6 +67,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "注文内容が不正です" }, { status: 400 });
     }
 
+    // Model files must be ones this shop stored itself (see storageServer.ts / uploadCustomModel).
+    // order_drafts is writable by anyone, and the server later downloads each item's modelUrl --
+    // an arbitrary URL there would make the server fetch whatever an attacker points it at.
+    const ownBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+    if (
+      ownBucket &&
+      !parsedItems.data.every((item) =>
+        item.modelUrl.startsWith(`https://firebasestorage.googleapis.com/v0/b/${ownBucket}/o/`)
+      )
+    ) {
+      return NextResponse.json({ error: "3Dモデルが正しくありません" }, { status: 400 });
+    }
+
     // A color hidden from /admin/colors must not be orderable even via a direct API call --
     // order_drafts accepts unauthenticated writes with no field validation (see the comment
     // above), so this is the actual enforcement point, same as the weekly-capacity check below.

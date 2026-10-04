@@ -203,8 +203,8 @@ export const HARDWARE_HOLE_DIAMETER_MM = 3;
 // a model that has no customer-specified hole (so the cavity is never sealed).
 export const DEFAULT_DRAIN_HOLE_DIAMETER_MM = 2;
 
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
-const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Own-model bring-in: the file still goes through the same server-side scaling/hollowing
 // pipeline as an AI-generated model (which expects a GLB), so the size cap here is purely a
 // storage/upload-time guard, not a physical-size limit -- physical size is still controlled by

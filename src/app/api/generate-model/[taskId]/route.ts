@@ -4,7 +4,7 @@ import {
   getHostedRenderedImageUrl,
   uploadGeneratedModel,
   uploadRenderedImage,
-} from "@/lib/orders";
+} from "@/lib/storageServer";
 import { refundFailedGeneration } from "@/lib/generationHolds";
 import { getTripoTaskStatus } from "@/lib/tripo";
 

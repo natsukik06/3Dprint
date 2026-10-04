@@ -581,6 +581,17 @@ export function OrderForm() {
     if (!generatedModelUrl || fields.length >= MAX_CART_ITEMS) return;
     const draft = getValues();
 
+    // An item with engraving turned on but no text can't be ordered (orderItemSchema rejects it),
+    // and by checkout it's too late to notice -- stop it here, next to the field.
+    if (draft.wantsEngraving && !draft.engravingText?.trim()) {
+      methods.setError("engravingText", {
+        type: "manual",
+        message: "刻印する文字を入力してください（刻印が不要ならチェックを外してください）",
+      });
+      return;
+    }
+    methods.clearErrors("engravingText");
+
     setLastItem({
       photos: draft.photos,
       draft: {
@@ -665,7 +676,9 @@ export function OrderForm() {
       hardwareColor: draft.wantsHardware ? draft.hardwareColor : DRAFT_DEFAULTS.hardwareColor,
       chainPositionNote: draft.wantsHardware ? draft.chainPositionNote : "",
       initial: draft.initial,
-      wantsEngraving: draft.wantsEngraving,
+      // Pose-set items are added automatically as each pose finishes, so there's no field to flag --
+      // an engraving with no text is simply not an engraving (it would otherwise fail checkout).
+      wantsEngraving: draft.wantsEngraving && !!draft.engravingText?.trim(),
       engravingText: draft.wantsEngraving ? draft.engravingText : "",
       engravingFont: draft.engravingFont,
       referenceImageUrls: result.referenceImageUrls,
@@ -798,6 +811,30 @@ export function OrderForm() {
         message: "送信に失敗しました。時間をおいて再度お試しください。",
       });
     }
+  }, (invalid) => {
+    // Without this, a validation failure on a field that isn't on screen at step 4 (e.g. a cart
+    // item's engraving text) made the order button look dead -- say what's wrong instead.
+    const items = getValues("items");
+    const problems: string[] = [];
+    const itemErrors = invalid.items;
+    if (Array.isArray(itemErrors)) {
+      itemErrors.forEach((itemError, index) => {
+        if (!itemError) return;
+        const messages = Object.values(itemError as Record<string, { message?: string }>)
+          .map((e) => e?.message)
+          .filter(Boolean);
+        problems.push(`カートの${index + 1}点目（${items[index]?.subject ?? ""}）：${messages.join("／") || "内容を確認してください"}`);
+      });
+    }
+    for (const [key, value] of Object.entries(invalid)) {
+      if (key === "items") continue;
+      const message = (value as { message?: string } | undefined)?.message;
+      if (message) problems.push(message);
+    }
+    setSubmitState({
+      status: "error",
+      message: `入力内容を確認してください。${problems.slice(0, 3).join(" ／ ")}`,
+    });
   });
 
   if (checkoutResult === "success") {

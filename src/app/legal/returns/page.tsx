@@ -1,17 +1,11 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { LegalBackLink } from "@/components/site/LegalBackLink";
 
 export default function ReturnsPage() {
   return (
     <div className="min-h-full bg-slate-50">
       <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-6">
-        <Link
-          href="/"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          トップに戻る
-        </Link>
+        <LegalBackLink className="mb-4" />
         <h1 className="mb-6 text-xl font-bold text-slate-900">
           返品・キャンセル・不良品対応について
         </h1>

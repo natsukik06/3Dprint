@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { LegalBackLink } from "@/components/site/LegalBackLink";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -16,13 +15,7 @@ export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-full bg-slate-50">
       <main className="mx-auto w-full max-w-xl space-y-4 px-4 py-8 sm:px-6">
-        <Link
-          href="/"
-          className="mb-2 inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          トップに戻る
-        </Link>
+        <LegalBackLink className="mb-2" />
         <div>
           <h1 className="mb-2 text-xl font-bold text-slate-900">
             プライバシーポリシー

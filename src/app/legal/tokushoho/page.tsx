@@ -38,7 +38,7 @@ const ROWS: Row[] = [
   {
     label: "3Dモデル作成クレジット",
     value:
-      `3Dモデルの作成は1回${CREDIT_PRICE_YEN.toLocaleString()}円（税込）で、初回は無料クレジットが付いています。形状のプレビューは1日2回まで無料です。ご利用済みのクレジットの返金はできません。3Dモデルの作成に失敗した場合は、使用したクレジットをお返しします。商品代金が${GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文では、使用した3Dモデル作成代（最大${MAX_DISCOUNTABLE_CREDITS}回分）がご注文時に割引されます。`,
+      `3Dモデルの作成は1回${CREDIT_PRICE_YEN.toLocaleString()}円（税込）で、初回は無料クレジットが付いています。形状のプレビューは1日2回まで無料です。ご利用済みのクレジットの返金はできません。3Dモデルの作成に失敗した場合は、使用したクレジットをお返しします。クレジットの有効期限は、最後にクレジットをご購入・ご利用いただいた日から1年間で、期限を過ぎたクレジットは失効します。商品代金が${GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文では、使用した3Dモデル作成代（最大${MAX_DISCOUNTABLE_CREDITS}回分）がご注文時に割引されます。`,
   },
   { label: "お支払い方法", value: "クレジットカード決済・PayPay（Stripe）" },
   { label: "お支払い時期", value: "ご注文時に全額前払いとなります。" },

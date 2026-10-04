@@ -8,6 +8,7 @@ import {
   computeScaleFactor,
   extractWorldTriangles,
 } from "./lib/modelScaling.js";
+import { runExpiryCleanup } from "./lib/expiry.js";
 import { buildPlacedItemStl, packPlates, type StlPlacement } from "./lib/plateLayout.js";
 import { stlToTriangles, trianglesToStl } from "./lib/stl.js";
 import {
@@ -459,5 +460,16 @@ export const cleanupOldModels = onSchedule(
     console.log(
       `cleanupOldModels: cleaned ${shippedCleaned} shipped order(s), ${orphanedCleaned} orphaned generation(s)`
     );
+  }
+);
+
+// -----------------------------------------------------------------------------------------
+// One-year retention (see lib/expiry.ts): reference photos are deleted a year after upload, and
+// 3D-generation credits expire a year after the account's last credit activity. Runs daily.
+export const cleanupExpiredData = onSchedule(
+  { schedule: "every 24 hours", timeZone: "Asia/Tokyo", ...JOB_RUNTIME_OPTS },
+  async () => {
+    const result = await runExpiryCleanup(db, admin.storage().bucket());
+    console.log("cleanupExpiredData:", JSON.stringify(result));
   }
 );

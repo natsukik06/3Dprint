@@ -33,21 +33,21 @@ export async function consumeCredit(uid: string): Promise<boolean> {
     const snap = await tx.get(ref);
     const credits = (snap.data()?.credits as number) ?? 0;
     if (credits <= 0) return false;
-    tx.update(ref, { credits: credits - 1 });
+    tx.update(ref, { credits: credits - 1, creditsLastActivityAt: FieldValue.serverTimestamp() });
     return true;
   });
 }
 
 export async function refundCredit(uid: string): Promise<void> {
   await userRef(uid).set(
-    { credits: FieldValue.increment(1) },
+    { credits: FieldValue.increment(1), creditsLastActivityAt: FieldValue.serverTimestamp() },
     { merge: true }
   );
 }
 
 export async function addCredits(uid: string, amount: number): Promise<void> {
   await userRef(uid).set(
-    { credits: FieldValue.increment(amount) },
+    { credits: FieldValue.increment(amount), creditsLastActivityAt: FieldValue.serverTimestamp() },
     { merge: true }
   );
 }
@@ -152,14 +152,14 @@ export async function consumePreviewCredit(uid: string): Promise<boolean> {
     const snap = await tx.get(ref);
     const previewCredits = (snap.data()?.previewCredits as number) ?? 0;
     if (previewCredits <= 0) return false;
-    tx.update(ref, { previewCredits: previewCredits - 1 });
+    tx.update(ref, { previewCredits: previewCredits - 1, creditsLastActivityAt: FieldValue.serverTimestamp() });
     return true;
   });
 }
 
 export async function addPreviewCredits(uid: string, amount: number): Promise<void> {
   await userRef(uid).set(
-    { previewCredits: FieldValue.increment(amount) },
+    { previewCredits: FieldValue.increment(amount), creditsLastActivityAt: FieldValue.serverTimestamp() },
     { merge: true }
   );
 }
@@ -201,6 +201,7 @@ export async function addDiscountableCredit(uid: string): Promise<void> {
     await userRef(uid).set(
       {
         generationCreditsAvailable: FieldValue.increment(1),
+        creditsLastActivityAt: FieldValue.serverTimestamp(),
         // Drives the unread-notification dot on マイページ (see AuthNavButton.tsx) -- a bare
         // balance increment has no "when" for the dot to compare against lastSeenNotificationsAt.
         couponUpdatedAt: FieldValue.serverTimestamp(),
@@ -222,7 +223,7 @@ export async function removeDiscountableCredit(uid: string): Promise<void> {
     const snap = await tx.get(ref);
     const available = (snap.data()?.generationCreditsAvailable as number) ?? 0;
     if (available <= 0) return;
-    tx.update(ref, { generationCreditsAvailable: available - 1 });
+    tx.update(ref, { generationCreditsAvailable: available - 1, creditsLastActivityAt: FieldValue.serverTimestamp() });
   });
 }
 
@@ -236,7 +237,7 @@ export async function consumeDiscountableCredits(uid: string | null): Promise<nu
     const available = (snap.data()?.generationCreditsAvailable as number) ?? 0;
     const applied = Math.min(available, MAX_DISCOUNTABLE_CREDITS);
     if (applied <= 0) return 0;
-    tx.update(ref, { generationCreditsAvailable: available - applied });
+    tx.update(ref, { generationCreditsAvailable: available - applied, creditsLastActivityAt: FieldValue.serverTimestamp() });
     return applied;
   });
 }
@@ -246,7 +247,7 @@ export async function consumeDiscountableCredits(uid: string | null): Promise<nu
 export async function refundDiscountableCredits(uid: string, amount: number): Promise<void> {
   if (amount <= 0) return;
   await userRef(uid).set(
-    { generationCreditsAvailable: FieldValue.increment(amount) },
+    { generationCreditsAvailable: FieldValue.increment(amount), creditsLastActivityAt: FieldValue.serverTimestamp() },
     { merge: true }
   );
 }

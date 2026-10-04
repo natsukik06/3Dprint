@@ -1,4 +1,4 @@
-import { GLOW_COLOR_OPTIONS, HARDWARE_COLOR_LABELS, type OrderItemDraft } from "@/types/order";
+import { GLOW_COLOR_OPTIONS, HARDWARE_COLOR_LABELS, sizeShortLabel, type OrderItemDraft } from "@/types/order";
 import { MAGIC_COLOR_LABELS } from "@/lib/pricing";
 
 // One line per item, matching the same summary shown on the admin packing-slip/spec-list pages --
@@ -14,7 +14,7 @@ export function summarizeOrderItemForLabel(item: OrderItemDraft): string {
   const engraving = item.wantsEngraving
     ? `／名前刻印:「${item.engravingText}」(${item.engravingFont})`
     : "";
-  return `${item.subject}（${item.sizeOption}） ${colors}${hardware}${engraving}`;
+  return `${item.subject}（${sizeShortLabel(item.sizeOption)}） ${colors}${hardware}${engraving}`;
 }
 
 // True when any item in the order uses a glow-in-the-dark color.

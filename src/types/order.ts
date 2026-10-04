@@ -154,6 +154,11 @@ export const HARDWARE_COLOR_LABELS: Record<HardwareColor, string> = {
   roseGold: "ローズゴールド",
   clear: "目印チャーム",
 };
+// "30mm" / "M" -- the short form for labels and emails (the raw ids like "solid30" are internal).
+export function sizeShortLabel(size: SizeOption): string {
+  return size === "M" ? "M" : `${size.replace("solid", "")}mm`;
+}
+
 export const SIZE_LABELS: Record<SizeOption, string> = {
   solid30: "30mmサイズ（最大辺3.0cm・中実・クリックポスト配送）",
   solid35: "35mmサイズ（最大辺3.5cm・中実・クリックポスト配送）",

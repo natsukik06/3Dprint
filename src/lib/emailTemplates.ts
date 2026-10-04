@@ -1,5 +1,5 @@
 import { formatYen, REFERRAL_DISCOUNT_RATE } from "@/lib/pricing";
-import type { OrderItemDraft } from "@/types/order";
+import { sizeShortLabel, type OrderItemDraft } from "@/types/order";
 
 function escapeHtml(value: string): string {
   return value
@@ -56,7 +56,7 @@ export function buildOrderConfirmationEmail(
   order: { items: OrderItemDraft[]; estimatedPriceYen: number; customerName: string }
 ): { subject: string; html: string } {
   const itemRows = order.items
-    .map((item) => `<li>${escapeHtml(item.subject)}（${escapeHtml(item.sizeOption)}サイズ）</li>`)
+    .map((item) => `<li>${escapeHtml(item.subject)}（${escapeHtml(sizeShortLabel(item.sizeOption))}サイズ）</li>`)
     .join("");
 
   const html = wrapEmail(`

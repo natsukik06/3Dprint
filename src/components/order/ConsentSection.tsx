@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useFormContext } from "react-hook-form";
+import { FREE_SHIPPING_SUBTOTAL_YEN, SHIPPING_FEE_YEN } from "@/lib/pricing";
 import type { OrderFormValues } from "@/types/order";
 
 export function ConsentSection() {
@@ -12,6 +13,20 @@ export function ConsentSection() {
 
   return (
     <div className="space-y-3">
+      <div className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">
+        <p className="mb-1 font-semibold text-slate-900">ご注文前の最終確認</p>
+        <ul className="list-disc space-y-0.5 pl-4">
+          <li>お支払い：クレジットカード・PayPay。ご注文時に全額前払いです（表示価格はすべて税込）。</li>
+          <li>
+            送料：{SHIPPING_FEE_YEN.toLocaleString()}円（商品代金の合計が
+            {FREE_SHIPPING_SUBTOTAL_YEN.toLocaleString()}円以上で無料）。
+          </li>
+          <li>発送：決済完了後、1週間〜1か月ほどかかります（一人で手作りしています）。</li>
+          <li>
+            返品・キャンセル：オーダーメイド品のため、お客様都合の返品・交換はできません。製作に着手する前であればキャンセルできます。破損・不良は到着後7日以内にご連絡ください。
+          </li>
+        </ul>
+      </div>
       <label className="flex items-start gap-3">
         <input
           type="checkbox"

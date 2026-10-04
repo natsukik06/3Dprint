@@ -78,6 +78,9 @@ export function CreditPurchase() {
         </button>
       </div>
 
+      <p className="w-full text-right text-[11px] text-slate-500">
+        ※購入したクレジットは、お客様都合による返金はできません。有効期限は、最後にご購入・ご利用いただいた日から1年です（詳しくは特定商取引法に基づく表記をご覧ください）。
+      </p>
       {error && <p className="w-full text-right text-xs text-red-600">{error}</p>}
     </div>
   );

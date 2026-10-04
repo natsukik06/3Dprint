@@ -1,8 +1,10 @@
 import { LegalBackLink } from "@/components/site/LegalBackLink";
 import {
+  CREDIT_PACKS,
   CREDIT_PRICE_YEN,
   GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN,
   MAX_DISCOUNTABLE_CREDITS,
+  PREVIEW_CREDIT_PRICE_YEN,
 } from "@/lib/creditPacks";
 import {
   ENGRAVING_PRICE_YEN,
@@ -16,8 +18,9 @@ import { WEEKLY_SOLID_PIECE_CAP } from "@/lib/orderCap";
 type Row = { label: string; value: string };
 
 const ROWS: Row[] = [
-  { label: "販売業者", value: "纐纈夏輝" },
+  { label: "販売業者", value: "纐纈夏輝（屋号：Charo 3D）" },
   { label: "運営統括責任者", value: "纐纈夏輝" },
+  { label: "店名・サイト名", value: "Charo 3D" },
   {
     label: "所在地",
     value: "ご請求をいただいた場合、遅滞なく開示いたします。",
@@ -38,7 +41,7 @@ const ROWS: Row[] = [
   {
     label: "3Dモデル作成クレジット",
     value:
-      `3Dモデルの作成は1回${CREDIT_PRICE_YEN.toLocaleString()}円（税込）で、初回は無料クレジットが付いています。形状のプレビューは1日2回まで無料です。ご利用済みのクレジットの返金はできません。3Dモデルの作成に失敗した場合は、使用したクレジットをお返しします。クレジットの有効期限は、最後にクレジットをご購入・ご利用いただいた日から1年間で、期限を過ぎたクレジットは失効します。商品代金が${GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文では、使用した3Dモデル作成代（最大${MAX_DISCOUNTABLE_CREDITS}回分）がご注文時に割引されます。`,
+      `3Dモデルの作成は1回${CREDIT_PRICE_YEN.toLocaleString()}円（税込）で、初回は無料クレジットが付いています。まとめ買いのパックは、${CREDIT_PACKS.map((p) => `${p.credits}回分${p.priceYen.toLocaleString()}円`).join("・")}です（いずれも税込）。形状のプレビューは1日2回まで無料で、それを超える分は1回${PREVIEW_CREDIT_PRICE_YEN.toLocaleString()}円（税込）で追加できます。商品代金が${GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文では、使用した3Dモデル作成代（最大${MAX_DISCOUNTABLE_CREDITS}回分）がご注文時に割引されます。【返金】ご購入・ご利用済みのクレジット（3Dモデル作成クレジット、追加プレビュー、割引の残りを含みます）は、お客様都合による返金はできません。3Dモデルの作成に失敗した場合は、使用したクレジットをお返しします。【有効期限】最後にクレジットをご購入・ご利用いただいた日から1年間です。期限を過ぎた残高は失効し、0になります。`,
   },
   { label: "お支払い方法", value: "クレジットカード決済・PayPay（Stripe）" },
   { label: "お支払い時期", value: "ご注文時に全額前払いとなります。" },
@@ -81,6 +84,7 @@ export default function TokushohoPage() {
             </div>
           ))}
         </div>
+        <p className="mt-4 text-sm text-slate-600">当サイト「Charo 3D」は、上記の販売業者が運営しています。</p>
       </main>
     </div>
   );

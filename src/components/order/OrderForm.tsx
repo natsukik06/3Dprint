@@ -13,7 +13,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { FormProvider, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -311,7 +311,7 @@ export function OrderForm() {
   }
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   // Latest signed-in email, readable from the one-time draft restore below (which runs once on
   // mount and would otherwise overwrite a prefilled email with the draft's saved blank).
   const userEmailRef = useRef<string | null>(null);
@@ -433,13 +433,16 @@ export function OrderForm() {
   const [addedFlash, setAddedFlash] = useState(false);
 
   const searchParams = useSearchParams();
+  const router = useRouter();
   const checkoutResult = searchParams.get("checkout");
+  const [cancelNotice, setCancelNotice] = useState(false);
 
   // Restore the whole in-progress draft (photos, inputs, cart, and where in the wizard the
   // customer was) from IndexedDB on first mount -- see src/lib/draftStorage.ts. Runs once; a
-  // successful checkout clears the saved draft below instead of restoring into it.
+  // successful checkout clears the saved draft below instead of restoring into it. Coming back
+  // from Stripe WITHOUT paying (checkout=cancel) restores it like any other visit.
   useEffect(() => {
-    if (checkoutResult) return;
+    if (checkoutResult === "success") return;
     let cancelled = false;
     (async () => {
       const saved = await loadDraftSlice<SavedOrderDraft>("orderDraft");
@@ -512,6 +515,34 @@ export function OrderForm() {
       clearAllDraftSlices();
     }
   }, [checkoutResult]);
+
+  // Back from Stripe's page without paying: hand back the discounts that checkout took (the server
+  // also expires the unpaid session), keep the cart as it was, and tell the customer so. Waits for
+  // the auth state so a signed-in customer's request carries their token.
+  useEffect(() => {
+    if (checkoutResult !== "cancel" || authLoading) return;
+    setCancelNotice(true);
+    const orderId = searchParams.get("orderId");
+    (async () => {
+      if (orderId) {
+        try {
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (auth.currentUser) {
+            headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+          }
+          await fetch("/api/order-checkout/release", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ orderId }),
+          });
+        } catch (error) {
+          console.error("order-checkout/release failed", error);
+        }
+      }
+      router.replace("/order", { scroll: false });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutResult, authLoading]);
 
   function handlePhotosChange(next: File[]) {
     setValue("photos", next, { shouldValidate: true });
@@ -839,24 +870,17 @@ export function OrderForm() {
     );
   }
 
-  if (checkoutResult === "cancel") {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">
-          お支払いがキャンセルされました
-        </h2>
-        <p className="mt-2 text-sm text-slate-600">
-          お支払いが完了しなかったため、注文は確定していません。お手数ですが、もう一度最初からお試しください。
-        </p>
-      </div>
-    );
-  }
-
   const petDetails = { furColorNote, breedNote, accessoryNote, bodyFeatureNote };
 
   return (
     <FormProvider {...methods}>
       <div ref={topRef} />
+
+      {cancelNotice && (
+        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          お支払いはキャンセルされました。カートの内容はそのまま残っています。もう一度「注文する」でお進みください。
+        </div>
+      )}
 
       <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
         <span className="font-serif text-sm font-semibold text-slate-900">LUMINA CHARO</span>

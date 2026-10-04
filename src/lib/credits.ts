@@ -184,6 +184,18 @@ export async function addDiscountableCredit(uid: string): Promise<void> {
   }
 }
 
+/** Takes back one discountable credit (never below zero) -- the reverse of addDiscountableCredit,
+ * used when the generation that earned it ended in failure and its credit was refunded. */
+export async function removeDiscountableCredit(uid: string): Promise<void> {
+  const ref = userRef(uid);
+  await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const available = (snap.data()?.generationCreditsAvailable as number) ?? 0;
+    if (available <= 0) return;
+    tx.update(ref, { generationCreditsAvailable: available - 1 });
+  });
+}
+
 /** Atomically applies up to MAX_DISCOUNTABLE_CREDITS from the balance and returns how many were
  * actually applied (0 for a signed-out checkout, same as consumeReferralDiscount). */
 export async function consumeDiscountableCredits(uid: string | null): Promise<number> {

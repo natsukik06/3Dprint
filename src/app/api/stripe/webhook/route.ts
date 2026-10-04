@@ -1,5 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { addCredits, addPreviewCredits, resetFreeGenerations } from "@/lib/credits";
 import { sendEmail } from "@/lib/email";
 import { buildOrderConfirmationEmail } from "@/lib/emailTemplates";
@@ -9,6 +9,10 @@ import { getNextOrderNumber } from "@/lib/orderNumber";
 import { runOrderProcessing } from "@/lib/processOrder";
 import { stripe } from "@/lib/stripe";
 import type { OrderItemDraft } from "@/types/order";
+
+// Post-payment work (model scaling, order-item fan-out, the confirmation email) runs in after() below;
+// give the function room to finish it instead of being cut off at the platform default.
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("stripe-signature");
@@ -34,6 +38,14 @@ export async function POST(request: NextRequest) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
+    // Only card/PayPay-style methods that confirm instantly are enabled. If a delayed method (konbini,
+    // bank transfer) were ever switched on in Stripe, "completed" would arrive BEFORE the money does --
+    // don't promote the order or hand out credits until it is actually paid.
+    if (session.payment_status === "unpaid") {
+      console.warn(`Stripe session ${session.id} completed but not paid yet -- ignoring`);
+      return NextResponse.json({ received: true });
+    }
+
     if (session.metadata?.type === "order") {
       const orderId = session.metadata?.orderId;
       if (orderId) {
@@ -49,7 +61,10 @@ export async function POST(request: NextRequest) {
         if (draftSnap.exists) {
           const draftData = draftSnap.data();
           const orderNumber = await getNextOrderNumber();
-          await orderRef.set({
+          // create() fails if the order already exists -- a duplicate or concurrent delivery of this
+          // event must not overwrite it (and its order number).
+          const created = await orderRef
+            .create({
             ...draftData,
             // Stripe's own record of what was actually charged (set server-side in
             // /api/order-checkout from a re-derived price, never from the client-writable
@@ -67,37 +82,55 @@ export async function POST(request: NextRequest) {
             orderNumber,
             paymentStatus: "paid",
             paidAt: FieldValue.serverTimestamp(),
-          });
+            })
+            .then(() => true)
+            .catch((error: { code?: number }) => {
+              if (error?.code === 6) return false; // ALREADY_EXISTS
+              throw error;
+            });
           await draftRef.delete();
           // A paying customer shouldn't be locked out of previewing their NEXT design for the
           // rest of the day just because they used up today's free-preview allowance earlier.
           const uid = draftData?.uid as string | null | undefined;
-          if (uid) {
+          if (uid && created) {
             resetFreeGenerations(uid).catch((error) => {
               console.error(`resetFreeGenerations failed for order ${orderId}`, error);
             });
           }
         }
-        // Fire-and-forget: don't block the webhook response on the (slower)
-        // model download + scaling work, email delivery, etc. Failures are logged AND flagged on
-        // the order doc itself (not just server logs) -- otherwise a paid order that fails here
-        // silently sits stuck forever with nothing in the admin UI pointing at it. Cleared on a
-        // successful retry from the admin order detail page.
-        runOrderProcessing(orderId).catch((error) => {
-          console.error(`post-payment processing failed for order ${orderId}`, error);
-          orderRef
-            .update({
-              processingFailed: true,
-              processingError: error instanceof Error ? error.message : String(error),
-            })
-            .catch((updateError) => {
-              console.error(`failed to flag processingFailed for order ${orderId}`, updateError);
-            });
-        });
+        // Run after the response has gone out (so Stripe isn't kept waiting on the slow model download
+        // + scaling work and email), but inside after() -- a bare un-awaited promise can be frozen the
+        // moment the serverless function returns, silently dropping paid orders. Failures are logged AND
+        // flagged on the order doc itself, otherwise a paid order that fails here silently sits stuck
+        // with nothing in the admin UI pointing at it. Cleared on a successful retry from the admin
+        // order detail page.
+        after(async () => {
+          try {
+            await runOrderProcessing(orderId);
+          } catch (error) {
+            console.error(`post-payment processing failed for order ${orderId}`, error);
+            await orderRef
+              .update({
+                processingFailed: true,
+                processingError: error instanceof Error ? error.message : String(error),
+              })
+              .catch((updateError) => {
+                console.error(`failed to flag processingFailed for order ${orderId}`, updateError);
+              });
+          }
 
-        orderRef
-          .get()
-          .then(async (snap) => {
+          try {
+            // Claim the email first (atomically) so a duplicate delivery of this event can't send the
+            // confirmation twice; if sending then fails, hand the claim back so a retry can send it.
+            const claimed = await adminDb.runTransaction(async (tx) => {
+              const s = await tx.get(orderRef);
+              if (!s.exists || s.data()?.confirmationEmailSentAt) return false;
+              tx.update(orderRef, { confirmationEmailSentAt: FieldValue.serverTimestamp() });
+              return true;
+            });
+            if (!claimed) return;
+
+            const snap = await orderRef.get();
             const order = snap.data() as
               | {
                   items: OrderItemDraft[];
@@ -110,17 +143,21 @@ export async function POST(request: NextRequest) {
               | undefined;
             if (!order) return;
 
-            const { subject, html } = buildOrderConfirmationEmail(order.orderNumber ?? orderId, order);
-            await sendEmail({ to: order.customerEmail, subject, html });
+            try {
+              const { subject, html } = buildOrderConfirmationEmail(order.orderNumber ?? orderId, order);
+              await sendEmail({ to: order.customerEmail, subject, html });
+            } catch (error) {
+              await orderRef.update({ confirmationEmailSentAt: FieldValue.delete() }).catch(() => {});
+              throw error;
+            }
 
             if (order.agreeMarketingEmail) {
               await upsertMarketingSubscriber(order.customerEmail, order.customerName);
             }
-          })
-          .catch((error) => {
+          } catch (error) {
             console.error(`post-payment email step failed for order ${orderId}`, error);
-          });
-      }
+          }
+        });      }
     } else {
       const uid = session.metadata?.uid;
       const credits = Number(session.metadata?.credits ?? 0);

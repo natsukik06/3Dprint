@@ -62,3 +62,6 @@ label-pipeline/output/
 __pycache__/
 /music/
 /ig-post-*.png
+
+# AI company: reports, drafts and icon URLs stay local
+/company/

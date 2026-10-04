@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { NextResponse, type NextRequest } from "next/server";
 import { colorPriceBySizeMap, enabledColors } from "@/lib/colorSettings";
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
           },
         ],
         success_url: `${origin}/order?checkout=success&orderId=${orderId}`,
-        cancel_url: `${origin}/order?checkout=cancel`,
+        cancel_url: `${origin}/order?checkout=cancel&orderId=${orderId}`,
       });
     } catch (error) {
       // Give back the discounts we already consumed above -- a Stripe hiccup here shouldn't cost
@@ -176,6 +177,18 @@ export async function POST(request: NextRequest) {
       stripeCheckoutSessionId: session.id,
       appliedGenerationCredits,
       verifiedDiscountYen: estimate.discountYen,
+    });
+    // What this checkout took from the customer, so /api/order-checkout/release can hand it back if
+    // they leave Stripe's page without paying. Kept in its own server-only collection (no Firestore
+    // rule allows client access) -- order_drafts is client-creatable, so anything stored there could
+    // be forged to claim a refund that was never taken.
+    await adminDb.collection("checkout_holds").doc(orderId).set({
+      sessionId: session.id,
+      uid: requester?.uid ?? null,
+      credits: appliedGenerationCredits,
+      referralDiscount: referralDiscountActive,
+      released: false,
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     return NextResponse.json({ url: session.url });

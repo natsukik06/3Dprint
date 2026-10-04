@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { addDiscountableCredit, consumeCredit, refundCredit } from "@/lib/credits";
 import type { ImagePayload } from "@/lib/gemini";
+import { recordGenerationHold } from "@/lib/generationHolds";
 import { createMultiviewTask, uploadImageToTripo } from "@/lib/tripo";
 import { guardTripoCapacity } from "@/lib/tripoCapacity";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
@@ -57,6 +58,8 @@ export async function POST(request: NextRequest) {
     // Only once the (paid) Tripo task is actually successfully queued -- see the same comment in
     // generate-model/confirm/route.ts.
     await addDiscountableCredit(user.uid);
+    // So a task that later fails gets its credit back -- see refundFailedGeneration.
+    await recordGenerationHold(taskId, user.uid);
 
     return NextResponse.json({ taskId });
   } catch (error) {

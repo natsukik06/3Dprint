@@ -5,6 +5,7 @@ import {
   uploadGeneratedModel,
   uploadRenderedImage,
 } from "@/lib/orders";
+import { refundFailedGeneration } from "@/lib/generationHolds";
 import { getTripoTaskStatus } from "@/lib/tripo";
 
 async function resolveHostedRenderedImageUrl(
@@ -42,6 +43,12 @@ export async function GET(
     const status = await getTripoTaskStatus(taskId);
 
     if (status.status !== "success") {
+      // Tripo does not bill failed/cancelled tasks -- hand the customer's credit back (once).
+      if (status.status === "failed" || status.status === "banned" || status.status === "cancelled") {
+        await refundFailedGeneration(taskId).catch((error) =>
+          console.error(`refundFailedGeneration failed for ${taskId}`, error)
+        );
+      }
       return NextResponse.json(status);
     }
 

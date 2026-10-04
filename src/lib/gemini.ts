@@ -1,4 +1,4 @@
-﻿import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import sharp from "sharp";
 import type {
   MagicColor,
@@ -264,17 +264,17 @@ function figureGridPrompt(
     "border, no divider lines, and no grid lines drawn — just four separate photos placed edge to " +
     "edge on a shared plain white background, each one a different rotation of the same turntable " +
     "sequence around the subject: " +
-    "Top-left quadrant: front view (真正面) — camera directly facing the subject head-on, its face " +
+    "Top-left quadrant: front view — camera directly facing the subject head-on, its face " +
     "pointing straight at the camera. " +
-    "Top-right quadrant: left side view (真左側面) — camera rotated a full 90 degrees " +
+    "Top-right quadrant: left side view — camera rotated a full 90 degrees " +
     "counterclockwise from the front view, so the subject's head/nose points toward the LEFT edge " +
     "of this quadrant and a full flank of the body is visible in profile. This must be a genuine " +
     "90-degree rotation, NOT a slightly-turned variant of the front view — if the face is still " +
     "mostly facing the camera, the rotation has failed. " +
-    "Bottom-left quadrant: back view (真背面) — camera rotated a further 90 degrees to be directly " +
+    "Bottom-left quadrant: back view — camera rotated a further 90 degrees to be directly " +
     "behind the subject, 180 degrees opposite the front view, showing the back/rear of the " +
     "subject with no face visible. " +
-    "Bottom-right quadrant: right side view (真右側面) — camera rotated 90 degrees clockwise from " +
+    "Bottom-right quadrant: right side view — camera rotated 90 degrees clockwise from " +
     "the front view, so the subject's head/nose points toward the RIGHT edge of this quadrant and " +
     "a full flank of the body is visible in profile, the mirror opposite of the top-right quadrant. " +
     "Self-check before finalizing: the top-right and bottom-right quadrants must look CLEARLY " +
@@ -291,7 +291,7 @@ function figureGridPrompt(
     `printed at only a few centimeters tall, so keep the sculpted form itself sturdy: ${printSafetyPhrase} ` +
     "Soft even studio lighting with no harsh shadows or reflections. " +
     `${proportionsPhrase}, full body visible and centered within each quadrant, no text ` +
-    "or watermark anywhere. Use the attached reference photos to match the subject's shape, " +
+    "or watermark anywhere (no letters, numbers, captions or labels in any language). Use the attached reference photos to match the subject's shape, " +
     "features, coloring, and identity exactly." +
     (wantsSelfStanding ? STABILITY_PHRASE : "") +
     petDetailsPhrase(petDetails, subjectType)
@@ -463,16 +463,16 @@ function figureGridPromptDuo(
     "with no border, no divider lines, and no grid lines drawn — just four separate photos " +
     "placed edge to edge on a shared plain white background, each one a different rotation of " +
     "the same turntable sequence around the whole two-figure scene: " +
-    "Top-left quadrant: front view (真正面) — camera directly facing the scene head-on, both " +
+    "Top-left quadrant: front view — camera directly facing the scene head-on, both " +
     "subjects' faces visible facing the camera. " +
-    "Top-right quadrant: left side view (真左側面) — camera rotated a full 90 degrees " +
+    "Top-right quadrant: left side view — camera rotated a full 90 degrees " +
     "counterclockwise from the front view, so both subjects are seen in full side profile. This " +
     "must be a genuine 90-degree rotation, NOT a slightly-turned variant of the front view — if " +
     "either subject's face is still mostly facing the camera, the rotation has failed. " +
-    "Bottom-left quadrant: back view (真背面) — camera rotated a further 90 degrees to be " +
+    "Bottom-left quadrant: back view — camera rotated a further 90 degrees to be " +
     "directly behind the scene, 180 degrees opposite the front view, showing the back/rear of " +
     "both subjects with no faces visible. " +
-    "Bottom-right quadrant: right side view (真右側面) — camera rotated 90 degrees clockwise " +
+    "Bottom-right quadrant: right side view — camera rotated 90 degrees clockwise " +
     "from the front view, so both subjects are seen in full side profile, the mirror opposite of " +
     "the top-right quadrant. " +
     "Self-check before finalizing: the top-right and bottom-right quadrants must look CLEARLY " +
@@ -494,7 +494,7 @@ function figureGridPromptDuo(
     "single-color material. This will be 3D printed at only a few centimeters tall, so keep the " +
     `sculpted form itself sturdy: ${printSafetyPhrase} Soft even studio lighting with no harsh ` +
     `shadows or reflections. ${proportionsPhrase} for both subjects, both fully visible and ` +
-    "centered within each quadrant, no text or watermark anywhere. " +
+    "centered within each quadrant, no text or watermark anywhere (no letters, numbers, captions or labels in any language). " +
     referencePhotoPhrase +
     petDetailsPhrase(petDetailsA, subjectType) +
     petDetailsPhrase(petDetailsB, subjectType)

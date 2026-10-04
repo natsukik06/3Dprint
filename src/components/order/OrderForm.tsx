@@ -317,6 +317,10 @@ export function OrderForm() {
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const { user } = useAuth();
+  // Latest signed-in email, readable from the one-time draft restore below (which runs once on
+  // mount and would otherwise overwrite a prefilled email with the draft's saved blank).
+  const userEmailRef = useRef<string | null>(null);
+  userEmailRef.current = user?.email ?? null;
 
   // Cart items without a finished-color render fall back to a live <model-viewer> (see
   // CartItemCard) -- registering the custom element here too means it's ready even if the cart
@@ -331,6 +335,11 @@ export function OrderForm() {
   // this session (e.g. a guest who started filling the form before signing in partway through).
   useEffect(() => {
     if (!user) return;
+    // The Google account's own address is the natural contact email -- fill it straight away
+    // (it's still editable), rather than making a signed-in customer type it again.
+    if (user.email && !getValues("customerEmail")) {
+      setValue("customerEmail", user.email);
+    }
     let cancelled = false;
     (async () => {
       const profile = await getCustomerProfile(user.uid).catch(() => null);
@@ -441,6 +450,9 @@ export function OrderForm() {
       const saved = await loadDraftSlice<SavedOrderDraft>("orderDraft");
       if (cancelled || !saved) return;
       methods.reset(saved.formValues);
+      if (!saved.formValues.customerEmail && userEmailRef.current) {
+        methods.setValue("customerEmail", userEmailRef.current);
+      }
       setCurrentStep(saved.currentStep);
       setModelSource(saved.modelSource);
       setCreateMode(saved.createMode);

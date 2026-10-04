@@ -89,7 +89,13 @@ service cloud.firestore {
       allow delete: if false;
 
       match /models/{taskId} {
-        allow read, create: if request.auth != null && request.auth.uid == uid;
+        allow read: if request.auth != null && request.auth.uid == uid;
+        // createdAt must be the server's own clock and only the app's own fields may be written:
+        // a nightly job deletes old gallery models, so a customer-chosen date or extra field must
+        // never be accepted.
+        allow create: if request.auth != null && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['modelUrl', 'renderedImageUrl', 'finishedPreviewUrls', 'referenceImageUrls', 'subject', 'pose', 'createdAt'])
+          && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
       }
     }

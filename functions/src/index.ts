@@ -372,10 +372,26 @@ function storagePathFromPublicUrl(url: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+// The URLs this job reads come from Firestore docs, some of which customers can write (their own
+// gallery entries) -- so a URL is never trusted to mean "delete this". Only a plain file directly
+// under models/ in THIS project's bucket may be removed, and the mascot's permanent assets
+// (models/charo-premade*) are never removed, whatever a document says.
+function isDeletableModelPath(url: string, path: string): boolean {
+  const bucketName = admin.storage().bucket().name;
+  if (!url.includes(`/b/${bucketName}/o/`)) return false;
+  if (!/^models\/[^/]+$/.test(path)) return false;
+  if (path.startsWith("models/charo-premade")) return false;
+  return true;
+}
+
 async function deleteModelFile(url: string | null | undefined): Promise<void> {
   if (!url) return;
   const path = storagePathFromPublicUrl(url);
   if (!path) return;
+  if (!isDeletableModelPath(url, path)) {
+    console.warn(`cleanupOldModels: refusing to delete ${path}`);
+    return;
+  }
   try {
     await admin.storage().bucket().file(path).delete();
   } catch (error) {

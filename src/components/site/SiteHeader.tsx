@@ -11,10 +11,10 @@ export function SiteHeader() {
       <nav className="mx-auto flex w-full max-w-xl items-center justify-between px-4 py-4 sm:px-6 md:max-w-2xl lg:max-w-4xl lg:px-8">
         <Link href="/">
           <Image
-            src="/logo-charo3d.png"
+            src="/logo-charo3d-v2.png"
             alt="Charo 3D"
-            width={817}
-            height={985}
+            width={938}
+            height={1004}
             className="h-9 w-auto dark:invert lg:h-11"
           />
         </Link>

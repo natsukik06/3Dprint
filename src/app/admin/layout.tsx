@@ -10,10 +10,10 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
           <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
             <Link href="/admin" className="flex items-center gap-2">
               <Image
-                src="/logo-charo3d.png"
+                src="/logo-charo3d-v2.png"
                 alt="Charo 3D"
-                width={817}
-                height={985}
+                width={938}
+                height={1004}
                 priority
                 className="h-6 w-auto"
               />

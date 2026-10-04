@@ -41,6 +41,7 @@ import {
   MAX_CART_ITEMS,
   orderFormSchema,
   SIZE_LABELS,
+  AVAILABLE_SIZE_OPTIONS,
   type HardwareAssignments,
   type MagicColor,
   type OrderFormValues,
@@ -246,7 +247,7 @@ function CartItemCard({
                 {/* Just the size name (e.g. "小サイズ") -- the full label with dimensions/
                 shipping method is too long for this badge; that detail is already shown at the
                 spec step. */}
-                {SIZE_LABELS[item.sizeOption].split("（")[0]}
+                {(SIZE_LABELS[item.sizeOption] ?? String(item.sizeOption)).split("（")[0]}
               </span>
             </p>
           </div>
@@ -451,7 +452,18 @@ export function OrderForm() {
     (async () => {
       const saved = await loadDraftSlice<SavedOrderDraft>("orderDraft");
       if (cancelled || !saved) return;
-      methods.reset(saved.formValues);
+      // A draft saved by an older version may carry sizes that are no longer sold (or none at all);
+      // restoring it as-is used to crash the cart. Fall back to the default size, and drop cart items
+      // that can't be ordered any more.
+      const sellable = AVAILABLE_SIZE_OPTIONS as readonly string[];
+      const restored = {
+        ...saved.formValues,
+        sizeOption: sellable.includes(saved.formValues.sizeOption)
+          ? saved.formValues.sizeOption
+          : DRAFT_DEFAULTS.sizeOption,
+        items: (saved.formValues.items ?? []).filter((item) => sellable.includes(item.sizeOption)),
+      };
+      methods.reset(restored);
       if (!saved.formValues.customerEmail && userEmailRef.current) {
         methods.setValue("customerEmail", userEmailRef.current);
       }
@@ -1174,10 +1186,17 @@ export function OrderForm() {
                 モデル化が完了したポーズは自動でカートに追加されます
               </p>
             )}
-            {addedFlash && (
-              <p className="mt-2 text-center text-sm text-emerald-600">
-                ✓ カートに追加しました
-              </p>
+            {/* Stays visible once anything is in the cart -- the way on to checkout used to be only
+                the small cart icon at the very top of the page. */}
+            {fields.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className="mt-3 w-full rounded-lg border border-emerald-300 bg-emerald-50 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+              >
+                {addedFlash ? "✓ カートに追加しました ― " : ""}
+                カートを見る・注文へ進む（{fields.length}点）
+              </button>
             )}
           </SectionCard>
         )}

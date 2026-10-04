@@ -18,6 +18,9 @@ export type ExpiryResult = {
   accountsClockStarted: number;
   accountsExpired: number;
   creditsExpired: number;
+  draftsDeleted: number;
+  holdsReleased: number;
+  holdsDeleted: number;
 };
 
 export async function runExpiryCleanup(
@@ -31,6 +34,9 @@ export async function runExpiryCleanup(
     accountsClockStarted: 0,
     accountsExpired: 0,
     creditsExpired: 0,
+    draftsDeleted: 0,
+    holdsReleased: 0,
+    holdsDeleted: 0,
   };
 
   // 1) Reference photos: every file under orders/ older than one year.
@@ -85,5 +91,55 @@ export async function runExpiryCleanup(
     result.creditsExpired += credits + previewCredits + discountable;
   }
 
+  // 3) Unpaid order drafts (created when someone presses "決済へ進む" but never pays) hold a name,
+  // address and phone number; they are deleted after 14 days, as the privacy policy says.
+  const DRAFT_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
+  const draftsSnap = await db.collection("order_drafts").get();
+  for (const draft of draftsSnap.docs) {
+    const created = draft.data().createdAt?.toDate?.() as Date | undefined;
+    if (!created || now - created.getTime() < DRAFT_RETENTION_MS) continue;
+    if (!dryRun) await draft.ref.delete();
+    result.draftsDeleted++;
+  }
+
+  // 4) Checkout holds: a Stripe payment page lasts 24h. If the customer left without paying and never
+  // came back to the site (so the release API was never called), hand back the referral discount and
+  // generation credits it took -- but only when no order exists for that checkout. Old holds are then
+  // removed.
+  const HOLD_GRACE_MS = 2 * 24 * 60 * 60 * 1000;
+  const holdsSnap = await db.collection("checkout_holds").get();
+  for (const hold of holdsSnap.docs) {
+    const data = hold.data();
+    const created = data.createdAt?.toDate?.() as Date | undefined;
+    if (!created) continue;
+    const age = now - created.getTime();
+
+    if (!data.released && age >= HOLD_GRACE_MS) {
+      const orderExists = (await db.collection("orders").doc(hold.id).get()).exists;
+      if (!orderExists) {
+        if (!dryRun) {
+          // Claim first (so a retry or a concurrent release can't hand it back twice).
+          const claimed = await db.runTransaction(async (tx) => {
+            const fresh = await tx.get(hold.ref);
+            if (!fresh.exists || fresh.data()?.released) return false;
+            tx.update(hold.ref, { released: true, releasedBy: "expiry-job" });
+            return true;
+          });
+          if (claimed && data.uid) {
+            const userRef = db.collection("users").doc(data.uid as string);
+            if (data.referralDiscount) await userRef.update({ referralDiscountAvailable: true });
+            const credits = Number(data.credits ?? 0);
+            if (credits > 0) await userRef.set({ generationCreditsAvailable: FieldValue.increment(credits) }, { merge: true });
+          }
+        }
+        result.holdsReleased++;
+      }
+    }
+
+    if (age >= DRAFT_RETENTION_MS) {
+      if (!dryRun) await hold.ref.delete();
+      result.holdsDeleted++;
+    }
+  }
   return result;
 }

@@ -14,7 +14,7 @@ function wrapEmail(bodyHtml: string): string {
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1e293b;">
       ${bodyHtml}
-      <p style="margin-top:32px;font-size:12px;color:#94a3b8;">LUMINA CHARO</p>
+      <p style="margin-top:32px;font-size:12px;color:#94a3b8;">Charo 3D</p>
     </div>
   `;
 }
@@ -45,7 +45,7 @@ function buildReceiptSection(
       <p style="margin:4px 0;font-size:14px;">但し書き：キーホルダー代として</p>
       <p style="margin:4px 0;font-size:13px;color:#64748b;">注文番号：${escapeHtml(orderId)}</p>
       <p style="margin:16px 0 0;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:10px;">
-        発行者：LUMINA CHARO（natsuki.ko006@gmail.com）
+        発行者：Charo 3D（natsuki.ko006@gmail.com）
       </p>
     </div>
   `;

@@ -12,7 +12,7 @@ export function SiteHeader() {
         <Link href="/">
           <Image
             src="/logo-full.png"
-            alt="LUMINA CHARO"
+            alt="Charo 3D"
             width={1569}
             height={1034}
             className="h-9 w-auto dark:invert lg:h-11"

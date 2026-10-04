@@ -133,7 +133,7 @@ export default function PlateOemPage() {
       <div className="hero">
         <div className="wrap hero-grid">
           <div>
-            <p className="eyebrow">LUMINA CHARO &nbsp;|&nbsp; ORIGINAL TRAY &amp; PLATE OEM</p>
+            <p className="eyebrow">Charo 3D &nbsp;|&nbsp; ORIGINAL TRAY &amp; PLATE OEM</p>
             <h1 className="display">
               かたちのアイデアを、
               <br />
@@ -389,7 +389,7 @@ export default function PlateOemPage() {
         </div>
       </div>
 
-      <footer>LUMINA CHARO — Original Tray &amp; Plate OEM</footer>
+      <footer>Charo 3D — Original Tray &amp; Plate OEM</footer>
     </div>
   );
 }

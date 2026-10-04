@@ -11,7 +11,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
             <Link href="/admin" className="flex items-center gap-2">
               <Image
                 src="/logo-full.png"
-                alt="LUMINA CHARO"
+                alt="Charo 3D"
                 width={1569}
                 height={1034}
                 priority

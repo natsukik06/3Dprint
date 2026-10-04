@@ -919,7 +919,7 @@ export function OrderForm() {
       )}
 
       <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-        <span className="font-serif text-sm font-semibold text-slate-900">LUMINA CHARO</span>
+        <span className="font-serif text-sm font-semibold text-slate-900">Charo 3D</span>
         <button
           type="button"
           onClick={() => setCartOpen(true)}

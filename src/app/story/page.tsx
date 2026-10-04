@@ -118,7 +118,7 @@ export default function StoryPage() {
             <div className="relative mx-auto aspect-[4/5] w-full max-w-xs overflow-hidden rounded-2xl border border-[#d9cbb0] shadow-lg dark:border-[#232726] lg:mx-0 lg:max-w-sm lg:flex-1">
               <Image
                 src="/product-lineup.jpg"
-                alt="LUMINA CHARO キーホルダー カラーバリエーション"
+                alt="Charo 3D キーホルダー カラーバリエーション"
                 fill
                 sizes="(min-width: 1024px) 384px, 320px"
                 className="object-cover"

@@ -50,7 +50,7 @@ export default function Home() {
         <nav className="absolute inset-x-0 top-0 z-20 mx-auto flex w-full max-w-xl items-center justify-between px-4 py-5 sm:px-6 md:max-w-2xl lg:max-w-4xl lg:px-8 lg:py-7">
           <Image
             src="/logo-full.png"
-            alt="LUMINA CHARO"
+            alt="Charo 3D"
             width={1569}
             height={1034}
             priority

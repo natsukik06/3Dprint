@@ -128,7 +128,7 @@ export default function NailOemPage() {
       <div className="hero">
         <div className="wrap hero-grid">
           <div>
-            <p className="eyebrow">LUMINA CHARO &nbsp;|&nbsp; NAIL PARTS OEM</p>
+            <p className="eyebrow">Charo 3D &nbsp;|&nbsp; NAIL PARTS OEM</p>
             <h1 className="display">
               画像1枚から、
               <br />
@@ -346,7 +346,7 @@ export default function NailOemPage() {
         </div>
       </div>
 
-      <footer>LUMINA CHARO — Nail Parts OEM</footer>
+      <footer>Charo 3D — Nail Parts OEM</footer>
     </div>
   );
 }

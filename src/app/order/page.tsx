@@ -35,7 +35,7 @@ export default async function OrderPage() {
           <h1 className="mx-auto">
             <Image
               src="/logo-full.png"
-              alt="LUMINA CHARO"
+              alt="Charo 3D"
               width={1569}
               height={1034}
               priority

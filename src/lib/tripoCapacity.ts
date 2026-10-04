@@ -43,8 +43,8 @@ async function sendMail(balance: TripoBalance, blocked: boolean): Promise<void> 
   await sendEmail({
     to: ADMIN_EMAIL,
     subject: blocked
-      ? "【LUMINA CHARO】Tripoの残高がなく、3Dモデル生成を停止中です"
-      : "【LUMINA CHARO】Tripoの残高が少なくなっています",
+      ? "【Charo 3D】Tripoの残高がなく、3Dモデル生成を停止中です"
+      : "【Charo 3D】Tripoの残高が少なくなっています",
     html: `<p>Tripo の利用可能クレジット: <strong>${balance.available}</strong>（約${Math.floor(balance.available / 30)}体分）</p>
 <p>${blocked ? "残高不足のため、お客様の3Dモデル生成を一時停止しています。" : "このままだと3Dモデル生成が止まります。"}</p>
 <p><a href="https://platform.tripo3d.ai/">https://platform.tripo3d.ai/</a> でクレジットを追加してください。</p>`,

@@ -65,3 +65,8 @@ __pycache__/
 
 # AI company: reports, drafts and icon URLs stay local
 /company/
+
+# Personal photos/notes and the AI-company agent files stay out of the (public) repo
+/é ê^/
+/.claude/agents/
+/*.txt

@@ -8,6 +8,7 @@ import { SubjectPoseFields } from "@/components/order/SubjectPoseFields";
 import { InfoModalButton } from "@/components/ui/InfoModalButton";
 import { RadioCard } from "@/components/ui/RadioCard";
 import { colorImageSrc, colorLabel, colorPriceBySizeMap } from "@/lib/colorSettings";
+import { assignmentFor, normalizeAssignments } from "@/lib/hardwareSplit";
 import { DEFAULT_COLOR_IMAGE_SRC } from "@/lib/colorSwatches";
 import {
   ADDITIONAL_UNIT_PRICE_YEN,
@@ -27,6 +28,7 @@ import {
   ENGRAVING_FONT_OPTIONS,
   HARDWARE_COLOR_LABELS,
   HARDWARE_COLOR_OPTIONS,
+  MAGIC_COLOR_OPTIONS,
   MAX_ENGRAVING_TEXT_LENGTH,
   MAX_TOTAL_QUANTITY,
   SIZE_LABELS,
@@ -175,6 +177,29 @@ export function SpecOptions({
     setColorScrollEdges(readScrollEdges(colorScrollRef.current));
   }, [activeColorGroupId, activeColorGroup.colors.length]);
 
+  // Strap (金具) choices per resin color. Kept in step with the chosen colors/quantities, and turned
+  // into one cart item per strap color when the set is added -- see src/lib/hardwareSplit.ts.
+  const hardwareAssignments = useWatch({ control, name: "hardwareAssignments" });
+  useEffect(() => {
+    if (!wantsHardware) return;
+    const next = normalizeAssignments(hardwareAssignments, colorQuantities);
+    if (JSON.stringify(next) !== JSON.stringify(hardwareAssignments ?? {})) {
+      setValue("hardwareAssignments", next);
+    }
+  }, [wantsHardware, colorQuantities, hardwareAssignments, setValue]);
+
+  function changeStrap(color: MagicColor, strap: HardwareColor, delta: 1 | -1) {
+    const qty = colorQuantities[color] ?? 0;
+    const current = assignmentFor(hardwareAssignments, color, qty);
+    const strapped = HARDWARE_COLOR_OPTIONS.reduce((sum, s) => sum + (current[s] ?? 0), 0);
+    const n = current[strap] ?? 0;
+    if (delta > 0 && strapped >= qty) return;
+    if (delta < 0 && n <= 0) return;
+    setValue(
+      "hardwareAssignments",
+      normalizeAssignments({ ...hardwareAssignments, [color]: { ...current, [strap]: n + delta } }, colorQuantities)
+    );
+  }
   return (
     <div className="space-y-6">
       {!hideSubjectAndPose && <SubjectPoseFields />}
@@ -460,35 +485,74 @@ export function SpecOptions({
           )}
         />
         {wantsHardware && (
-          <Controller
-            name="hardwareColor"
-            control={control}
-            render={({ field }) => (
-              <div className="grid gap-1.5 sm:grid-cols-2">
-                {HARDWARE_COLOR_OPTIONS.map((option) => (
-                  <RadioCard
-                    key={option}
-                    name={field.name}
-                    value={option}
-                    checked={field.value === option}
-                    onChange={field.onChange}
-                    label={HARDWARE_COLOR_LABELS[option]}
-                    icon={
-                      <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                        <Image
-                          src={HARDWARE_COLOR_IMAGE_SRC[option]}
-                          alt={HARDWARE_COLOR_LABELS[option]}
-                          fill
-                          sizes="48px"
-                          className="object-cover"
-                        />
-                      </span>
-                    }
-                  />
-                ))}
-              </div>
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500">
+              色ごとに、金具の種類と個数を選べます。選ばなかった分は金具なしでお届けします。
+            </p>
+            {MAGIC_COLOR_OPTIONS.filter((color) => (colorQuantities?.[color] ?? 0) > 0).map((color) => {
+              const qty = colorQuantities[color] ?? 0;
+              const assigned = assignmentFor(hardwareAssignments, color, qty);
+              const strapped = HARDWARE_COLOR_OPTIONS.reduce((sum, s) => sum + (assigned[s] ?? 0), 0);
+              return (
+                <div key={color} className="space-y-2 rounded-xl border border-slate-200 p-3">
+                  <p className="text-sm font-medium text-slate-900">
+                    {colorLabel(colorSettings, color, MAGIC_COLOR_LABELS[color])}
+                    <span className="ml-1 text-xs font-normal text-slate-500">× {qty}個</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {HARDWARE_COLOR_OPTIONS.map((strap) => {
+                      const n = assigned[strap] ?? 0;
+                      return (
+                        <div key={strap} className="flex flex-col items-center gap-1.5 rounded-lg bg-slate-50 p-2">
+                          <span className="relative h-10 w-10 overflow-hidden rounded-md bg-slate-100">
+                            <Image
+                              src={HARDWARE_COLOR_IMAGE_SRC[strap]}
+                              alt={HARDWARE_COLOR_LABELS[strap]}
+                              fill
+                              sizes="40px"
+                              className="object-cover"
+                            />
+                          </span>
+                          <span className="text-[11px] leading-tight text-slate-700">
+                            {HARDWARE_COLOR_LABELS[strap]}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => changeStrap(color, strap, -1)}
+                              disabled={n <= 0}
+                              aria-label={`${HARDWARE_COLOR_LABELS[strap]}を減らす`}
+                              className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="w-4 text-center text-sm tabular-nums text-slate-900">{n}</span>
+                            <button
+                              type="button"
+                              onClick={() => changeStrap(color, strap, 1)}
+                              disabled={strapped >= qty}
+                              aria-label={`${HARDWARE_COLOR_LABELS[strap]}を増やす`}
+                              className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    金具あり {strapped}個／金具なし {qty - strapped}個
+                  </p>
+                </div>
+              );
+            })}
+            {(errors.hardwareAssignments as { message?: string } | undefined)?.message && (
+              <p className="text-sm text-red-600">
+                {(errors.hardwareAssignments as { message?: string }).message}
+              </p>
             )}
-          />
+          </div>
         )}
       </fieldset>
 

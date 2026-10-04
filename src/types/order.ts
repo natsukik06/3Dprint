@@ -121,6 +121,7 @@ export type PetDetails = {
   bodyFeatureNote?: string;
 };
 export type HardwareColor = (typeof HARDWARE_COLOR_OPTIONS)[number];
+export type HardwareAssignments = Partial<Record<MagicColor, Partial<Record<HardwareColor, number>>>>;
 export type EngravingFont = (typeof ENGRAVING_FONT_OPTIONS)[number];
 export type SizeOption = (typeof SIZE_OPTIONS)[number];
 export type OrderStatus = (typeof ORDER_STATUS_OPTIONS)[number];
@@ -377,6 +378,12 @@ export const orderFormSchema = z
   colorQuantities: colorQuantitiesSchema,
   wantsHardware: z.boolean(),
   hardwareColor: z.enum(HARDWARE_COLOR_OPTIONS),
+  // Form-only: for each chosen resin color, how many pieces get which strap (金具) color. When the
+  // set is added to the cart it is split into one item per strap color (see src/lib/hardwareSplit.ts),
+  // so stored items still carry a single hardwareColor each.
+  hardwareAssignments: z
+    .partialRecord(z.enum(MAGIC_COLOR_OPTIONS), z.partialRecord(z.enum(HARDWARE_COLOR_OPTIONS), z.number().int().min(0)))
+    .optional(),
   chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
   wantsEngraving: z.boolean(),
   engravingText: z

@@ -32,6 +32,7 @@ import { getCustomerProfile, saveCustomerProfile } from "@/lib/customerProfile";
 import { clearAllDraftSlices, loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
 import { colorPriceBySizeMap } from "@/lib/colorSettings";
 import { auth } from "@/lib/firebase";
+import { splitByHardware } from "@/lib/hardwareSplit";
 import { submitOrder } from "@/lib/orders";
 import { MAGIC_COLOR_LABELS, POSE_LABELS } from "@/lib/pricing";
 import { useColorSettings } from "@/lib/useColorSettings";
@@ -40,6 +41,7 @@ import {
   MAX_CART_ITEMS,
   orderFormSchema,
   SIZE_LABELS,
+  type HardwareAssignments,
   type MagicColor,
   type OrderFormValues,
   type OrderItemDraft,
@@ -61,6 +63,7 @@ type ItemDraftSnapshot = Pick<
   | "colorQuantities"
   | "wantsHardware"
   | "hardwareColor"
+  | "hardwareAssignments"
   | "chainPositionNote"
   | "wantsEngraving"
   | "engravingText"
@@ -122,6 +125,7 @@ const DRAFT_DEFAULTS = {
   },
   wantsHardware: false,
   hardwareColor: "silver" as const,
+  hardwareAssignments: {} as HardwareAssignments,
   chainPositionNote: "",
   wantsEngraving: false,
   engravingText: "",
@@ -584,6 +588,7 @@ export function OrderForm() {
     setValue("colorQuantities", DRAFT_DEFAULTS.colorQuantities);
     setValue("wantsHardware", DRAFT_DEFAULTS.wantsHardware);
     setValue("hardwareColor", DRAFT_DEFAULTS.hardwareColor);
+    setValue("hardwareAssignments", DRAFT_DEFAULTS.hardwareAssignments);
     setValue("chainPositionNote", DRAFT_DEFAULTS.chainPositionNote);
     setValue("wantsEngraving", DRAFT_DEFAULTS.wantsEngraving);
     setValue("engravingText", DRAFT_DEFAULTS.engravingText);
@@ -633,6 +638,7 @@ export function OrderForm() {
         colorQuantities: draft.colorQuantities,
         wantsHardware: draft.wantsHardware,
         hardwareColor: draft.hardwareColor,
+        hardwareAssignments: draft.hardwareAssignments,
         chainPositionNote: draft.chainPositionNote,
         wantsEngraving: draft.wantsEngraving,
         engravingText: draft.engravingText,
@@ -640,29 +646,51 @@ export function OrderForm() {
       },
     });
 
-    append({
-      subjectType: draft.subjectType,
-      subject: draft.subject,
-      furColorNote: draft.furColorNote,
-      breedNote: draft.breedNote,
-      accessoryNote: draft.accessoryNote,
-      bodyFeatureNote: draft.bodyFeatureNote,
-      pose: draft.pose,
-      modelStyle: draft.modelStyle,
-      wantsSelfStanding: draft.wantsSelfStanding,
-      sizeOption: draft.sizeOption,
-      colorQuantities: draft.colorQuantities,
-      wantsHardware: draft.wantsHardware,
-      hardwareColor: draft.wantsHardware ? draft.hardwareColor : DRAFT_DEFAULTS.hardwareColor,
-      chainPositionNote: draft.wantsHardware ? draft.chainPositionNote : "",
-      wantsEngraving: draft.wantsEngraving,
-      engravingText: draft.wantsEngraving ? draft.engravingText : "",
-      engravingFont: draft.engravingFont,
-      referenceImageUrls: generatedReferenceImageUrls,
-      modelUrl: generatedModelUrl,
-      finishedPreviewUrls: generatedPreviewUrls,
-      isCustomModel,
-    });
+    // Pieces that get different straps (or none) must be separate items -- production drills and
+    // ships per item -- so one draft can become several cart lines (see hardwareSplit.ts).
+    const pieces = splitByHardware(
+      {
+        subjectType: draft.subjectType,
+        subject: draft.subject,
+        furColorNote: draft.furColorNote,
+        breedNote: draft.breedNote,
+        accessoryNote: draft.accessoryNote,
+        bodyFeatureNote: draft.bodyFeatureNote,
+        pose: draft.pose,
+        modelStyle: draft.modelStyle,
+        wantsSelfStanding: draft.wantsSelfStanding,
+        sizeOption: draft.sizeOption,
+        colorQuantities: draft.colorQuantities,
+        wantsHardware: draft.wantsHardware,
+        hardwareColor: draft.hardwareColor,
+        chainPositionNote: draft.chainPositionNote,
+        wantsEngraving: draft.wantsEngraving,
+        engravingText: draft.wantsEngraving ? draft.engravingText : "",
+        engravingFont: draft.engravingFont,
+        referenceImageUrls: generatedReferenceImageUrls,
+        modelUrl: generatedModelUrl,
+        finishedPreviewUrls: generatedPreviewUrls,
+        isCustomModel,
+      },
+      draft.hardwareAssignments,
+      DRAFT_DEFAULTS.hardwareColor
+    );
+    if (draft.wantsHardware && pieces.every((p) => !p.wantsHardware)) {
+      methods.setError("hardwareAssignments", {
+        type: "manual",
+        message: "金具をつける個体を1個以上選ぶか、「金具穴を追加する」のチェックを外してください",
+      });
+      return;
+    }
+    if (fields.length + pieces.length > MAX_CART_ITEMS) {
+      methods.setError("hardwareAssignments", {
+        type: "manual",
+        message: `金具の種類ごとに別の商品になるため、カートの上限（${MAX_CART_ITEMS}点）を超えます。金具の種類を減らすか、カートの商品を減らしてください`,
+      });
+      return;
+    }
+    methods.clearErrors("hardwareAssignments");
+    pieces.forEach((piece) => append(piece));
 
     // generationCreditsUsed is intentionally NOT reset here -- it accumulates across the whole
     // set for the credit-usage discount.
@@ -683,31 +711,37 @@ export function OrderForm() {
     if (fields.length >= MAX_CART_ITEMS) return;
     const draft = getValues();
 
-    append({
-      subjectType: draft.subjectType,
-      subject: `${draft.subject}（${POSE_LABELS[pose]}）`,
-      furColorNote: draft.furColorNote,
-      breedNote: draft.breedNote,
-      accessoryNote: draft.accessoryNote,
-      bodyFeatureNote: draft.bodyFeatureNote,
-      pose,
-      modelStyle: draft.modelStyle,
-      wantsSelfStanding: draft.wantsSelfStanding,
-      sizeOption: draft.sizeOption,
-      colorQuantities: draft.colorQuantities,
-      wantsHardware: draft.wantsHardware,
-      hardwareColor: draft.wantsHardware ? draft.hardwareColor : DRAFT_DEFAULTS.hardwareColor,
-      chainPositionNote: draft.wantsHardware ? draft.chainPositionNote : "",
-      // Pose-set items are added automatically as each pose finishes, so there's no field to flag --
-      // an engraving with no text is simply not an engraving (it would otherwise fail checkout).
-      wantsEngraving: draft.wantsEngraving && !!draft.engravingText?.trim(),
-      engravingText: draft.wantsEngraving ? draft.engravingText : "",
-      engravingFont: draft.engravingFont,
-      referenceImageUrls: result.referenceImageUrls,
-      modelUrl: result.modelUrl,
-      finishedPreviewUrls: {},
-      isCustomModel: false,
-    });
+    // Same strap-color split as handleAddToCart (one cart line per strap color), within the cart cap.
+    const pieces = splitByHardware(
+      {
+        subjectType: draft.subjectType,
+        subject: `${draft.subject}（${POSE_LABELS[pose]}）`,
+        furColorNote: draft.furColorNote,
+        breedNote: draft.breedNote,
+        accessoryNote: draft.accessoryNote,
+        bodyFeatureNote: draft.bodyFeatureNote,
+        pose,
+        modelStyle: draft.modelStyle,
+        wantsSelfStanding: draft.wantsSelfStanding,
+        sizeOption: draft.sizeOption,
+        colorQuantities: draft.colorQuantities,
+        wantsHardware: draft.wantsHardware,
+        hardwareColor: draft.hardwareColor,
+        chainPositionNote: draft.chainPositionNote,
+        // Pose-set items are added automatically as each pose finishes, so there's no field to flag --
+        // an engraving with no text is simply not an engraving (it would otherwise fail checkout).
+        wantsEngraving: draft.wantsEngraving && !!draft.engravingText?.trim(),
+        engravingText: draft.wantsEngraving ? draft.engravingText : "",
+        engravingFont: draft.engravingFont,
+        referenceImageUrls: result.referenceImageUrls,
+        modelUrl: result.modelUrl,
+        finishedPreviewUrls: {},
+        isCustomModel: false,
+      },
+      draft.hardwareAssignments,
+      DRAFT_DEFAULTS.hardwareColor
+    );
+    pieces.slice(0, MAX_CART_ITEMS - fields.length).forEach((piece) => append(piece));
 
     setValue("generationCreditsUsed", getValues("generationCreditsUsed") + 1);
     setAddedFlash(true);
@@ -736,6 +770,7 @@ export function OrderForm() {
     setValue("colorQuantities", lastItem.draft.colorQuantities);
     setValue("wantsHardware", lastItem.draft.wantsHardware);
     setValue("hardwareColor", lastItem.draft.hardwareColor);
+    setValue("hardwareAssignments", lastItem.draft.hardwareAssignments ?? {});
     setValue("wantsEngraving", lastItem.draft.wantsEngraving);
     setValue("engravingText", lastItem.draft.engravingText);
     setValue("engravingFont", lastItem.draft.engravingFont);
@@ -766,6 +801,7 @@ export function OrderForm() {
     setValue("colorQuantities", lastItem.draft.colorQuantities);
     setValue("wantsHardware", lastItem.draft.wantsHardware);
     setValue("hardwareColor", lastItem.draft.hardwareColor);
+    setValue("hardwareAssignments", lastItem.draft.hardwareAssignments ?? {});
     // The engraving toggle/font are style choices worth carrying over, but the text itself is
     // pet-specific (usually a name) just like the subject above -- reset it, not copy it.
     setValue("wantsEngraving", lastItem.draft.wantsEngraving);

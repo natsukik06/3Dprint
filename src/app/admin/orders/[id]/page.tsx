@@ -276,12 +276,6 @@ function ItemCard({
         <span className="ml-1 rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">
           {item.sizeOption}
         </span>
-        <span
-          className="ml-1 rounded bg-indigo-100 px-1 text-[10px] font-bold text-indigo-700"
-          title="刻印するイニシャル"
-        >
-          {item.initial}
-        </span>
         {item.isCustomModel && (
           <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">
             お客様提供モデル

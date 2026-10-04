@@ -27,7 +27,6 @@ import {
   ENGRAVING_FONT_OPTIONS,
   HARDWARE_COLOR_LABELS,
   HARDWARE_COLOR_OPTIONS,
-  INITIAL_OPTIONS,
   MAX_ENGRAVING_TEXT_LENGTH,
   MAX_TOTAL_QUANTITY,
   SIZE_LABELS,
@@ -179,32 +178,6 @@ export function SpecOptions({
   return (
     <div className="space-y-6">
       {!hideSubjectAndPose && <SubjectPoseFields />}
-
-      <div className="space-y-2">
-        <label
-          htmlFor="initial"
-          className="block text-sm font-medium text-slate-700"
-        >
-          刻印するイニシャルを1文字選んでください
-        </label>
-        <select
-          id="initial"
-          {...register("initial")}
-          className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
-        >
-          {INITIAL_OPTIONS.map((letter) => (
-            <option key={letter} value={letter}>
-              {letter}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-slate-500">
-          底面の目立たない場所に小さく彫り込みます。複数点セットで作る場合も、選んだ文字でお手元の一点一点を見分けられます。
-        </p>
-        {errors.initial && (
-          <p className="text-sm text-red-600">{errors.initial.message}</p>
-        )}
-      </div>
 
       <fieldset className="min-w-0 space-y-2">
         <legend className="text-sm font-medium text-slate-700">サイズ</legend>

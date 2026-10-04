@@ -62,7 +62,6 @@ type ItemDraftSnapshot = Pick<
   | "wantsHardware"
   | "hardwareColor"
   | "chainPositionNote"
-  | "initial"
   | "wantsEngraving"
   | "engravingText"
   | "engravingFont"
@@ -124,7 +123,6 @@ const DRAFT_DEFAULTS = {
   wantsHardware: false,
   hardwareColor: "silver" as const,
   chainPositionNote: "",
-  initial: "A" as const,
   wantsEngraving: false,
   engravingText: "",
   engravingFont: "Arial" as const,
@@ -245,9 +243,6 @@ function CartItemCard({
                 shipping method is too long for this badge; that detail is already shown at the
                 spec step. */}
                 {SIZE_LABELS[item.sizeOption].split("（")[0]}
-              </span>
-              <span className="rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">
-                {item.initial}
               </span>
             </p>
           </div>
@@ -559,7 +554,6 @@ export function OrderForm() {
     setValue("wantsHardware", DRAFT_DEFAULTS.wantsHardware);
     setValue("hardwareColor", DRAFT_DEFAULTS.hardwareColor);
     setValue("chainPositionNote", DRAFT_DEFAULTS.chainPositionNote);
-    setValue("initial", DRAFT_DEFAULTS.initial);
     setValue("wantsEngraving", DRAFT_DEFAULTS.wantsEngraving);
     setValue("engravingText", DRAFT_DEFAULTS.engravingText);
     setValue("engravingFont", DRAFT_DEFAULTS.engravingFont);
@@ -609,7 +603,6 @@ export function OrderForm() {
         wantsHardware: draft.wantsHardware,
         hardwareColor: draft.hardwareColor,
         chainPositionNote: draft.chainPositionNote,
-        initial: draft.initial,
         wantsEngraving: draft.wantsEngraving,
         engravingText: draft.engravingText,
         engravingFont: draft.engravingFont,
@@ -631,7 +624,6 @@ export function OrderForm() {
       wantsHardware: draft.wantsHardware,
       hardwareColor: draft.wantsHardware ? draft.hardwareColor : DRAFT_DEFAULTS.hardwareColor,
       chainPositionNote: draft.wantsHardware ? draft.chainPositionNote : "",
-      initial: draft.initial,
       wantsEngraving: draft.wantsEngraving,
       engravingText: draft.wantsEngraving ? draft.engravingText : "",
       engravingFont: draft.engravingFont,
@@ -675,7 +667,6 @@ export function OrderForm() {
       wantsHardware: draft.wantsHardware,
       hardwareColor: draft.wantsHardware ? draft.hardwareColor : DRAFT_DEFAULTS.hardwareColor,
       chainPositionNote: draft.wantsHardware ? draft.chainPositionNote : "",
-      initial: draft.initial,
       // Pose-set items are added automatically as each pose finishes, so there's no field to flag --
       // an engraving with no text is simply not an engraving (it would otherwise fail checkout).
       wantsEngraving: draft.wantsEngraving && !!draft.engravingText?.trim(),
@@ -714,7 +705,6 @@ export function OrderForm() {
     setValue("colorQuantities", lastItem.draft.colorQuantities);
     setValue("wantsHardware", lastItem.draft.wantsHardware);
     setValue("hardwareColor", lastItem.draft.hardwareColor);
-    setValue("initial", lastItem.draft.initial);
     setValue("wantsEngraving", lastItem.draft.wantsEngraving);
     setValue("engravingText", lastItem.draft.engravingText);
     setValue("engravingFont", lastItem.draft.engravingFont);
@@ -745,9 +735,8 @@ export function OrderForm() {
     setValue("colorQuantities", lastItem.draft.colorQuantities);
     setValue("wantsHardware", lastItem.draft.wantsHardware);
     setValue("hardwareColor", lastItem.draft.hardwareColor);
-    setValue("initial", DRAFT_DEFAULTS.initial);
     // The engraving toggle/font are style choices worth carrying over, but the text itself is
-    // pet-specific (usually a name) just like subject/initial above -- reset it, not copy it.
+    // pet-specific (usually a name) just like the subject above -- reset it, not copy it.
     setValue("wantsEngraving", lastItem.draft.wantsEngraving);
     setValue("engravingText", DRAFT_DEFAULTS.engravingText);
     setValue("engravingFont", lastItem.draft.engravingFont);

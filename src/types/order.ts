@@ -51,14 +51,6 @@ export const HARDWARE_COLOR_OPTIONS =["silver", "gold", "roseGold", "clear"] as 
 // order item), instead of two separate figures. How they're arranged relative to each other --
 // see figureGridPromptDuo in src/lib/gemini.ts for what each actually asks the AI to draw.
 export const SCENE_LAYOUT_OPTIONS = ["sideBySide", "snuggled", "stacked"] as const;
-// A-Z, engraved into the underside of the piece during hollowing (see functions/src's
-// engraveInitial) so a physical piece can never be mixed up with another order's piece or
-// color once it's off the shared print plate and out of colorless resin -- the customer's own
-// choice of letter travels with the object itself, not just a paper work sheet.
-export const INITIAL_OPTIONS = [
-  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-  "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-] as const;
 // What's being reproduced -- affects which detail-note fields are shown, the AI prompt wording
 // (fur/anatomy language only makes sense for "pet"), and whether the pose picker is shown at all
 // ("object" always reproduces the pose as photographed, since a mug doesn't sit/stand/lie down).
@@ -130,7 +122,6 @@ export type PetDetails = {
 };
 export type HardwareColor = (typeof HARDWARE_COLOR_OPTIONS)[number];
 export type EngravingFont = (typeof ENGRAVING_FONT_OPTIONS)[number];
-export type Initial = (typeof INITIAL_OPTIONS)[number];
 export type SizeOption = (typeof SIZE_OPTIONS)[number];
 export type OrderStatus = (typeof ORDER_STATUS_OPTIONS)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUS_OPTIONS)[number];
@@ -344,10 +335,7 @@ export const orderItemSchema = z
     wantsHardware: z.boolean(),
     hardwareColor: z.enum(HARDWARE_COLOR_OPTIONS),
     chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
-    // Engraved into the piece during hollowing -- see INITIAL_OPTIONS above.
-    initial: z.enum(INITIAL_OPTIONS),
-    // Customer-chosen name/text engraving -- separate from `initial` above (that's a hidden
-    // single-letter piece-tracking mark; this is a visible, customer-requested decoration).
+    // Customer-chosen name/text engraving (a visible, customer-requested decoration).
     wantsEngraving: z.boolean(),
     engravingText: z
       .string()
@@ -390,7 +378,6 @@ export const orderFormSchema = z
   wantsHardware: z.boolean(),
   hardwareColor: z.enum(HARDWARE_COLOR_OPTIONS),
   chainPositionNote: z.string().max(200, "200文字以内で入力してください").optional(),
-  initial: z.enum(INITIAL_OPTIONS, "イニシャルを選択してください"),
   wantsEngraving: z.boolean(),
   engravingText: z
     .string()

@@ -67,10 +67,6 @@ function SpecRowCard({ row }: { row: SpecRow }) {
           </div>
         )}
         <div>
-          <dt className="inline font-medium text-slate-500">管理刻印：</dt>
-          <dd className="inline">{row.initial}</dd>
-        </div>
-        <div>
           <dt className="inline font-medium text-slate-500">金具穴：</dt>
           <dd className="inline">
             {row.wantsHardware

@@ -30,9 +30,7 @@ import { db } from "@/lib/firebase";
 import { uploadCustomModel } from "@/lib/orders";
 import { CHARO_PREMADE_MODEL } from "@/lib/premadeModels";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
-import { MAGIC_COLOR_LABELS } from "@/lib/pricing";
 import {
-  MAGIC_COLOR_OPTIONS,
   MAX_CUSTOM_MODEL_SIZE_BYTES,
   type ColorQuantities,
   type MagicColor,
@@ -66,11 +64,6 @@ const MODEL_GENERATION_STATUS_MESSAGES = [
   "3Dメッシュを構築中...",
   "細部の形状を最適化中...",
   "陰影と質感を計算中...",
-];
-const PREVIEW_GENERATION_STATUS_MESSAGES = [
-  "色味を調整中...",
-  "レジンの質感を計算中...",
-  "光の反射を計算中...",
 ];
 const STATUS_MESSAGE_INTERVAL_MS = 1800;
 
@@ -131,12 +124,6 @@ export type GeneratedModel = {
   subject: string;
   pose: Pose;
 };
-
-type ColorPreviewState =
-  | { phase: "idle" }
-  | { phase: "generating" }
-  | { phase: "success"; previewUrl: string }
-  | { phase: "error"; message: string };
 
 type ModelState =
   | { phase: "idle" }
@@ -254,35 +241,12 @@ export function PreviewPanel({
   onGenerated,
   initialModel,
 }: PreviewPanelProps) {
-  const purchasedColors = MAGIC_COLOR_OPTIONS.filter(
-    (color) => (colorQuantities[color] ?? 0) > 0
-  );
-
   // In "reuse" mode, falling back to the premade Charo mascot when no specific past model was
   // passed in means this panel always opens with SOMETHING selected -- no empty/idle state to
   // click through first, matching the "最初はちゃろが選択済み" default from the product-page
   // redesign.
   const effectiveInitialModel = mode === "reuse" ? (initialModel ?? CHARO_PREMADE_MODEL) : null;
 
-  const [previewsByColor, setPreviewsByColor] = useState<
-    Partial<Record<MagicColor, ColorPreviewState>>
-  >(() => {
-    if (!effectiveInitialModel) return {};
-    const restored: Partial<Record<MagicColor, ColorPreviewState>> = {};
-    for (const [color, url] of Object.entries(effectiveInitialModel.finishedPreviewUrls)) {
-      if (url) restored[color as MagicColor] = { phase: "success", previewUrl: url };
-    }
-    return restored;
-  });
-  const [activeColor, setActiveColor] = useState<MagicColor>(() => {
-    if (effectiveInitialModel) {
-      const firstColor = Object.keys(effectiveInitialModel.finishedPreviewUrls)[0] as
-        | MagicColor
-        | undefined;
-      if (firstColor) return firstColor;
-    }
-    return purchasedColors[0] ?? MAGIC_COLOR_OPTIONS[0];
-  });
   const [modelState, setModelState] = useState<ModelState>(() =>
     effectiveInitialModel
       ? { phase: "success", modelUrl: effectiveInitialModel.modelUrl }
@@ -294,7 +258,9 @@ export function PreviewPanel({
   const [gallery, setGallery] = useState<GeneratedModel[]>(
     mode === "reuse" ? [CHARO_PREMADE_MODEL] : []
   );
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
+    effectiveInitialModel?.taskId ?? null
+  );
   // Tripo's renderedImageUrl is a signed, expiring URL -- an old past model's thumbnail can
   // start failing to load once it expires (the modelUrl itself is fine; it's re-hosted
   // permanently, see /api/generate-model/[taskId]). Tracks which ones have failed so the gallery
@@ -302,19 +268,11 @@ export function PreviewPanel({
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
   const [isClearMaterial, setIsClearMaterial] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [expandedView, setExpandedView] = useState<"model" | "preview" | null>(
-    null
-  );
+  const [expandedView, setExpandedView] = useState<"model" | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modelViewerRef = useRef<ModelViewerElement | null>(null);
   const modalModelViewerRef = useRef<ModelViewerElement | null>(null);
   const suppressResetRef = useRef(false);
-  // The first magic-color completion the customer successfully generated for this draft --
-  // once set, never overwritten (even by later colors or regenerations of this same color). Used
-  // as the visual reference for the 4-direction turnaround/3D shape below, so the shape the
-  // customer actually gets matches the finished look they already approved, instead of the 3D
-  // step running its own independent (and stylistically different) generation off the raw photo.
-  const firstPreviewRef = useRef<{ color: MagicColor; previewUrl: string } | null>(null);
   // Companion data for whichever taskId modelState is currently "polling" -- see
   // SavedPreviewDraft above for why this can't just live inside ModelState itself.
   const pollContextRef = useRef<{
@@ -333,22 +291,9 @@ export function PreviewPanel({
     name: ["wantsHardware"],
   });
 
-  if (purchasedColors.length > 0 && !purchasedColors.includes(activeColor)) {
-    setActiveColor(purchasedColors[0]);
-  }
-
-  const activePreview = previewsByColor[activeColor] ?? { phase: "idle" };
-  const hasAnySuccessfulPreview = Object.values(previewsByColor).some(
-    (p) => p?.phase === "success"
-  );
-
   const modelGenerationStatus = useCyclingMessage(
     modelState.phase === "starting" || modelState.phase === "polling",
     MODEL_GENERATION_STATUS_MESSAGES
-  );
-  const previewGenerationStatus = useCyclingMessage(
-    activePreview.phase === "generating",
-    PREVIEW_GENERATION_STATUS_MESSAGES
   );
 
   const currentModelUrl =
@@ -374,7 +319,6 @@ export function PreviewPanel({
     if (effectiveInitialModel) {
       setValue("subject", effectiveInitialModel.subject, { shouldValidate: true });
       setValue("pose", effectiveInitialModel.pose);
-      setSelectedTaskId(effectiveInitialModel.taskId);
       onGenerated({
         modelUrl: effectiveInitialModel.modelUrl,
         finishedPreviewUrls: effectiveInitialModel.finishedPreviewUrls,
@@ -457,9 +401,7 @@ export function PreviewPanel({
     if (suppressResetRef.current) {
       suppressResetRef.current = false;
     } else {
-      setPreviewsByColor({});
       setModelState({ phase: "idle" });
-      firstPreviewRef.current = null;
     }
   }
 
@@ -516,51 +458,6 @@ export function PreviewPanel({
       for (const el of elements) el.removeEventListener("load", apply);
     };
   }, [currentModelUrl, isClearMaterial, expandedView]);
-
-  async function handleGeneratePreviewClick() {
-    if (photos.length === 0 || !subject.trim() || !user) return;
-
-    setPreviewsByColor((prev) => ({
-      ...prev,
-      [activeColor]: { phase: "generating" },
-    }));
-    try {
-      const idToken = await user.getIdToken();
-      const formData = new FormData();
-      photos.forEach((file) => formData.append("photos", file));
-      formData.append("subject", subject);
-      formData.append("subjectType", subjectType);
-      formData.append("pose", pose);
-      formData.append("modelStyle", modelStyle);
-      formData.append("wantsSelfStanding", String(wantsSelfStanding));
-      formData.append("magicColor", activeColor);
-      appendPetDetails(formData, petDetails);
-
-      const res = await fetch("/api/generate-preview", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-        body: formData,
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "生成に失敗しました");
-
-      setPreviewsByColor((prev) => ({
-        ...prev,
-        [activeColor]: { phase: "success", previewUrl: json.previewUrl },
-      }));
-      if (!firstPreviewRef.current) {
-        firstPreviewRef.current = { color: activeColor, previewUrl: json.previewUrl };
-      }
-    } catch (err) {
-      setPreviewsByColor((prev) => ({
-        ...prev,
-        [activeColor]: {
-          phase: "error",
-          message: err instanceof Error ? err.message : "生成に失敗しました",
-        },
-      }));
-    }
-  }
 
   function pollStatus(
     taskId: string,
@@ -632,7 +529,6 @@ export function PreviewPanel({
 
   async function handleGenerateModelClick() {
     if (
-      !hasAnySuccessfulPreview ||
       photos.length === 0 ||
       !subject.trim() ||
       !user
@@ -643,14 +539,7 @@ export function PreviewPanel({
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     onGenerated(null);
     setValue("chainPositionNote", "");
-    const finishedPreviewUrls: FinishedPreviewUrls = Object.fromEntries(
-      Object.entries(previewsByColor)
-        .filter(([, state]) => state?.phase === "success")
-        .map(([color, state]) => [
-          color,
-          (state as { phase: "success"; previewUrl: string }).previewUrl,
-        ])
-    );
+    const finishedPreviewUrls: FinishedPreviewUrls = {};
     setModelState({ phase: "starting" });
 
     try {
@@ -663,9 +552,6 @@ export function PreviewPanel({
       formData.append("modelStyle", modelStyle);
       formData.append("wantsSelfStanding", String(wantsSelfStanding));
       formData.append("checkHollowFill", String((colorQuantities.furCavity ?? 0) > 0));
-      if (firstPreviewRef.current) {
-        formData.append("referenceFinishedImageUrl", firstPreviewRef.current.previewUrl);
-      }
       appendPetDetails(formData, petDetails);
 
       const res = await fetch("/api/generate-model", {
@@ -830,15 +716,6 @@ export function PreviewPanel({
     setValue("pose", entry.pose, { shouldValidate: true });
     setSelectedTaskId(entry.taskId);
     setModelState({ phase: "success", modelUrl: entry.modelUrl });
-    const restored: Partial<Record<MagicColor, ColorPreviewState>> = {};
-    for (const [color, url] of Object.entries(entry.finishedPreviewUrls)) {
-      if (url) {
-        restored[color as MagicColor] = { phase: "success", previewUrl: url };
-      }
-    }
-    setPreviewsByColor(restored);
-    const firstColor = Object.keys(restored)[0] as MagicColor | undefined;
-    if (firstColor) setActiveColor(firstColor);
     onGenerated({
       modelUrl: entry.modelUrl,
       finishedPreviewUrls: entry.finishedPreviewUrls,
@@ -853,7 +730,7 @@ export function PreviewPanel({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="mx-auto w-full max-w-sm">
         <div className="relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-3 text-center">
           {modelState.phase === "success" && (
             <button
@@ -925,61 +802,7 @@ export function PreviewPanel({
           )}
         </div>
 
-        <div className="relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-3 text-center">
-          {mode === "custom" ? (
-            <>
-              <Sparkles className="h-10 w-10 text-slate-300" strokeWidth={1.5} />
-              <p className="text-xs text-slate-400">
-                持ち込みモデルのため完成イメージのプレビューはありません
-              </p>
-            </>
-          ) : (
-            <>
-              {activePreview.phase === "success" && (
-                <button
-                  type="button"
-                  onClick={() => setExpandedView("preview")}
-                  aria-label="完成イメージを拡大表示"
-                  className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1.5 text-slate-600 shadow hover:bg-white"
-                >
-                  <Maximize2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-              {activePreview.phase === "idle" && (
-                <>
-                  <Sparkles className="h-10 w-10 text-slate-300" strokeWidth={1.5} />
-                  <p className="text-xs text-slate-400">
-                    {mode === "reuse"
-                      ? "この色の完成イメージはありません（以前生成した色のみ表示されます）"
-                      : "完成イメージ（未生成）"}
-                  </p>
-                </>
-              )}
-              {activePreview.phase === "generating" && (
-                <>
-                  <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-                  <p className="text-xs text-slate-500">生成中...</p>
-                  <p className="text-[10px] text-slate-400">{previewGenerationStatus}</p>
-                </>
-              )}
-              {activePreview.phase === "success" && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={activePreview.previewUrl}
-                  alt="魔法の素材での完成イメージ"
-                  className="h-full w-full object-cover"
-                />
-              )}
-              {activePreview.phase === "error" && (
-                <p className="text-xs text-red-600">{activePreview.message}</p>
-              )}
-            </>
-          )}
-        </div>
       </div>
-      <p className="text-center text-xs text-slate-400">
-        左：3D形状（白マット） / 右：選択中カラーの完成イメージ
-      </p>
 
       {mode === "custom" && (
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -1019,67 +842,33 @@ export function PreviewPanel({
         </div>
       )}
 
-      {(mode === "ai" || mode === "reuse") && purchasedColors.length > 1 && (
-        <div className="flex justify-center gap-2">
-          {purchasedColors.map((color) => (
-            <button
-              key={color}
-              type="button"
-              onClick={() => setActiveColor(color)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                color === activeColor
-                  ? "border-slate-800 bg-slate-800 text-white"
-                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {MAGIC_COLOR_LABELS[color]}
-              {previewsByColor[color]?.phase === "success" && " ✓"}
-            </button>
-          ))}
-        </div>
-      )}
-
       {mode === "ai" &&
+        modelState.phase !== "reviewingViews" &&
         (user ? (
           <button
             type="button"
-            onClick={handleGeneratePreviewClick}
+            onClick={handleGenerateModelClick}
             disabled={
               photos.length === 0 ||
               !subject.trim() ||
-              activePreview.phase === "generating"
+              modelState.phase === "starting" ||
+              modelState.phase === "polling"
             }
-            className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {activePreview.phase === "success" || activePreview.phase === "error"
-              ? `${MAGIC_COLOR_LABELS[activeColor]}の完成イメージを作り直す（無料）`
-              : `${MAGIC_COLOR_LABELS[activeColor]}の完成イメージを生成する（無料）`}
+            {modelState.phase === "success" || modelState.phase === "error"
+              ? "写真からもう一度、形状を作り直す（無料）"
+              : "写真から3D形状を作る（無料）"}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => signInWithGoogle()}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
           >
-            ログインして完成イメージを生成する
+            ログインして3D形状を作る
           </button>
         ))}
-
-      {mode === "ai" && hasAnySuccessfulPreview && modelState.phase !== "reviewingViews" && (
-        <button
-          type="button"
-          onClick={handleGenerateModelClick}
-          disabled={
-            modelState.phase === "starting" ||
-            modelState.phase === "polling"
-          }
-          className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {modelState.phase === "success" || modelState.phase === "error"
-            ? "この形状でもう一度3D化する（無料）"
-            : "この形状を3D化する（無料）"}
-        </button>
-      )}
 
       {mode === "ai" && modelState.phase === "reviewingViews" && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -1271,7 +1060,7 @@ export function PreviewPanel({
             className="relative aspect-square w-full max-w-2xl overflow-hidden rounded-2xl bg-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
-            {expandedView === "model" && modelState.phase === "success" && (
+            {modelState.phase === "success" && (
               <model-viewer
                 ref={modalModelViewerRef}
                 src={displayModelUrl}
@@ -1280,14 +1069,6 @@ export function PreviewPanel({
                 auto-rotate
                 shadow-intensity="1"
                 style={{ width: "100%", height: "100%" }}
-              />
-            )}
-            {expandedView === "preview" && activePreview.phase === "success" && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={activePreview.previewUrl}
-                alt="魔法の素材での完成イメージ（拡大）"
-                className="h-full w-full object-contain"
               />
             )}
           </div>

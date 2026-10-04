@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
             <li>お名前、メールアドレス、電話番号、郵便番号、ご住所</li>
             <li>ご注文時にアップロードいただく参考写真、お持ち込みの3Dモデルデータ</li>
             <li>Googleアカウントによるログイン情報（メールアドレス、アカウントを識別するID等）</li>
-            <li>生成された3Dモデル・完成イメージ画像</li>
+            <li>生成された3Dモデル・4方向のスケッチ画像</li>
             <li>ご注文内容（仕様・数量・金額等）およびお問い合わせ内容</li>
             <li>3Dモデルの作成回数、クレジットの残高、割引の利用状況</li>
             <li>
@@ -58,7 +58,7 @@ export default function PrivacyPolicyPage() {
         <Section title="利用目的">
           <ul className="list-disc space-y-1 pl-5">
             <li>ご注文いただいた商品の製作・梱包・発送のため</li>
-            <li>3Dモデルおよび完成イメージの生成のため</li>
+            <li>3Dモデルおよび4方向スケッチの生成のため</li>
             <li>ご注文の確認、発送のお知らせなど、取引に関する連絡のため</li>
             <li>お問い合わせ・アフターサポート対応のため</li>
             <li>決済処理のため</li>
@@ -79,7 +79,7 @@ export default function PrivacyPolicyPage() {
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>Google（Firebase） - 会員認証、データ保存、ファイルストレージ</li>
-            <li>Google（Gemini API） - 完成イメージ画像の生成（アップロード写真を送信します）</li>
+            <li>Google（Gemini API） - 4方向スケッチ画像の生成（アップロード写真を送信します）</li>
             <li>Tripo（tripo3d.ai） - 写真からの3Dモデル生成（生成用の画像を送信します）</li>
             <li>Stripe, Inc. - 決済処理</li>
             <li>Resend, Inc. - ご注文の確認メール・お知らせメールの送信（メールアドレス、お名前、注文内容の一部）</li>

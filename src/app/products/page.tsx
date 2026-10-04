@@ -120,8 +120,8 @@ export default function ProductsPage() {
                 </span>
                 {/* eslint-disable-next-line @next/next/no-img-element -- Firebase Storage URL, not a local/next.config-whitelisted remote domain */}
                 <img
-                  src={CHARO_PREMADE_MODEL.finishedPreviewUrls.starryBlue}
-                  alt="ちゃろ（既製フィギュア・星空ブルー）"
+                  src={CHARO_PREMADE_MODEL.renderedImageUrl ?? undefined}
+                  alt="ちゃろ（既製フィギュア）"
                   className="h-full w-full object-cover"
                 />
               </div>

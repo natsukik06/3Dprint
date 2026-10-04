@@ -12,7 +12,7 @@ import { CHARO_PREMADE_MODEL } from "@/lib/premadeModels";
 // real generation history as the example (see src/lib/premadeModels.ts for how Charo itself was
 // made). The 4-direction turnaround shots are a separate, permanently-hosted set (monochrome
 // "white clay" style, generated straight from the logo) -- distinct from CHARO_PREMADE_MODEL's
-// own finishedPreviewUrls, which are the color completions shown in step 2/4.
+// own finishedPreviewUrls, which is shown in the last step.
 const HOW_IT_WORKS_VIEWS = {
   front:
     "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-front.png?alt=media&token=69b13389-cf2c-4da3-ba13-213d54b7c657",
@@ -140,11 +140,11 @@ export default function Home() {
                 ちゃろができるまで
               </h2>
               <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#6b5c40] dark:text-[#9fb0ae]">
-                写真いちまいから、世界にひとつだけの透きとおる結晶フィギュアへ。ブランドマスコット「ちゃろ」を例に、4つの工程をご紹介します。
+                写真いちまいから、世界にひとつだけの透きとおる結晶フィギュアへ。ブランドマスコット「ちゃろ」を例に、3つの工程をご紹介します。
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <div className="rounded-2xl border border-[#d9cbb0] bg-white p-4 dark:border-[#232726] dark:bg-[#121415]">
                 <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#0f766e] text-sm font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
                   1
@@ -163,27 +163,10 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-[#d9cbb0] bg-white p-4 dark:border-[#232726] dark:bg-[#121415]">
-                <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#0f766e] text-sm font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
-                  2
-                </span>
-                <div className="aspect-square overflow-hidden rounded-xl bg-[#f4ecdc] dark:bg-white/5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={CHARO_PREMADE_MODEL.finishedPreviewUrls.starryBlue}
-                    alt="完成イメージ：星空ブルー"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <p className="mt-3 text-sm font-semibold">好きな色で完成イメージ</p>
-                <p className="mt-1 text-xs leading-6 text-[#6b5c40] dark:text-[#9fb0ae]">
-                  好きな魔法のカラーを選ぶと、AIが完成イメージを1枚生成します。
-                </p>
-              </div>
 
               <div className="rounded-2xl border border-[#d9cbb0] bg-white p-4 dark:border-[#232726] dark:bg-[#121415]">
                 <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#0f766e] text-sm font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
-                  3
+                  2
                 </span>
                 <div className="grid aspect-square grid-cols-2 gap-0.5 overflow-hidden rounded-xl bg-[#f4ecdc] dark:bg-white/5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -195,16 +178,16 @@ export default function Home() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={HOW_IT_WORKS_VIEWS.right} alt="右側面スケッチ" className="h-full w-full object-cover" />
                 </div>
-                <p className="mt-3 text-sm font-semibold">その画像から4方向をスケッチ</p>
+                <p className="mt-3 text-sm font-semibold">写真から4方向をスケッチ</p>
                 <p className="mt-1 text-xs leading-6 text-[#6b5c40] dark:text-[#9fb0ae]">
-                  完成イメージをもとに、AIが正面・左右・背面をまとめて描き上げます。
+                  お送りいただいた写真をもとに、AIが正面・左右・背面をまとめて描き上げます。形がイメージと合うか、ここで確認できます（作り直しは無料）。
                 </p>
               </div>
 
               <div className="rounded-2xl border border-[#d9cbb0] bg-white p-4 dark:border-[#232726] dark:bg-[#121415]">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0f766e] text-sm font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
-                    4
+                    3
                   </span>
                   <span className="rounded-full bg-[#f4ecdc] px-2 py-0.5 text-[10px] font-bold text-[#8a5a34] dark:bg-white/10 dark:text-[#e8c98a]">
                     ¥{CREDIT_PRICE_YEN}/回

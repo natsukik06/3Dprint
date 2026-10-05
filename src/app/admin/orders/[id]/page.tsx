@@ -20,6 +20,7 @@ import { db } from "@/lib/firebase";
 import { MAGIC_COLOR_LABELS, POSE_LABELS, formatYen } from "@/lib/pricing";
 import { buildLabelPrintCommands } from "@/lib/labelCommands";
 import { waitForJob, type JobSnapshot } from "@/lib/watchJob";
+import { SURVEY_PRICE_LABELS, type SurveyAnswers } from "@/types/survey";
 import { estimateRemaining } from "@/lib/eta";
 import {
   HARDWARE_COLOR_LABELS,
@@ -30,6 +31,8 @@ import {
   type OrderItemRecord,
   type PaymentStatus,
 } from "@/types/order";
+
+type SurveyRow = SurveyAnswers & { createdAt?: { toDate: () => Date } };
 
 type OrderDetail = {
   orderNumber?: string;
@@ -680,6 +683,24 @@ function AdminOrderDetail({ id }: { id: string }) {
   const [productionByIndex, setProductionByIndex] = useState<
     Record<number, ItemProduction>
   >({});
+  // The QR-sticker survey (see /survey), matched to this order by the customer's email.
+  const [survey, setSurvey] = useState<SurveyRow | null | undefined>(undefined);
+
+  useEffect(() => {
+    const email = order?.customerEmail;
+    if (!email) return;
+    let cancelled = false;
+    getDocs(query(collection(db, "survey_responses"), where("email", "==", email)))
+      .then((snap) => {
+        if (!cancelled) setSurvey(snap.docs[0] ? (snap.docs[0].data() as SurveyRow) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setSurvey(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [order?.customerEmail]);
 
   useEffect(() => {
     let cancelled = false;
@@ -742,8 +763,88 @@ function AdminOrderDetail({ id }: { id: string }) {
     return <p className="text-sm text-slate-500">注文が見つかりません</p>;
   }
 
+  const productions = Object.values(productionByIndex);
+  const allCompleted =
+    productions.length > 0 && productions.every((p) => p.status === "completed");
+  const timeline: { label: string; done: boolean; detail?: string }[] = [
+    {
+      label: "ご注文",
+      done: true,
+      detail: order.createdAt?.toDate().toLocaleString("ja-JP"),
+    },
+    {
+      label: "お支払い",
+      done: order.paymentStatus === "paid",
+      detail: order.paidAt?.toDate().toLocaleString("ja-JP"),
+    },
+    {
+      label: "製作",
+      done: allCompleted,
+      detail:
+        productions.length === 0
+          ? "支払い後に開始"
+          : `${productions.filter((p) => p.status === "completed").length}／${order.items.length}点 完了`,
+    },
+    {
+      label: "発送",
+      done: order.shipped,
+      detail: order.shippedAt?.toDate().toLocaleString("ja-JP"),
+    },
+    {
+      label: "アンケート",
+      done: !!survey,
+      detail: survey ? survey.createdAt?.toDate().toLocaleString("ja-JP") : "未回答",
+    },
+  ];
+
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-900">この注文の経過</p>
+          <Link
+            href={`/admin/sheets?order=${id}`}
+            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+          >
+            作業シートを開く（印刷）
+          </Link>
+        </div>
+        <ol className="space-y-1.5">
+          {timeline.map((step) => (
+            <li key={step.label} className="flex items-center gap-2 text-sm">
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                  step.done ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-400"
+                }`}
+              >
+                {step.done ? "✓" : ""}
+              </span>
+              <span className={step.done ? "font-semibold text-slate-900" : "text-slate-500"}>
+                {step.label}
+              </span>
+              {step.detail && <span className="text-xs text-slate-500">{step.detail}</span>}
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {survey && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="mb-1 text-sm font-semibold text-slate-900">アンケートのご回答</p>
+          <InfoRow label="知った場所" value={survey.foundVia} />
+          <InfoRow label="満足度" value={`${survey.satisfaction}／5`} />
+          <InfoRow label="ペットに似ていたか" value={`${survey.likeness}／5`} />
+          <InfoRow label="価格" value={SURVEY_PRICE_LABELS[survey.priceFeel]} />
+          <InfoRow label="友達にすすめたいか" value={survey.wouldRecommend ? "すすめたい" : "どちらでもない・すすめない"} />
+          <InfoRow label="声の紹介（匿名）" value={survey.allowQuote ? "許可あり" : "許可なし"} />
+          {survey.comment && (
+            <p className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-sm text-slate-900">
+              {survey.comment}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <InfoRow label="注文番号" value={order.orderNumber ?? id} />
         <InfoRow label="セット点数" value={`${order.items.length}点`} />

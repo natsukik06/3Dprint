@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { after, NextResponse, type NextRequest } from "next/server";
 import { addCredits, addPreviewCredits, resetFreeGenerations } from "@/lib/credits";
+import { notifyOwner } from "@/lib/discordNotify";
 import { sendEmail } from "@/lib/email";
 import { buildOrderConfirmationEmail } from "@/lib/emailTemplates";
 import { adminDb } from "@/lib/firebaseAdmin";
@@ -131,6 +132,22 @@ export async function POST(request: NextRequest) {
             if (!claimed) return;
 
             const snap = await orderRef.get();
+            {
+              const o = snap.data() as
+                | { items?: OrderItemDraft[]; estimatedPriceYen?: number; orderNumber?: string; processingFailed?: boolean }
+                | undefined;
+              const pieces = (o?.items ?? []).reduce(
+                (sum, item) =>
+                  sum + Object.values(item.colorQuantities ?? {}).reduce((s, q) => s + (q ?? 0), 0),
+                0
+              );
+              await notifyOwner(
+                `🛒 新しい注文が入りました！\n注文番号：${o?.orderNumber ?? orderId}\n` +
+                  `金額：${(o?.estimatedPriceYen ?? 0).toLocaleString()}円／${pieces}個\n` +
+                  (o?.processingFailed ? "⚠️ 注文の自動処理に失敗しています。管理画面で確認してください。\n" : "") +
+                  "管理画面：https://diy-figure-app.vercel.app/admin"
+              );
+            }
             const order = snap.data() as
               | {
                   items: OrderItemDraft[];

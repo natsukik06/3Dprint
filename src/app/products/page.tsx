@@ -143,8 +143,8 @@ export default function ProductsPage() {
                 </span>
                 <LikeButton productId="keychain-s" />
                 <Image
-                  src="/showcase/sit-front.jpg"
-                  alt="キーホルダー（小）のイメージ（実際の商品の写真は準備中です）"
+                  src="/photos/kansei-side.jpg"
+                  alt="クリアレジンのキーホルダー（実際の商品・小サイズ）"
                   fill
                   sizes="(min-width: 1024px) 33vw, 30vw"
                   className="object-cover"

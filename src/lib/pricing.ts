@@ -37,7 +37,7 @@ export const SOLID_PRICE_YEN: Record<SolidSizeOption, number> = {
 export const HARDWARE_ADDON_PRICE_YEN = 50;
 // Per physical piece -- covers picking/positioning a 3D-text font in the slicer and the extra
 // slice/print verification per order, on top of the hardware addon's own labor.
-export const ENGRAVING_PRICE_YEN = 100;
+export const ENGRAVING_PRICE_YEN = 300;
 export const SHIPPING_FEE_YEN = 700;
 export const FREE_SHIPPING_SUBTOTAL_YEN = 2200;
 // Friend-referral reward: both the referrer and the new customer they referred get this much off

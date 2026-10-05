@@ -16,6 +16,10 @@ import {
   type SubjectType,
 } from "@/types/order";
 
+// Generation (~25s) + auto-check + at most one regeneration (~25s) + risk check: well under this,
+// but the default limit could be tight now that a second image can be generated.
+export const maxDuration = 120;
+
 function isImageFile(value: FormDataEntryValue | null): value is File {
   return value instanceof File && value.type.startsWith("image/");
 }

@@ -26,6 +26,33 @@ const POSE_PHRASES: Record<Pose, string> = {
   auto: "a natural, well-balanced pose",
 };
 
+// The plain phrases above were not enough: with "a standing pose" / "a lying down pose" the model
+// kept drawing the animal sitting (the usual pose in pet photos) in nearly every generation. For a
+// pet the pose is now spelled out body-part by body-part and the other poses are ruled out. Objects
+// keep the plain phrase (they have no legs to describe).
+const PET_POSE_PHRASES: Partial<Record<Pose, string>> = {
+  sitting:
+    "a SITTING pose: the animal sits upright on its haunches, bottom on the ground, front legs straight",
+  standing:
+    "a STANDING pose: the animal MUST be standing up on all four legs with all four paws on the " +
+    "ground, body held up off the ground, four straight legs visible under the belly — it is " +
+    "NOT sitting, NOT lying down and NOT crouching",
+  lying:
+    "a LYING-DOWN pose: the animal MUST be lying flat on its belly on the ground, body low and " +
+    "touching the ground, legs tucked under or stretched forward, head resting low — it is NOT " +
+    "sitting upright, NOT standing and NOT crouching",
+};
+
+function posePhrase(pose: Pose, subjectType: SubjectType): string {
+  return (subjectType === "pet" ? PET_POSE_PHRASES[pose] : undefined) ?? POSE_PHRASES[pose];
+}
+
+// An explicit pose (sitting / standing / lying) must win over the model's habit of drawing a sitting
+// pet; "auto" and "asPhoto" leave the model free.
+function isExplicitPose(pose: Pose): boolean {
+  return pose === "sitting" || pose === "standing" || pose === "lying";
+}
+
 // What the customer types into "subject" (see SubjectPoseFields.tsx) used to be spliced straight
 // into the prompt as the noun describing what to generate -- so a customer who typed the wrong
 // animal (or left in a placeholder example) over a correct photo got back exactly that wrong
@@ -271,7 +298,11 @@ function figureGridPrompt(
 
   return (
     "A single image containing a precise 2x2 grid of four photos of the same small figurine of " +
-    `${subjectPhrase(subject, subjectType)}, in ${POSE_PHRASES[pose]}. The grid has exactly four equal-sized quadrants with no ` +
+    `${subjectPhrase(subject, subjectType)}, in ${posePhrase(pose, subjectType)}. ` +
+    (isExplicitPose(pose) && subjectType === "pet"
+      ? "The pose is the most important requirement and must be identical in all four photos. "
+      : "") +
+    "The grid has exactly four equal-sized quadrants with no " +
     "border, no divider lines, and no grid lines drawn — just four separate photos placed edge to " +
     "edge on a shared plain white background, each one a different rotation of the same turntable " +
     "sequence around the subject: " +
@@ -288,6 +319,8 @@ function figureGridPrompt(
     "Bottom-right quadrant: right side view — camera rotated 90 degrees clockwise from " +
     "the front view, so the subject's head/nose points toward the RIGHT edge of this quadrant and " +
     "a full flank of the body is visible in profile, the mirror opposite of the top-right quadrant. " +
+    "The left and right side views are exact mirror images of each other, both strict 90-degree " +
+    "side profiles — never a rear three-quarter view and never a view from behind. " +
     "Self-check before finalizing: the top-right and bottom-right quadrants must look CLEARLY " +
     "different from each other (one profile faces left, the other faces right) — if they look " +
     "like the same angle repeated twice, redo the rotation. " +
@@ -296,10 +329,17 @@ function figureGridPrompt(
     "rotation differs between quadrants. Leave generous plain white margin around the figurine " +
     "within each quadrant so no part of it comes close to the quadrant boundary. " +
     stylePhrase(style) +
+    (style === "deformed" && subjectType === "pet"
+      ? " Proportions: about 2 to 2.5 heads tall — a big round head about as wide as the body, " +
+        "large glossy simple eyes, short chubby limbs and a soft plump body — and this chibi " +
+        "proportion applies even if the photographed animal looks slim or long-haired."
+      : "") +
     " Render the " +
     `figurine's actual colors, markings, and ${subjectType === "pet" ? "coat pattern" : "surface pattern/texture"} as closely as possible to the ` +
     "reference photos — do not simplify it to a plain or single-color material. This will be 3D " +
     `printed at only a few centimeters tall, so keep the sculpted form itself sturdy: ${printSafetyPhrase} ` +
+    "The figurine stands directly on the ground with NO turntable, NO round disc, NO pedestal, " +
+    "NO plinth, NO platform and NO base of any kind under it. " +
     "Soft even studio lighting with no harsh shadows or reflections. " +
     `${proportionsPhrase}, full body visible and centered within each quadrant, no text ` +
     "or watermark anywhere (no letters, numbers, captions or labels in any language)." +
@@ -310,8 +350,13 @@ function figureGridPrompt(
     petDetailsPhrase(petDetails, subjectType) +
     (hasComposition
       ? compositionPhrase(photoCount, true) +
-        " The pose and body orientation shown in the composition reference REPLACE the pose " +
-        "described earlier; the subject is still just the single animal from the pet photos."
+        (isExplicitPose(pose) && subjectType === "pet"
+          ? ` The customer explicitly chose ${posePhrase(pose, subjectType)}. That chosen pose is ` +
+            "MANDATORY and wins over the composition reference: take only the rough body " +
+            "direction and head angle from the reference, never its posture. "
+          : " The pose and body orientation shown in the composition reference REPLACE the pose " +
+            "described earlier. ") +
+        "The subject is still just the single animal from the pet photos."
       : "")
   );
 }
@@ -816,7 +861,9 @@ export async function generateWhiteClayViewsDuo(
   subjectType: SubjectType = "pet",
   compositionRef?: ImagePayload,
   // Id of a preset composition (e.g. "lying-together"); only adds posture wording to the prompt.
-  compositionId?: string
+  compositionId?: string,
+  // Test hook: receives the first auto-check result and whether a regeneration happened.
+  onCheck?: (info: { first: DuoCheckResult | null; retried: boolean }) => void
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
   const photos = [...referencePhotosA, ...referencePhotosB];
@@ -835,28 +882,136 @@ export async function generateWhiteClayViewsDuo(
           detectSpecies(client, referencePhotosB),
         ])
     : [null, null];
-  const gridImage = await generateImage(
-    client,
-    neutralRef ? [...photos, neutralRef] : photos,
-    figureGridPromptDuo(
-      referencePhotosA.length,
-      layout,
-      petDetailsA,
-      petDetailsB,
-      subjectType,
-      photos.length,
-      !!compositionRef,
-      {
-        speciesA,
-        speciesB,
-        samePhoto,
-        compositionHint: compositionId ? DUO_COMPOSITION_HINTS[compositionId] : undefined,
-        subjectA,
-        subjectB,
-      }
-    )
+  const prompt = figureGridPromptDuo(
+    referencePhotosA.length,
+    layout,
+    petDetailsA,
+    petDetailsB,
+    subjectType,
+    photos.length,
+    !!compositionRef,
+    {
+      speciesA,
+      speciesB,
+      samePhoto,
+      compositionHint: compositionId ? DUO_COMPOSITION_HINTS[compositionId] : undefined,
+      subjectA,
+      subjectB,
+    }
   );
-  return splitGridImage(gridImage);
+  const refs = neutralRef ? [...photos, neutralRef] : photos;
+
+  let views = await splitGridImage(await generateImage(client, refs, prompt));
+  // Auto-check, then at most ONE regeneration. Whatever the second attempt looks like is returned
+  // (no second check). A check that throws counts as "fine": the generation itself succeeded.
+  // DISABLED by default (DUO_AUTO_CHECK_ENABLED): in testing the check failed every sample and the
+  // regeneration fixed only 1 in 12, so it nearly doubled the cost for no gain. Kept for tests.
+  const first = DUO_AUTO_CHECK_ENABLED
+    ? await checkDuoViews(client, views, isPet).catch((error) => {
+        console.error("checkDuoViews failed", error);
+        return null;
+      })
+    : null;
+  let retried = false;
+  if (first && !first.ok) {
+    retried = true;
+    console.warn("duo views failed auto-check, regenerating once:", first.problems.join("; "));
+    try {
+      views = await splitGridImage(await generateImage(client, refs, prompt));
+    } catch (error) {
+      // The second attempt failed outright: keep the first result rather than failing the order.
+      console.error("duo regeneration failed, keeping first result", error);
+    }
+  }
+  onCheck?.({ first, retried });
+  return views;
+}
+
+const DUO_AUTO_CHECK_ENABLED = process.env.DUO_AUTO_CHECK === "1";
+
+export type DuoCheckResult = { ok: boolean; problems: string[] };
+
+/** Runs the same duo auto-check on any four views (used by tests to judge the final result). */
+export function checkDuoViewsOnce(
+  views: Record<View, ImagePayload>,
+  isPet = true
+): Promise<DuoCheckResult> {
+  return checkDuoViews(getClient(), views, isPet);
+}
+
+const DUO_CHECK_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    frontCount: { type: "INTEGER" },
+    leftCount: { type: "INTEGER" },
+    backCount: { type: "INTEGER" },
+    rightCount: { type: "INTEGER" },
+    rightIsMirrorOfLeftProfile: { type: "BOOLEAN" },
+    hasDividerLinesOrText: { type: "BOOLEAN" },
+  },
+  required: [
+    "frontCount",
+    "leftCount",
+    "backCount",
+    "rightCount",
+    "rightIsMirrorOfLeftProfile",
+    "hasDividerLinesOrText",
+  ],
+};
+
+// Looks at the four generated views of a two-subject figurine and says whether they are usable:
+// both subjects visible in every view, the right view a real side profile (the mirror of the left
+// one, not a second back view), and no drawn divider lines or text. Throws on API/parse errors --
+// the caller decides what that means.
+async function checkDuoViews(
+  client: GoogleGenAI,
+  views: Record<View, ImagePayload>,
+  isPet: boolean
+): Promise<DuoCheckResult> {
+  const thing = isPet ? "animal" : "object";
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+  for (const view of VIEWS) {
+    parts.push({ text: `${view.toUpperCase()} view image:` });
+    parts.push({ inlineData: { mimeType: views[view].mimeType, data: views[view].data } });
+  }
+  parts.push({
+    text:
+      `These 4 images should be the front, left, back and right turntable views of ONE figurine ` +
+      `showing TWO ${thing}s together. For each image, count how many separate ${thing} figures are ` +
+      `visibly present (one mostly hidden behind another but with its head or part of its body ` +
+      `visible still counts). Also: is the RIGHT image a side profile in which the ${thing} faces ` +
+      `are visible from the side (answer false only if it is mostly a view of the rear ends, i.e. ` +
+      `a repeat of the BACK image)? Do any of the images contain drawn divider/border lines, or any ` +
+      `letters, numbers or text? JSON only.`,
+  });
+  const response = await client.models.generateContent({
+    model: GEMINI_ANALYSIS_MODEL,
+    contents: parts,
+    config: { responseMimeType: "application/json", responseSchema: DUO_CHECK_SCHEMA },
+  });
+  const text = response.text;
+  if (!text) throw new Error("Gemini did not return a duo check");
+  const j = JSON.parse(text) as {
+    frontCount: number;
+    leftCount: number;
+    backCount: number;
+    rightCount: number;
+    rightIsMirrorOfLeftProfile: boolean;
+    hasDividerLinesOrText: boolean;
+  };
+  const problems: string[] = [];
+  const counts: Array<[View, number]> = [
+    ["front", j.frontCount],
+    ["left", j.leftCount],
+    ["back", j.backCount],
+    ["right", j.rightCount],
+  ];
+  for (const [view, n] of counts) {
+    if (!(n >= 2)) problems.push(`${view} shows ${n} ${thing}(s)`);
+  }
+  if (!j.rightIsMirrorOfLeftProfile) problems.push("right view is a repeat of the back view, not a side profile");
+  if (j.hasDividerLinesOrText) problems.push("divider lines or text drawn");
+  return { ok: problems.length === 0, problems };
 }
 
 /** Generates a single "finished look" crystal-material preview image. */
@@ -931,7 +1086,7 @@ export async function generateFinishedPreview(
     : "solid, three-dimensional smooth resin with a clean, uniform finish and absolutely no glitter or sparkle particles";
   const prompt =
     `A highly detailed, photorealistic macro photography of a figurine keychain depicting ` +
-    `${subjectPhrase(subject, subjectType)}, in ${POSE_PHRASES[pose]}. ${shapeStylePhrase}${interiorPhrase} Do not depict the subject's ` +
+    `${subjectPhrase(subject, subjectType)}, in ${posePhrase(pose, subjectType)}. ${shapeStylePhrase}${interiorPhrase} Do not depict the subject's ` +
     `${realColoringPhrase} anywhere -- only the overall shape ` +
     "and silhouette should be recognizable; the material itself must read as " +
     `${materialPhrase}, never a flat illustration and ${neverRealisticPhrase}. ` +

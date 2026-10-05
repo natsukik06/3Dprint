@@ -105,10 +105,13 @@ export default function ProductsPage() {
             <h2 className="text-xs font-bold uppercase tracking-[0.15em] text-[#8a5a34] dark:text-[#7fd8cb]">
               Lineup
             </h2>
-            <span className="text-xs text-[#8a7c5e] dark:text-[#6d7c79]">
-              その他{COMING_SOON.length}種 準備中
+            <span className="rounded-full bg-[#fff1d6] px-3 py-1 text-xs font-bold text-[#9a5b00] dark:bg-[#3a2f16] dark:text-[#f0c36b]">
+              準備中 {COMING_SOON.length}種
             </span>
           </div>
+          <p className="mb-3 rounded-lg border border-[#e8d7a8] bg-[#fffaf0] px-3 py-2 text-xs leading-relaxed text-[#6b5c40] dark:border-[#3a2f16] dark:bg-[#1c1810] dark:text-[#cdbb8a]">
+            点線で囲んだ「<b>準備中</b>」の商品は、まだ販売していません（まだ注文できません）。発売まで、もうしばらくお待ちください。ご注文いただけるのは「販売中」の商品です。
+          </p>
           <div className="grid grid-cols-3 gap-3 lg:gap-5">
             <Link
               href="/order"
@@ -161,8 +164,8 @@ export default function ProductsPage() {
                 className="overflow-hidden rounded-xl border border-dashed border-[#d9cbb0] dark:border-[#2c3230]"
               >
                 <div className="relative aspect-square">
-                  <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-[#e8ddc6] px-2 py-0.5 text-[9px] font-bold text-[#8a7c5e] dark:bg-white/5 dark:text-[#6d7c79]">
-                    近日公開
+                  <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-[#fff1d6] px-2 py-0.5 text-[11px] font-bold text-[#9a5b00] dark:bg-[#3a2f16] dark:text-[#f0c36b]">
+                    準備中
                   </span>
                   <LikeButton productId={item.id} />
                   {item.image ? (
@@ -184,7 +187,7 @@ export default function ProductsPage() {
                   <p className="truncate text-[11px] leading-tight text-[#8a7c5e] dark:text-[#6d7c79]">
                     {item.name}
                   </p>
-                  <p className="text-xs text-[#a89b7d] dark:text-[#586360]">近日公開</p>
+                  <p className="text-xs text-[#9a5b00] dark:text-[#f0c36b]">準備中・まだ注文できません</p>
                 </div>
               </div>
             ))}

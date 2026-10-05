@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
             price_data: {
               currency: "jpy",
               unit_amount: PREVIEW_CREDIT_PRICE_YEN,
-              product_data: { name: "追加プレビュー生成 1回分" },
+              product_data: { name: "4方向イメージ作成 追加1回分" },
             },
           },
         ],
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
           price_data: {
             currency: "jpy",
             unit_amount: priceYen,
-            product_data: { name: `生成クレジット ${credits}回分` },
+            product_data: { name: `3Dモデル作成クレジット ${credits}回分` },
           },
         },
       ],

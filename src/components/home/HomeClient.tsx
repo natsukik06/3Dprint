@@ -13,20 +13,35 @@ import { zenGothic, zenMincho, displayFont as display } from "@/lib/fonts";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { AuthNavButton } from "@/components/site/AuthNavButton";
 import { CREDIT_PRICE_YEN, GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN } from "@/lib/creditPacks";
-import { CHARO_PREMADE_MODEL } from "@/lib/premadeModels";
 
-// "ちゃろができるまで" -- illustrates the AI generation pipeline using the brand mascot's own
-// real generation history as the example (see src/lib/premadeModels.ts for how Charo itself was
-// made). The 4-direction turnaround shots are a separate, permanently-hosted set (monochrome
-// "white clay" style, generated straight from the logo) -- distinct from CHARO_PREMADE_MODEL's
-// own finishedPreviewUrls, which is shown in the last step.
-const HOW_IT_WORKS_VIEWS = {
-  front:
-    "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-front.png?alt=media&token=69b13389-cf2c-4da3-ba13-213d54b7c657",
-  left: "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-left.png?alt=media&token=45c374c2-72ef-40f3-b944-5c0e75079083",
-  back: "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-back.png?alt=media&token=8645c9ff-21a3-49b6-ac06-54bd55854456",
-  right:
-    "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-right.png?alt=media&token=08d507a1-550f-4097-971e-1cd427aac8c7",
+// "ちゃろができるまで" -- one real sample photo (public/sample-photo-chi.jpg) run through the actual
+// pipeline twice, once per model style: 4-direction views -> 3D model render. Permanently hosted
+// in Storage (previews/charo-howto-*), distinct from CHARO_PREMADE_MODEL.
+const HOW_IT_WORKS = {
+  deformed: {
+    front:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-front.png?alt=media&token=8e63ecd1-1fb2-4b4a-b905-edcc09d0f733",
+    left:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-left.png?alt=media&token=3da73831-f53f-4d9e-a360-8f5dad308f5b",
+    back:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-back.png?alt=media&token=cd6d9667-b644-4979-8b1f-6905e455f990",
+    right:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-right.png?alt=media&token=654bbd2e-467f-43d8-8cb3-5ffa83411459",
+    model3d:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-3d.png?alt=media&token=c4d7eec9-9feb-417d-b3f6-31bddad015ed",
+  },
+  real: {
+    front:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-real-front.png?alt=media&token=a8d2799c-7dcc-41c3-bf31-82f787a221a9",
+    left:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-real-left.png?alt=media&token=6e073141-f28f-4ca0-9348-78bad25beced",
+    back:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-real-back.png?alt=media&token=ce5983cc-5f98-488d-b740-9eea27a4fd82",
+    right:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-real-right.png?alt=media&token=11320560-deaf-41be-ac45-2916cad0d49a",
+    model3d:
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-real-3d.png?alt=media&token=15eeb893-2a70-4a4c-aa34-b449b8718a5a",
+  },
 };
 
 // One square card of the composition picker. Shows the showcase photo when it exists and falls back
@@ -229,9 +244,8 @@ export function HomeClient({ showcase }: { showcase?: ReactNode }) {
         {showcase}
 
         {/* HOW IT'S MADE -- shows the AI generation pipeline using the brand mascot's own real
-            generation history (see HOW_IT_WORKS_VIEWS / CHARO_PREMADE_MODEL above) as a concrete,
-            already-made example, right up front before anyone commits to uploading their own
-            photo. */}
+            pipeline on one sample photo (see HOW_IT_WORKS above), in both model styles side by
+            side, right up front before anyone commits to uploading their own photo. */}
         <div className="border-t border-[#d9cbb0] bg-white/60 py-16 dark:border-[#1c1f1e] dark:bg-white/[0.02] sm:py-20">
           <div className="mx-auto w-full max-w-xl px-4 sm:px-6 md:max-w-2xl lg:max-w-4xl lg:px-8">
             <div className="mb-10 text-center">
@@ -245,79 +259,100 @@ export function HomeClient({ showcase }: { showcase?: ReactNode }) {
                 ちゃろができるまで
               </h2>
               <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#6b5c40] dark:text-[#9fb0ae]">
-                写真いちまいから、世界にひとつだけの透きとおる結晶フィギュアへ。ブランドマスコット「ちゃろ」を例に、3つの工程をご紹介します。
+                写真いちまいから、世界にひとつだけの透きとおる結晶フィギュアへ。1枚の見本写真を例に、「かわいいトイ調」と「写真そのまま」の2つの仕上がりをご紹介します。
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-              <div className="rounded-2xl border border-[#d9cbb0] bg-white p-4 dark:border-[#232726] dark:bg-[#121415]">
-                <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#0f766e] text-sm font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
+            {/* Shared source photo, then the same photo run through the pipeline twice (two columns). */}
+            <div className="mx-auto w-28 sm:w-32">
+              <div className="aspect-square overflow-hidden rounded-xl border border-[#d9cbb0] bg-[#f4ecdc] dark:border-[#232726] dark:bg-white/5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/sample-photo-chi.jpg" alt="見本の写真：チワワ" className="h-full w-full object-cover" />
+              </div>
+              <p className="mt-2 text-center text-xs font-semibold">
+                <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-[11px] font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
                   1
                 </span>
-                <div className="aspect-square overflow-hidden rounded-xl bg-[#f4ecdc] dark:bg-white/5">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- site logo, but this row also renders Firebase-hosted images, so kept consistent as plain img */}
-                  <img
-                    src="/sample-photo-chi.jpg"
-                    alt="見本の写真：チワワ"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <p className="mt-3 text-sm font-semibold">写真を送るだけ</p>
-                <p className="mt-1 text-xs leading-6 text-[#6b5c40] dark:text-[#9fb0ae]">
-                  お気に入りの一枚でOK。正面から全身が写った、明るい写真がおすすめです。
-                </p>
-              </div>
+                写真を送るだけ
+              </p>
+            </div>
 
+            <div className="mt-2 flex justify-center text-[#8a5a34] dark:text-[#7fd8cb]" aria-hidden="true">
+              ▼
+            </div>
 
-              <div className="rounded-2xl border border-[#d9cbb0] bg-white p-4 dark:border-[#232726] dark:bg-[#121415]">
-                <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#0f766e] text-sm font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
-                  2
-                </span>
-                <div className="grid aspect-square grid-cols-2 gap-0.5 overflow-hidden rounded-xl bg-[#f4ecdc] dark:bg-white/5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={HOW_IT_WORKS_VIEWS.front} alt="正面スケッチ" className="h-full w-full object-cover" />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={HOW_IT_WORKS_VIEWS.left} alt="左側面スケッチ" className="h-full w-full object-cover" />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={HOW_IT_WORKS_VIEWS.back} alt="背面スケッチ" className="h-full w-full object-cover" />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={HOW_IT_WORKS_VIEWS.right} alt="右側面スケッチ" className="h-full w-full object-cover" />
-                </div>
-                <p className="mt-3 text-sm font-semibold">写真から4方向をスケッチ</p>
-                <p className="mt-1 text-xs leading-6 text-[#6b5c40] dark:text-[#9fb0ae]">
-                  お送りいただいた写真をもとに、AIが正面・左右・背面をまとめて描き上げます。形がイメージと合うか、ここで確認できます（作り直しは無料）。
-                </p>
-              </div>
+            <div className="mx-auto mt-2 grid max-w-md grid-cols-2 gap-3 sm:max-w-xl sm:gap-5">
+              {(
+                [
+                  { key: "deformed", title: "かわいいトイ調", note: "丸くてかわいい、ぬいぐるみ風", alt: "デフォルメ" },
+                  { key: "real", title: "写真そのまま", note: "毛並みまでそのまま再現", alt: "リアル" },
+                ] as const
+              ).map((col) => (
+                <div
+                  key={col.key}
+                  className="rounded-2xl border border-[#d9cbb0] bg-white p-2.5 dark:border-[#232726] dark:bg-[#121415] sm:p-4"
+                >
+                  <p className="text-center text-sm font-semibold">{col.title}</p>
+                  <p className="mt-0.5 min-h-8 text-center text-[11px] leading-4text-[#6b5c40] dark:text-[#9fb0ae]">
+                    {col.note}
+                  </p>
 
-              <div className="rounded-2xl border border-[#d9cbb0] bg-white p-4 dark:border-[#232726] dark:bg-[#121415]">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0f766e] text-sm font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
-                    3
-                  </span>
-                  <span className="rounded-full bg-[#f4ecdc] px-2 py-0.5 text-[10px] font-bold text-[#8a5a34] dark:bg-white/10 dark:text-[#e8c98a]">
-                    ¥{CREDIT_PRICE_YEN}/回
-                  </span>
+                  <p className="mt-3 text-xs font-semibold">
+                    <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-[11px] font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
+                      2
+                    </span>
+                    4方向のイメージ
+                  </p>
+                  <div className="mt-1.5 grid aspect-square grid-cols-2 gap-0.5 overflow-hidden rounded-lg bg-[#f4ecdc] dark:bg-white/5">
+                    {(["front", "left", "back", "right"] as const).map((view) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={view}
+                        src={HOW_IT_WORKS[col.key][view]}
+                        alt={`${col.alt} ${view === "front" ? "正面" : view === "left" ? "左側面" : view === "back" ? "背面" : "右側面"}`}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    ))}
+                  </div>
+
+                  <div className="my-1.5 text-center text-xs text-[#8a5a34] dark:text-[#7fd8cb]" aria-hidden="true">
+                    ▼
+                  </div>
+
+                  <p className="text-xs font-semibold">
+                    <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-[11px] font-bold text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]">
+                      3
+                    </span>
+                    3Dモデル
+                  </p>
+                  <div className="mt-1.5 aspect-square overflow-hidden rounded-lg bg-white dark:bg-white/90">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={HOW_IT_WORKS[col.key].model3d}
+                      alt={`${col.alt}の3Dモデル`}
+                      loading="lazy"
+                      className="h-full w-full object-contain p-1"
+                    />
+                  </div>
                 </div>
-                <div className="aspect-square overflow-hidden rounded-xl bg-[#f4ecdc] dark:bg-white/5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={CHARO_PREMADE_MODEL.renderedImageUrl ?? undefined}
-                    alt="完成した3Dモデル"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <p className="mt-3 text-sm font-semibold">3Dモデルが誕生！</p>
-                <p className="mt-1 text-xs leading-6 text-[#6b5c40] dark:text-[#9fb0ae]">
-                  4方向のスケッチから、ほんものの3Dモデルが立ち上がります。3D化には¥{CREDIT_PRICE_YEN}かかります（初回は無料クレジット付き）。
-                </p>
-                <p className="mt-1.5 inline-block rounded-full bg-emerald-600/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
-                  ✓ 商品代金が{GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文なら、かかった分（最大2回分）が割引されます
-                </p>
-              </div>
+              ))}
+            </div>
+
+            <div className="mx-auto mt-6 max-w-md rounded-2xl border border-[#d9cbb0] bg-white p-4 text-center dark:border-[#232726] dark:bg-[#121415]">
+              <span className="rounded-full bg-[#f4ecdc] px-2 py-0.5 text-[10px] font-bold text-[#8a5a34] dark:bg-white/10 dark:text-[#e8c98a]">
+                ¥{CREDIT_PRICE_YEN}/回
+              </span>
+              <p className="mt-2 text-xs leading-6 text-[#6b5c40] dark:text-[#9fb0ae]">
+                写真から4方向のイメージを描き、形がイメージと合うか確認できます（作り直しは無料）。そのイメージから3Dモデルを作ります。3D化には¥{CREDIT_PRICE_YEN}かかります（初回は無料クレジット付き）。
+              </p>
+              <p className="mt-1.5 inline-block rounded-full bg-emerald-600/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
+                ✓ 商品代金が{GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文なら、かかった分（最大2回分）が割引されます
+              </p>
             </div>
 
             <p className="mt-8 text-center text-xs text-[#8a7c5e] dark:text-[#6d7c79]">
-              ※実際のご注文では、あなたの大切な子の写真を使って同じ工程で作ります（上の例ではロゴを使用しました）
+              ※実際のご注文では、あなたの大切な子の写真を使って同じ工程で作ります（上の例は見本の写真を使用しています）
             </p>
           </div>
         </div>

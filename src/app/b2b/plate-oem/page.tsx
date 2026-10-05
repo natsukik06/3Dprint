@@ -13,7 +13,6 @@ const zenGothic = Zen_Kaku_Gothic_New({
 });
 
 const CONTACT_EMAIL = "natsuki.ko006@gmail.com";
-const INSTAGRAM_URL = "https://instagram.com/lumina_charo";
 
 // Static marketing landing page for shops / brand owners commissioning custom resin
 // trays & plates, aimed at Instagram DM / email outreach -- not part of the main
@@ -377,12 +376,9 @@ export default function PlateOemPage() {
         <div className="wrap">
           <p className="eyebrow">Contact</p>
           <h2 className="display">まずは、作りたい形の画像を1枚送ってください。</h2>
-          <p>お見積もり・ご相談は無料です。Instagram DMまたはメールよりお気軽にどうぞ。</p>
+          <p>お見積もり・ご相談は無料です。メールよりお気軽にどうぞ。</p>
           <div className="hero-cta" style={{ justifyContent: "center" }}>
-            <a className="btn btn-primary" href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer">
-              Instagramで相談する
-            </a>
-            <a className="btn btn-ghost" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("お皿・トレイOEMのご相談")}`}>
+            <a className="btn btn-primary" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("お皿・トレイOEMのご相談")}`}>
               メールで相談する
             </a>
           </div>

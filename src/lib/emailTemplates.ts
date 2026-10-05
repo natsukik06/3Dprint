@@ -124,7 +124,7 @@ export function buildShippedNotificationEmail(
     <p style="font-size:13px;color:#64748b;">注文番号：${escapeHtml(orderId)}</p>
     ${referralSection}
     <p style="margin-top:20px;font-size:13px;color:#64748b;">
-      よろしければ、お手元に届いた様子を <a href="https://instagram.com/lumina_charo" style="color:#0369a1;">@lumina_charo</a> をタグ付けしてSNSに投稿していただけると励みになります（任意です）。
+      よろしければ、お手元に届いた様子を、Instagram「Charo 3D」へのタグ付けでSNSに投稿していただけると励みになります（任意です）。
     </p>
   `);
 

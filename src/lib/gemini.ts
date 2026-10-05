@@ -232,23 +232,36 @@ const OMIT_SURROUNDINGS_PHRASE =
 // saying "figurine", which on its own wasn't stopping the model from drifting toward a
 // photorealistic photo of a real living animal, especially in the two-subject (duo) case.
 const TOY_STYLE_PHRASE =
-  "STYLE = DEFORMED (super-deformed chibi toy). This must read unmistakably as a cute vinyl " +
-  "collectible toy — a matte soft-vinyl / resin sofubi figure like the chibi mascot figurines sold " +
-  "in Japanese gashapon capsule-toy machines — and NEVER as a photograph or realistic sculpture of " +
+  "STYLE = DEFORMED (super-deformed chibi toy). This must read unmistakably as a cute, plump " +
+  "hand-painted porcelain / resin designer figurine — a collectible mascot figure with a matte " +
+  "ceramic-like finish and a very fine speckled grain, like the chibi figurines sold in Japanese " +
+  "gashapon capsule-toy machines — and NEVER as a photograph or realistic sculpture of " +
   "a real living animal or object. Strongly exaggerated, simplified, rounded forms: the whole " +
   "figure is only about 2 to 2.5 heads tall, with an oversized round head that is as big as the " +
-  "entire body; huge, round, glossy black eyes with one small white highlight; a tiny simple " +
-  "nose and mouth; short, thick, stubby tube-like legs with rounded paw ends; a small " +
-  "plump rounded body. The body structure stays that of a real four-legged ANIMAL, never a " +
+  "entire body (the head is clearly bigger than the little body, even for slim or long-legged " +
+  "or long-haired animals — redraw the body small, round and short, never the real animal's proportions; the legs are NOT long and the chest is NOT broad — a tiny sitting bean-shaped body under a giant head); the ears are large and stand up tall and wide, sculpted as clean pointed or " +
+  "rounded shapes (with a soft pink inside if the animal has pale inner ears); huge, round, " +
+  "very glossy black bead eyes with one clear white highlight, set low and wide apart; a tiny " +
+  "simple nose and a small gentle mouth; short, thick, stubby tube-like legs with rounded paw ends; a small " +
+  "plump rounded body. Any fluffy chest, neck ruff or cheek fur is sculpted as bold, chunky " +
+  "carved tufts and layered locks with a few shallow grooves — like a carved figurine (even when " +
+  "the reference is a long-haired, fluffy animal: its head fur is smooth and sculpted too, " +
+  "with only a few chunky pointed locks at the cheeks and ear edges), one " +
+  "big sculpted ruff of chest fur with visible streaks — never " +
+  "as real hair. The colors are separated cleanly and graphically (crisp edges between the " +
+  "white, black, orange, gray or brown areas, as if painted on a molded figure). " +
+  "The body structure stays that of a real four-legged ANIMAL, never a " +
   "human-like doll: no arms, no hands, no fingers, no upright two-legged human posture, no " +
   "standing like a person. Dogs and cats have four legs: the front legs are short thick legs " +
   "going straight down under the chest to the ground (or folded neatly together when sitting), " +
   "the hind legs are short and thick; a sitting dog/cat sits like a real animal on its haunches " +
   "with both front paws planted on the ground. Fur/feathers/skin are NOT drawn as fine individual hairs: they are " +
   "simplified into smooth, rounded, sculpted masses and a few chunky tufts, with a uniform matte " +
-  "painted-vinyl surface finish like a Pop Mart / Sonny Angel designer toy: the coat colors appear as smooth painted color " +
+  "porcelain/resin surface finish (soft, slightly chalky, with a very fine even speckle grain) like a " +
+  "Pop Mart / Sonny Angel designer figurine: the coat colors appear as smooth painted color " +
   "areas on a smooth molded surface, with no hair strands, no fluff and no fur fibers visible " +
-  "anywhere. Keep the subject's real colors, markings and " +
+  "anywhere. Do not add decorations (stars, ribbons, jewels) that the reference photos do not show. " +
+  "Keep the subject's real colors, markings and " +
   "recognizable features, but the body shape must NOT follow the real animal's anatomy.";
 
 // The alternative to TOY_STYLE_PHRASE above -- true-to-life proportions instead of a cute

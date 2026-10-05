@@ -117,8 +117,8 @@ export default function StoryPage() {
           <section className="py-16 lg:flex lg:items-center lg:gap-14 lg:py-24">
             <div className="relative mx-auto aspect-[4/5] w-full max-w-xs overflow-hidden rounded-2xl border border-[#d9cbb0] shadow-lg dark:border-[#232726] lg:mx-0 lg:max-w-sm lg:flex-1">
               <Image
-                src="/product-lineup.jpg"
-                alt="Charo 3D キーホルダー カラーバリエーション"
+                src="/showcase/sit-front.jpg"
+                alt="ちゃろのイメージ（実際の商品の写真は準備中です）"
                 fill
                 sizes="(min-width: 1024px) 384px, 320px"
                 className="object-cover"

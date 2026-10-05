@@ -36,6 +36,8 @@ export const COMPOSITION_PRESETS: CompositionPreset[] = [
   preset("one-behind-other", "ひとりが後ろ", "duo", "のぞきこむ名コンビ"),
   preset("facing-each-other", "むかい合う", "duo", "見つめ合う2匹"),
   preset("lying-together", "ならんで伏せる", "duo", "ならんでのんびり"),
+  preset("on-back", "背中にのる", "duo", "背中でひと休み"),
+  preset("cuddle-sleep", "くっついて眠る", "duo", "寄りそって、おやすみ"),
   preset("sit-front", "すわって正面", "single", "ちょこんとお座り"),
   preset("lie-down", "ふせる", "single", "ごろんとリラックス"),
   preset("stand-side", "立って横向き", "single", "りりしく横向き"),

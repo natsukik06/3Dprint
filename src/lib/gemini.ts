@@ -553,6 +553,13 @@ const DUO_COMPOSITION_HINTS: Record<string, string> = {
   "lying-together":
     "BOTH animals are lying down flat on their bellies on the ground, bodies low and touching, " +
     "heads resting low (neither one stands or sits upright)",
+  "on-back":
+    "animal A lies flat on its belly on the ground; animal B lies stretched out ON TOP of A's back, " +
+    "chin or cheek resting on A, B's body in full contact with A's back so the two form one solid mass " +
+    "(B is not floating and not standing, it is resting its weight on A)",
+  "cuddle-sleep":
+    "BOTH animals are curled up asleep with eyes closed, cuddled tightly together, one's head tucked " +
+    "against or under the other's chin or neck, bodies pressed into one rounded mass, nobody standing or sitting upright",
 };
 
 export type DuoSpecies = "dog" | "cat" | "other" | null;

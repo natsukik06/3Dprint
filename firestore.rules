@@ -56,6 +56,11 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update, delete: if false;
     }
+    match /showcase_items/{itemId} {
+      // 作成例ギャラリー: read and written only by the server (Admin SDK bypasses these rules) --
+      // the public pages are rendered on the server, so nothing needs client access.
+      allow read, write: if false;
+    }
     match /product_likes/{productId} {
       // Public "気になる！" tap on the lineup -- no login, so this is a low-stakes interest
       // signal, not authenticated data. Rules only allow the count to move by exactly +-1 per

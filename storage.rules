@@ -26,6 +26,14 @@ service firebase.storage {
         request.resource.size < 50 * 1024 * 1024 &&
         request.resource.contentType == 'model/gltf-binary';
     }
+    // 作成例ギャラリー (/examples and the home page). Everything here is copied/uploaded by the
+    // SERVER (Admin SDK, see src/app/api/admin/showcase) after the admin chose to publish it, and is
+    // shown publicly -- so reads are open, writes are closed. Kept outside models/ on purpose: the
+    // nightly cleanup deletes models/<file> after shipping, but never touches showcase/.
+    match /showcase/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
     // Print-batch STL files -- admin only. (Admin SDK uploads bypass these rules; this covers
     // uploads from the admin's own signed-in browser.) Previously "any signed-in user" could write.
     match /batches/{allPaths=**} {

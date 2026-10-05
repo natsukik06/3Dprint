@@ -6,6 +6,7 @@ const PATHS = [
   "/products",
   "/order",
   "/story",
+  "/examples",
   "/guide/faq",
   "/guide/photo-tips",
   "/legal/tokushoho",

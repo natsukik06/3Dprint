@@ -214,6 +214,12 @@ export default function AdminPage() {
           >
             カラー設定
           </Link>
+          <Link
+            href="/admin/showcase"
+            className="text-slate-600 underline underline-offset-2"
+          >
+            作成例
+          </Link>
         </div>
       </div>
       <TripoBalanceBanner />

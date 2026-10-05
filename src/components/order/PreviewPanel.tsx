@@ -30,7 +30,7 @@ import { SINGLE_COMPOSITIONS } from "@/lib/compositions";
 import { clearDraftSlice,loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
 import { db } from "@/lib/firebase";
 import { uploadCustomModel } from "@/lib/orders";
-import { CHARO_PREMADE_MODEL } from "@/lib/premadeModels";
+import { CHARO_PREMADE_MODEL, PREMADE_MODELS } from "@/lib/premadeModels";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
 import {
   MAX_CUSTOM_MODEL_SIZE_BYTES,
@@ -266,7 +266,7 @@ export function PreviewPanel({
   );
   const [compositionFile, setCompositionFile] = useState<File | null>(null);
   const [gallery, setGallery] = useState<GeneratedModel[]>(
-    mode === "reuse" ? [CHARO_PREMADE_MODEL] : []
+    mode === "reuse" ? PREMADE_MODELS : []
   );
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
     effectiveInitialModel?.taskId ?? null
@@ -443,7 +443,7 @@ export function PreviewPanel({
       // customer's own generation history only (see the mode checks below it never renders
       // there), so the extra entry is harmless; in "reuse" mode it keeps the mascot alongside
       // the customer's own past models in one switchable list.
-      setGallery(mode === "reuse" ? [CHARO_PREMADE_MODEL, ...entries] : entries);
+      setGallery(mode === "reuse" ? [...PREMADE_MODELS, ...entries] : entries);
     }
 
     loadGallery();
@@ -1025,25 +1025,31 @@ export function PreviewPanel({
               key={entry.taskId}
               type="button"
               onClick={() => handleSelectGalleryItem(entry)}
-              className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white ${
+              aria-label={entry.subject || "生成済みモデル"}
+              className={`relative flex w-24 shrink-0 flex-col overflow-hidden rounded-lg border-2 bg-white ${
                 entry.taskId === selectedTaskId
                   ? "border-slate-800"
                   : "border-slate-200 hover:border-slate-400"
               }`}
             >
-              {entry.renderedImageUrl && !failedThumbnails.has(entry.taskId) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={entry.renderedImageUrl}
-                  alt="生成済みモデル"
-                  className="h-full w-full object-cover"
-                  onError={() =>
-                    setFailedThumbnails((prev) => new Set(prev).add(entry.taskId))
-                  }
-                />
-              ) : (
-                <Box className="m-auto h-6 w-6 text-slate-300" />
-              )}
+              <div className="flex aspect-square w-full items-center justify-center">
+                {entry.renderedImageUrl && !failedThumbnails.has(entry.taskId) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={entry.renderedImageUrl}
+                    alt={entry.subject || "生成済みモデル"}
+                    className="h-full w-full object-cover"
+                    onError={() =>
+                      setFailedThumbnails((prev) => new Set(prev).add(entry.taskId))
+                    }
+                  />
+                ) : (
+                  <Box className="h-6 w-6 text-slate-300" />
+                )}
+              </div>
+              <span className="truncate px-1 py-0.5 text-center text-[11px] text-slate-600">
+                {entry.subject || "モデル"}
+              </span>
             </button>
           ))}
         </div>

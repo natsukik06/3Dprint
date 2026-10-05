@@ -30,3 +30,20 @@ export const CHARO_PREMADE_MODEL: GeneratedModel = {
   subject: "ちゃろ",
   pose: "sitting",
 };
+
+// The brand mascot's realistic version -- a hand-sculpted model (not AI-generated), lightened for the
+// web and hosted permanently under models/charo-premade* (the nightly cleanup never touches that
+// prefix). Selectable next to the cute version in the reuse flow.
+export const CHARO_REAL_PREMADE_MODEL: GeneratedModel = {
+  taskId: "charo-premade-real",
+  modelUrl:
+    "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/models%2Fcharo-premade-real.glb?alt=media&token=34fbd5af-2d30-46ad-b982-8982a09498f7",
+  renderedImageUrl:
+    "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-real.png?alt=media&token=7ed24b6c-44b4-47d0-9e39-50bba5ed4f14",
+  finishedPreviewUrls: {},
+  referenceImageUrls: [],
+  subject: "ちゃろ（リアル）",
+  pose: "sitting",
+};
+
+export const PREMADE_MODELS: GeneratedModel[] = [CHARO_PREMADE_MODEL, CHARO_REAL_PREMADE_MODEL];

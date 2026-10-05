@@ -2,6 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
+import {
+  DUO_COMPOSITIONS,
+  SINGLE_COMPOSITIONS,
+  type CompositionKind,
+  type CompositionPreset,
+} from "@/lib/compositions";
 import { zenGothic, zenMincho, displayFont as display } from "@/lib/fonts";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { AuthNavButton } from "@/components/site/AuthNavButton";
@@ -22,7 +29,45 @@ const HOW_IT_WORKS_VIEWS = {
     "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-right.png?alt=media&token=08d507a1-550f-4097-971e-1cd427aac8c7",
 };
 
+// One square card of the composition picker. Shows the showcase photo when it exists and falls back
+// to the plain composition icon when it does not (or fails to load).
+function CompositionCard({ preset }: { preset: CompositionPreset }) {
+  const [useIcon, setUseIcon] = useState(false);
+  return (
+    <Link
+      href={`/order?composition=${preset.id}`}
+      className="group block overflow-hidden rounded-2xl border border-[#d9cbb0] bg-white transition-colors hover:border-[#0f766e] dark:border-[#232726] dark:bg-[#121415] dark:hover:border-[#7fd8cb]"
+    >
+      <div className="aspect-square overflow-hidden bg-[#f4ecdc] dark:bg-white/5">
+        {/* eslint-disable-next-line @next/next/no-img-element -- showcase image may not exist yet; onError falls back to the icon */}
+        <img
+          src={useIcon ? preset.imageUrl : preset.showcaseUrl}
+          alt={`${preset.label}の見本`}
+          loading="lazy"
+          ref={(el) => {
+            // The 404 can land before hydration, when onError is not attached yet.
+            if (el && el.complete && el.naturalWidth === 0) setUseIcon(true);
+          }}
+          onError={() => setUseIcon(true)}
+          className={`h-full w-full transition-transform group-hover:scale-105 ${
+            useIcon ? "object-contain p-4" : "object-cover"
+          }`}
+        />
+      </div>
+      <div className="px-2.5 py-2.5 text-center">
+        <p className="text-sm font-semibold leading-tight">{preset.label}</p>
+        <p className="mt-0.5 text-[11px] leading-5 text-[#6b5c40] dark:text-[#9fb0ae]">
+          {preset.catchCopy}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
 export default function Home() {
+  const [compositionKind, setCompositionKind] = useState<CompositionKind>("single");
+  const shownCompositions =
+    compositionKind === "single" ? SINGLE_COMPOSITIONS : DUO_COMPOSITIONS;
   return (
     <div
       className={`${zenGothic.variable} ${zenMincho.variable} min-h-full bg-[#f4ecdc] text-[#3f3424] dark:bg-[#0a0a0c] dark:text-[#eef2f1]`}
@@ -123,6 +168,61 @@ export default function Home() {
       </header>
 
       <main>
+        {/* PICK A COMPOSITION -- choosing a card jumps straight to /order?composition=<id>, which
+            opens the matching creation mode with that composition preselected. */}
+        <section className="border-t border-[#d9cbb0] py-16 dark:border-[#1c1f1e] sm:py-20">
+          <div className="mx-auto w-full max-w-xl px-4 sm:px-6 md:max-w-2xl lg:max-w-4xl lg:px-8">
+            <div className="mb-6 text-center">
+              <span
+                className="mb-2 block text-xs italic tracking-[0.2em] text-[#8a5a34] dark:text-[#7fd8cb]"
+                style={display}
+              >
+                PICK A POSE
+              </span>
+              <h2 className="text-2xl font-semibold leading-relaxed" style={display}>
+                構図から選んで作る
+              </h2>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#6b5c40] dark:text-[#9fb0ae]">
+                気に入った構図を選ぶ → 写真を送る → 4方向で確認
+              </p>
+            </div>
+
+            <div
+              role="tablist"
+              aria-label="何匹で作るか"
+              className="mx-auto mb-5 grid max-w-xs grid-cols-2 gap-1 rounded-full border border-[#d9cbb0] bg-white/70 p-1 dark:border-[#232726] dark:bg-[#121415]"
+            >
+              {(
+                [
+                  ["single", "1匹で作る"],
+                  ["duo", "2匹で作る"],
+                ] as const
+              ).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  role="tab"
+                  aria-selected={compositionKind === kind}
+                  onClick={() => setCompositionKind(kind)}
+                  className={`rounded-full py-2.5 text-sm font-semibold transition-colors ${
+                    compositionKind === kind
+                      ? "bg-[#0f766e] text-white dark:bg-[#7fd8cb] dark:text-[#0a0a0c]"
+                      : "text-[#6b5c40] hover:text-[#3f3424] dark:text-[#9fb0ae] dark:hover:text-[#eef2f1]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+              {shownCompositions.map((preset) => (
+                <CompositionCard key={preset.id} preset={preset} />
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* HOW IT'S MADE -- shows the AI generation pipeline using the brand mascot's own real
             generation history (see HOW_IT_WORKS_VIEWS / CHARO_PREMADE_MODEL above) as a concrete,
             already-made example, right up front before anyone commits to uploading their own
@@ -152,14 +252,14 @@ export default function Home() {
                 <div className="aspect-square overflow-hidden rounded-xl bg-[#f4ecdc] dark:bg-white/5">
                   {/* eslint-disable-next-line @next/next/no-img-element -- site logo, but this row also renders Firebase-hosted images, so kept consistent as plain img */}
                   <img
-                    src="/logo-lumina-reference.png"
-                    alt="参考写真：ちゃろのロゴ"
-                    className="h-full w-full object-contain p-6"
+                    src="/sample-photo-chi.jpg"
+                    alt="見本の写真：チワワ"
+                    className="h-full w-full object-cover"
                   />
                 </div>
                 <p className="mt-3 text-sm font-semibold">写真を送るだけ</p>
                 <p className="mt-1 text-xs leading-6 text-[#6b5c40] dark:text-[#9fb0ae]">
-                  お気に入りの一枚でOK。今回は「ちゃろ」のロゴを参考写真にしました。
+                  お気に入りの一枚でOK。正面から全身が写った、明るい写真がおすすめです。
                 </p>
               </div>
 

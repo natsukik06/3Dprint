@@ -105,6 +105,8 @@ function LayoutIcon({ layout }: { layout: SceneLayout }) {
 type DuoBuilderProps = {
   colorQuantities: ColorQuantities;
   onGenerated: (result: GeneratedResult | null) => void;
+  // Preselected composition preset (from /order?composition=<id>); the customer can still change it.
+  initialCompositionId?: string | null;
 };
 
 // "おそろいセット" -- two different pets, sculpted together into one figurine. Owns its own
@@ -112,7 +114,11 @@ type DuoBuilderProps = {
 // RHF draft fields) since there's no single "subject"/"photos" pair to bind to here; once
 // generation succeeds it writes the combined subject name into the shared `subject` field so the
 // rest of the wizard (cart row, pricing, packing slip) sees it exactly like any other item.
-export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
+export function DuoBuilder({
+  colorQuantities,
+  onGenerated,
+  initialCompositionId,
+}: DuoBuilderProps) {
   const [photosA, setPhotosA] = useState<File[]>([]);
   const [photosB, setPhotosB] = useState<File[]>([]);
   const [subjectA, setSubjectA] = useState("");
@@ -120,7 +126,9 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
   const [layout, setLayout] = useState<SceneLayout>("sideBySide");
   // Optional composition reference (not saved in the draft). When chosen it takes priority over
   // `layout` in the prompt; the upload wins over a preset.
-  const [compositionId, setCompositionId] = useState<string | null>(null);
+  const [compositionId, setCompositionId] = useState<string | null>(
+    initialCompositionId ?? null
+  );
   const [compositionFile, setCompositionFile] = useState<File | null>(null);
   const [modelState, setModelState] = useState<ModelState>({ phase: "idle" });
   const [purchasingPreview, setPurchasingPreview] = useState(false);

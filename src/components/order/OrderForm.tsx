@@ -28,6 +28,7 @@ import { SpecOptions } from "@/components/order/SpecOptions";
 import { SubjectPoseFields } from "@/components/order/SubjectPoseFields";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { signInWithGoogle } from "@/lib/auth";
+import { COMPOSITION_PRESETS } from "@/lib/compositions";
 import { getCustomerProfile, saveCustomerProfile } from "@/lib/customerProfile";
 import { clearAllDraftSlices, loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
 import { colorPriceBySizeMap } from "@/lib/colorSettings";
@@ -441,6 +442,27 @@ export function OrderForm() {
   const router = useRouter();
   const checkoutResult = searchParams.get("checkout");
   const [cancelNotice, setCancelNotice] = useState(false);
+  // /order?composition=<id> (from the home page's composition picker): an unknown id is ignored.
+  const urlCompositionRaw = searchParams.get("composition");
+  const urlComposition = COMPOSITION_PRESETS.find((c) => c.id === urlCompositionRaw) ?? null;
+  const urlCompositionRef = useRef(urlComposition);
+  // Preselected composition handed to the builder that is mounted for it; cleared once an item is
+  // added so the next item starts without it.
+  const [presetCompositionId, setPresetCompositionId] = useState<string | null>(null);
+
+  // Opens the creation flow that matches the composition chosen on the home page: one pet -> the
+  // normal AI mode, two pets -> the duo (おそろいセット) mode, with that composition preselected.
+  function applyUrlComposition() {
+    const preset = urlCompositionRef.current;
+    if (!preset) return;
+    setPresetCompositionId(preset.id);
+    setCurrentStep(1);
+    setCartOpen(false);
+    setModelSource("create");
+    const mode = preset.kind === "duo" ? "duo" : "ai";
+    setCreateMode(mode);
+    setMountedCreateMode(mode);
+  }
 
   // Restore the whole in-progress draft (photos, inputs, cart, and where in the wizard the
   // customer was) from IndexedDB on first mount -- see src/lib/draftStorage.ts. Runs once; a
@@ -451,7 +473,11 @@ export function OrderForm() {
     let cancelled = false;
     (async () => {
       const saved = await loadDraftSlice<SavedOrderDraft>("orderDraft");
-      if (cancelled || !saved) return;
+      if (cancelled) return;
+      if (!saved) {
+        applyUrlComposition();
+        return;
+      }
       // A draft saved by an older version may carry sizes that are no longer sold (or none at all);
       // restoring it as-is used to crash the cart. Fall back to the default size, and drop cart items
       // that can't be ordered any more.
@@ -476,6 +502,9 @@ export function OrderForm() {
       setGeneratedReferenceImageUrls(saved.generatedReferenceImageUrls);
       setIsCustomModel(saved.isCustomModel);
       setCartOpen(saved.cartOpen);
+      // Arriving with ?composition=<id> wins over the restored wizard position (photos and the
+      // rest of the restored inputs are kept).
+      applyUrlComposition();
     })();
     return () => {
       cancelled = true;
@@ -612,6 +641,7 @@ export function OrderForm() {
     setModelSource("reuse");
     setCreateMode(null);
     setMountedCreateMode(null);
+    setPresetCompositionId(null);
     // Clears every child builder's own saved slice (previewDraft/duoDraft/poseSetDraft) too --
     // draftKey bumping below remounts them fresh, and without this their mount-time restore
     // effect would pull back the PREVIOUS item's now-irrelevant in-progress generation state.
@@ -1077,6 +1107,7 @@ export function OrderForm() {
                       <PreviewPanel
                         key={draftKey}
                         mode="ai"
+                        initialCompositionId={presetCompositionId}
                         photos={photos ?? []}
                         subject={subject ?? ""}
                         subjectType={subjectType ?? "pet"}
@@ -1129,6 +1160,7 @@ export function OrderForm() {
                       </button>
                       <DuoBuilder
                         key={draftKey}
+                        initialCompositionId={presetCompositionId}
                         colorQuantities={colorQuantities}
                         onGenerated={handleGenerated}
                       />

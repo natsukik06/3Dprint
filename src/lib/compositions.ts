@@ -1,4 +1,4 @@
-// Preset composition (構図) references. Each image is a plain gray clay silhouette used ONLY to
+﻿// Preset composition (構図) references. Each image is a plain gray clay silhouette used ONLY to
 // show body orientation / arrangement -- see compositionPhrase in gemini.ts. Files live in
 // public/compositions/<id>.png.
 export type CompositionKind = "duo" | "single";
@@ -8,21 +8,37 @@ export type CompositionPreset = {
   label: string;
   kind: CompositionKind;
   imageUrl: string;
+  // Showcase photo for the home page (public/showcase/<id>.jpg, may not exist yet -- callers fall
+  // back to imageUrl) and a short catch copy.
+  showcaseUrl: string;
+  catchCopy: string;
 };
 
-function preset(id: string, label: string, kind: CompositionKind): CompositionPreset {
-  return { id, label, kind, imageUrl: `/compositions/${id}.png` };
+function preset(
+  id: string,
+  label: string,
+  kind: CompositionKind,
+  catchCopy: string
+): CompositionPreset {
+  return {
+    id,
+    label,
+    kind,
+    imageUrl: `/compositions/${id}.png`,
+    showcaseUrl: `/showcase/${id}.jpg`,
+    catchCopy,
+  };
 }
 
 export const COMPOSITION_PRESETS: CompositionPreset[] = [
-  preset("side-by-side", "ならんで座る", "duo"),
-  preset("snuggled", "くっついて座る", "duo"),
-  preset("one-behind-other", "ひとりが後ろ", "duo"),
-  preset("facing-each-other", "むかい合う", "duo"),
-  preset("lying-together", "ならんで伏せる", "duo"),
-  preset("sit-front", "すわって正面", "single"),
-  preset("lie-down", "ふせる", "single"),
-  preset("stand-side", "立って横向き", "single"),
+  preset("side-by-side", "ならんで座る", "duo", "なかよく並んでパチリ"),
+  preset("snuggled", "くっついて座る", "duo", "ぴったり寄りそって"),
+  preset("one-behind-other", "ひとりが後ろ", "duo", "のぞきこむ名コンビ"),
+  preset("facing-each-other", "むかい合う", "duo", "見つめ合う2匹"),
+  preset("lying-together", "ならんで伏せる", "duo", "ならんでのんびり"),
+  preset("sit-front", "すわって正面", "single", "ちょこんとお座り"),
+  preset("lie-down", "ふせる", "single", "ごろんとリラックス"),
+  preset("stand-side", "立って横向き", "single", "りりしく横向き"),
 ];
 
 export const DUO_COMPOSITIONS = COMPOSITION_PRESETS.filter((c) => c.kind === "duo");

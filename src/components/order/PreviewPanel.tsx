@@ -107,6 +107,8 @@ type PreviewPanelProps = {
   // (Charo). Left null/omitted in normal use; PreviewPanel's own gallery already covers picking
   // a different one after mount (see handleSelectGalleryItem).
   initialModel?: GeneratedModel | null;
+  // Preselected composition preset (from /order?composition=<id>); the customer can still change it.
+  initialCompositionId?: string | null;
 };
 
 function appendPetDetails(formData: FormData, petDetails: PetDetails) {
@@ -242,6 +244,7 @@ export function PreviewPanel({
   petDetails,
   onGenerated,
   initialModel,
+  initialCompositionId,
 }: PreviewPanelProps) {
   // In "reuse" mode, falling back to the premade Charo mascot when no specific past model was
   // passed in means this panel always opens with SOMETHING selected -- no empty/idle state to
@@ -258,7 +261,9 @@ export function PreviewPanel({
     { phase: "idle" } | { phase: "uploading" } | { phase: "error"; message: string }
   >({ phase: "idle" });
   // Optional composition reference (not saved in the draft: it just resets on reload).
-  const [compositionId, setCompositionId] = useState<string | null>(null);
+  const [compositionId, setCompositionId] = useState<string | null>(
+    initialCompositionId ?? null
+  );
   const [compositionFile, setCompositionFile] = useState<File | null>(null);
   const [gallery, setGallery] = useState<GeneratedModel[]>(
     mode === "reuse" ? [CHARO_PREMADE_MODEL] : []

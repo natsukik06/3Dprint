@@ -20,15 +20,15 @@ import { CREDIT_PRICE_YEN, GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN } from "@/lib/
 const HOW_IT_WORKS = {
   deformed: {
     front:
-      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-front.png?alt=media&token=8e63ecd1-1fb2-4b4a-b905-edcc09d0f733",
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-front.png?alt=media&token=69b13389-cf2c-4da3-ba13-213d54b7c657",
     left:
-      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-left.png?alt=media&token=3da73831-f53f-4d9e-a360-8f5dad308f5b",
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-left.png?alt=media&token=45c374c2-72ef-40f3-b944-5c0e75079083",
     back:
-      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-back.png?alt=media&token=cd6d9667-b644-4979-8b1f-6905e455f990",
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-back.png?alt=media&token=8645c9ff-21a3-49b6-ac06-54bd55854456",
     right:
-      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-right.png?alt=media&token=654bbd2e-467f-43d8-8cb3-5ffa83411459",
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade-whiteclay-mono-right.png?alt=media&token=08d507a1-550f-4097-971e-1cd427aac8c7",
     model3d:
-      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-howto-deformed-3d.png?alt=media&token=c4d7eec9-9feb-417d-b3f6-31bddad015ed",
+      "https://firebasestorage.googleapis.com/v0/b/diy-figure-app.firebasestorage.app/o/previews%2Fcharo-premade.png?alt=media&token=7d27bc8a-cf82-4aa2-bfd1-8e7fa79ea6f0",
   },
   real: {
     front:

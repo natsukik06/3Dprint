@@ -415,21 +415,28 @@ export async function generatePoseSetViews(
 
 const SCENE_LAYOUT_PHRASES: Record<SceneLayout, string> = {
   sideBySide:
-    "positioned side by side at the same ground level, each facing forward, with a small gap " +
-    "between them so both bodies stay clearly separate and readable",
+    "sitting side by side on the same ground, their shoulders and sides pressed together so they " +
+    "join into one solid piece, both facing the camera",
   snuggled:
-    "snuggled closely together in an affectionate pose, their bodies gently touching or leaning " +
-    "against each other, like they belong to the same home",
+    "sitting close together in an affectionate pose, leaning their heads and bodies against each " +
+    "other so they touch along a broad area, like they belong to the same home",
   stacked:
-    "arranged as one compact cluster with the second subject positioned slightly behind and " +
-    "above the first (not floating -- resting against or partially behind the first subject's " +
-    "body), as if peeking out from just behind them",
+    "sitting on the same ground, one slightly behind and diagonally beside the other so the rear " +
+    "one's head peeks up a little higher next to the front one's head, bodies pressed firmly " +
+    "together (nothing floating, nobody climbing on or lying across the other)",
 };
 
 // "おそろいセット" -- two different pets/objects sculpted together into ONE figurine (one
 // physical piece), rather than the single-subject figureGridPrompt above. Still one 2x2
 // turnaround grid, because the output is still one 3D mesh: the "subject" of the turnaround is
 // now the whole two-figure scene, not one figure alone.
+//
+// Tuned 2026-10 by generating dog+dog / dog+cat / cat+cat pairs (see company/reports/
+// 2026-10-05-ノブナガ-多頭プロンプト改善.md): the old wording let the two animals blend (both
+// ended up with the same markings), drift to a realistic photo look, and come out lopsided.
+// The fixes: spell out how A and B differ, force the same cute chibi treatment and size for both,
+// fuse the bodies along a broad contact patch (print-safe), forbid a base/disc, and require BOTH
+// animals in every quadrant with mirrored profile views.
 function figureGridPromptDuo(
   subjectA: string,
   subjectB: string,
@@ -439,63 +446,85 @@ function figureGridPromptDuo(
   petDetailsB: PetDetails | undefined,
   subjectType: SubjectType
 ): string {
-  const printSafetyPhrase =
-    subjectType === "pet"
-      ? "render fur/feathers as defined locks or tufts of a real, printable thickness rather " +
-        "than fine wispy individual strands, keep every part of both bodies thick and " +
-        "continuous, and avoid any thin protrusion that tapers down to a sharp point."
-      : "keep every part of both objects thick and continuous, and avoid any thin handle, rim, " +
-        "blade, or protrusion that tapers down to a sharp or fragile edge.";
-  const proportionsPhrase =
-    subjectType === "pet" ? "Precise anatomical proportions" : "Precise proportions";
-  const referencePhotoPhrase =
-    `Of the attached reference photos, the first ${referencePhotoCountA} show subject A only; ` +
-    "the remaining photos show subject B only -- match each figure's identity, shape, coloring, " +
-    "and markings only to its own set of reference photos, never blending the two subjects' " +
-    "features together.";
+  const isPet = subjectType === "pet";
+  const noun = isPet ? "pets" : "objects";
+  const photosA = referencePhotoCountA > 1 ? `1-${referencePhotoCountA}` : "1";
+  const subjectAPhrase = isPet
+    ? "the pet in reference photo(s) " + photosA
+    : `${subjectPhrase(subjectA, subjectType)}, shown in reference photo(s) ${photosA}`;
+  const subjectBPhrase = isPet
+    ? "the pet in the remaining reference photo(s)"
+    : `${subjectPhrase(subjectB, subjectType)}, shown in the remaining reference photo(s)`;
+
+  const identityPhrase = isPet
+    ? "They are two DIFFERENT animals: before drawing, note what makes them differ (coat color " +
+      "and markings, ear shape, face/muzzle shape, fur length, species) and keep those " +
+      "differences clearly visible in all four views — never draw two copies of the same " +
+      "animal, never swap or blend their features: a dog stays a dog and a cat stays a cat with " +
+      "its own species-correct face (cats: small nose, short flat muzzle, round face; dogs: a " +
+      "clear muzzle/snout), and neither animal borrows the other's markings, ear shape or coat " +
+      "pattern."
+    : "They are two DIFFERENT objects: keep each one's own shape, colors and decoration clearly " +
+      "visible in all four views — never draw two copies of the same object and never blend them.";
+  const cutenessPhrase = isPet
+    ? "CUTENESS (very important): sculpt both as adorable chibi gashapon-style toys — a big " +
+      "round head about as wide as the body, large glossy simple eyes set low and wide apart, " +
+      "tiny nose and mouth, short chubby limbs, a soft plump rounded body, about 2 to 2.5 heads " +
+      "tall. Sweet, gentle, happy faces. This chibi simplification applies even to fluffy or " +
+      "long-haired animals: turn their fluff into smooth rounded toy shapes with a few soft " +
+      "tufts and give them the same big glossy bead eyes, so none of them looks like a " +
+      "realistic photographed animal — redraw every animal as a toy even if its reference photo " +
+      "looks very realistic. Same cute chibi treatment and about the same overall size for " +
+      "BOTH (neither one much larger or smaller than the other, neither hidden), each keeping " +
+      "its own recognizable traits (ear shape, face markings, coat colors and patches, tail, " +
+      "fur length) from its own photos. "
+    : "CUTENESS: sculpt both as cute, softly rounded collectible toy versions of the real " +
+      "objects, about the same overall size (neither much larger or smaller, neither hidden), " +
+      "each keeping its own recognizable shape, colors and decoration from its own photos. ";
+  const materialPhrase = isPet
+    ? "MATERIAL: smooth matte resin toy surfaces with softly sculpted fur tufts and simple " +
+      "painted-on color patches — NOT a photo of a real animal, no individual hair strands, no " +
+      "photorealistic fur. "
+    : "MATERIAL: smooth matte resin toy surfaces — NOT a photograph of the real objects. ";
+  const structurePhrase = isPet
+    ? "STRUCTURE FOR 3D PRINTING (a few cm tall keychain): the two bodies are fused together " +
+      "along a broad contact area (at least a third of the body width), sitting on the same " +
+      "flat ground line, with thick short legs, thick ears and a short thick tail — no thin " +
+      "spindly parts, no gaps or holes, nothing floating, and NO base, plate, stand, pedestal " +
+      "or disc under them. "
+    : "STRUCTURE FOR 3D PRINTING (a few cm tall keychain): the two objects are fused together " +
+      "along a broad contact area, resting on the same flat ground line, with every part thick " +
+      "and continuous — no thin handles, rims, blades or spindly parts, no gaps or holes, " +
+      "nothing floating, and NO base, plate, stand, pedestal or disc under them. ";
 
   return (
-    "A single image containing a precise 2x2 grid of four photos of the same small figurine " +
-    `depicting TWO subjects together as one combined scene: subject A (${subjectPhrase(subjectA, subjectType, "its own reference photos")}) and subject ` +
-    `B (${subjectPhrase(subjectB, subjectType, "its own reference photos")}), ${SCENE_LAYOUT_PHRASES[layout]}. Both subjects keep their own individual ` +
-    "identity, proportions, and coloring -- this is two distinct figures sculpted together into " +
-    "one piece, not a blended hybrid creature. The grid has exactly four equal-sized quadrants " +
-    "with no border, no divider lines, and no grid lines drawn — just four separate photos " +
-    "placed edge to edge on a shared plain white background, each one a different rotation of " +
-    "the same turntable sequence around the whole two-figure scene: " +
-    "Top-left quadrant: front view — camera directly facing the scene head-on, both " +
-    "subjects' faces visible facing the camera. " +
-    "Top-right quadrant: left side view — camera rotated a full 90 degrees " +
-    "counterclockwise from the front view, so both subjects are seen in full side profile. This " +
-    "must be a genuine 90-degree rotation, NOT a slightly-turned variant of the front view — if " +
-    "either subject's face is still mostly facing the camera, the rotation has failed. " +
-    "Bottom-left quadrant: back view — camera rotated a further 90 degrees to be " +
-    "directly behind the scene, 180 degrees opposite the front view, showing the back/rear of " +
-    "both subjects with no faces visible. " +
-    "Bottom-right quadrant: right side view — camera rotated 90 degrees clockwise " +
-    "from the front view, so both subjects are seen in full side profile, the mirror opposite of " +
-    "the top-right quadrant. " +
-    "Self-check before finalizing: the top-right and bottom-right quadrants must look CLEARLY " +
-    "different from each other (one profile faces left, the other faces right) — if they look " +
-    "like the same angle repeated twice, redo the rotation. Likewise the bottom-left (back) " +
-    "quadrant must look clearly different from both side-profile quadrants, not another " +
-    "near-front view. The relative arrangement of subject A and subject B must stay identical " +
-    "across all four quadrants (only the camera moves, the two subjects never change position " +
-    "relative to each other). " +
-    "All four photos show the exact same turntable photography setup: identical camera height, " +
-    "identical camera distance, identical scale — only the turntable rotation differs between " +
-    "quadrants. Leave generous plain white margin around the whole scene within each quadrant so " +
-    "no part of it comes close to the quadrant boundary. " +
-    TOY_STYLE_PHRASE +
-    " This applies to BOTH subjects equally — neither one should read as a real photographed " +
-    "animal, even though each one's identity/markings must still match its own reference photos. " +
-    `Render each figure's actual colors, markings, and ${subjectType === "pet" ? "coat pattern" : "surface pattern/texture"} as ` +
-    "closely as possible to its own reference photos — do not simplify either one to a plain or " +
-    "single-color material. This will be 3D printed at only a few centimeters tall, so keep the " +
-    `sculpted form itself sturdy: ${printSafetyPhrase} Soft even studio lighting with no harsh ` +
-    `shadows or reflections. ${proportionsPhrase} for both subjects, both fully visible and ` +
-    "centered within each quadrant, no text or watermark anywhere (no letters, numbers, captions or labels in any language). " +
-    referencePhotoPhrase +
+    "Create ONE image: a precise 2x2 grid of four photos of the same small kawaii collectible " +
+    `figurine (a single rigid sculpture) showing TWO different ${noun} together as one combined ` +
+    `piece. Subject A is ${subjectAPhrase}; subject B is ${subjectBPhrase}. ` +
+    `${identityPhrase} Subject A and subject B are ${SCENE_LAYOUT_PHRASES[layout]}. ` +
+    cutenessPhrase +
+    materialPhrase +
+    structurePhrase +
+    "GRID: exactly four equal quadrants on one shared plain white background with NO border, " +
+    "divider lines or grid lines. Same camera height, distance and scale in all four; the " +
+    "figurine is a turntable object, only the rotation changes, and the arrangement of A and B " +
+    "never changes. " +
+    `EVERY one of the four quadrants must contain BOTH ${isPet ? "animals" : "objects"} together (never a quadrant with only one); in the ` +
+    "side views the two are lined up side by side along the viewing direction, one partly " +
+    "overlapping the other, both facing the same way. " +
+    "Top-left: FRONT view, both faces/fronts looking at the camera. " +
+    "Top-right: LEFT-SIDE view — a true 90 degree turn so we see the full side profile of both, " +
+    "both heads/fronts pointing toward the LEFT edge. " +
+    "Bottom-left: BACK view, 180 degrees from the front, the rear of both, no faces. " +
+    "Bottom-right: RIGHT-SIDE view — the opposite 90 degree turn, full side profile of both, " +
+    "both heads/fronts pointing toward the RIGHT edge. " +
+    "Think of four camera positions around the turntable at 0, 90, 180 and 270 degrees: no two " +
+    "quadrants may show the same angle, and the two profile quadrants must be mirror-image " +
+    "views (pointing left in one, right in the other). All four quadrants must be clearly " +
+    "different angles of the same figurine. Whole figurine fully visible and centered in each " +
+    "quadrant with generous white margin. Soft even studio light, no harsh shadows. No text, " +
+    "letters, numbers or watermark anywhere (no captions or labels in any language). " +
+    "Use each subject's own reference photos only for its own identity and coloring." +
     petDetailsPhrase(petDetailsA, subjectType) +
     petDetailsPhrase(petDetailsB, subjectType)
   );

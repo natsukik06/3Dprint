@@ -220,6 +220,12 @@ export default function AdminPage() {
           >
             作成例
           </Link>
+          <Link
+            href="/admin/survey"
+            className="text-slate-600 underline underline-offset-2"
+          >
+            アンケート
+          </Link>
         </div>
       </div>
       <TripoBalanceBanner />

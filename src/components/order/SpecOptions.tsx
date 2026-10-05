@@ -590,7 +590,7 @@ export function SpecOptions({
                 htmlFor="engravingText"
                 className="block text-xs font-medium text-slate-700"
               >
-                刻印する文字（半角の英数字・{MAX_ENGRAVING_TEXT_LENGTH}文字以内）
+                刻印する文字（英数字・ひらがな・カタカナ・漢字／{MAX_ENGRAVING_TEXT_LENGTH}文字以内）
               </label>
               <input
                 id="engravingText"
@@ -605,6 +605,9 @@ export function SpecOptions({
                   {errors.engravingText.message}
                 </p>
               )}
+              <p className="text-[11px] leading-relaxed text-amber-700">
+                ※漢字・ひらがななど、選んだフォントに無い文字は、別のフォントで刻印される場合があります（字の形が画面のイメージと変わることがあります）。英数字のみなら、選んだフォントのとおりに刻印できます。
+              </p>
             </div>
             <div className="space-y-1.5">
               <label

@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 export const POSE_OPTIONS = [
   "sitting",
@@ -310,6 +310,10 @@ const FUR_CAVITY_SOLID_SIZE_ERROR = {
 // wantsEngraving just toggles the UI/price on -- the actual text is a separate optional field
 // (empty by default so it validates fine while the checkbox is off), so enforce it's non-empty
 // only once the customer has actually opted in.
+// Latin letters/digits plus Japanese kana/kanji. A glyph the chosen font lacks (typically kanji) is
+// engraved in a fallback font at production time -- the order form warns about this.
+export const ENGRAVING_TEXT_PATTERN = /^[A-Za-z0-9 .,!&'\-ぁ-んァ-ヶー一-龠々]*$/;
+
 function refineEngravingTextRequired<
   T extends { wantsEngraving: boolean; engravingText?: string },
 >(v: T) {
@@ -348,7 +352,7 @@ export const orderItemSchema = z
       .max(MAX_ENGRAVING_TEXT_LENGTH, `${MAX_ENGRAVING_TEXT_LENGTH}文字以内で入力してください`)
       // The slicer's 3D-text tool can only cut Latin letters/digits from its recommended fonts (see
       // ENGRAVING_FONT_OPTIONS) -- Japanese, emoji or markup characters would fail at production time.
-      .regex(/^[A-Za-z0-9 .,!&'\-]*$/, "刻印は半角の英数字（A〜Z・0〜9・スペースなど）で入力してください")
+      .regex(ENGRAVING_TEXT_PATTERN, "刻印は英数字・ひらがな・カタカナ・漢字で入力してください（絵文字や記号の一部は使えません）")
       .optional(),
     engravingFont: z.enum(ENGRAVING_FONT_OPTIONS),
     referenceImageUrls: z.array(z.string()),
@@ -399,7 +403,7 @@ export const orderFormSchema = z
     .max(MAX_ENGRAVING_TEXT_LENGTH, `${MAX_ENGRAVING_TEXT_LENGTH}文字以内で入力してください`)
       // The slicer's 3D-text tool can only cut Latin letters/digits from its recommended fonts (see
       // ENGRAVING_FONT_OPTIONS) -- Japanese, emoji or markup characters would fail at production time.
-      .regex(/^[A-Za-z0-9 .,!&'\-]*$/, "刻印は半角の英数字（A〜Z・0〜9・スペースなど）で入力してください")
+      .regex(ENGRAVING_TEXT_PATTERN, "刻印は英数字・ひらがな・カタカナ・漢字で入力してください（絵文字や記号の一部は使えません）")
     .optional(),
   engravingFont: z.enum(ENGRAVING_FONT_OPTIONS),
   generationCreditsUsed: z.number().int().min(0),

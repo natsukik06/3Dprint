@@ -433,48 +433,144 @@ const SCENE_LAYOUT_PHRASES: Record<SceneLayout, string> = {
     "together (nothing floating, nobody climbing on or lying across the other)",
 };
 
+// Posture wording for the preset composition references (public/compositions/*). The reference
+// image itself is a blurred gray silhouette, which conveys "lying" or "snuggled" only weakly, so the
+// pose is also put into words. Only used when a preset id is known (not for customer uploads).
+const DUO_COMPOSITION_HINTS: Record<string, string> = {
+  "side-by-side":
+    "both animals sit upright side by side, shoulders touching, both facing the camera",
+  snuggled:
+    "both animals sit very close together, heads leaning against each other, bodies pressed together",
+  "one-behind-other":
+    "one animal sits in front and the other sits right behind it, its head peeking out beside the front one",
+  "facing-each-other":
+    "the two animals sit facing each other, noses close together, seen in profile from the front",
+  "lying-together":
+    "BOTH animals are lying down flat on their bellies on the ground, bodies low and touching, " +
+    "heads resting low (neither one stands or sits upright)",
+};
+
+export type DuoSpecies = "dog" | "cat" | "other" | null;
+
+const SPECIES_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    species: { type: "STRING", enum: ["dog", "cat", "other"] },
+  },
+  required: ["species"],
+};
+
+// Reads the species (dog / cat / other) of the main animal in a set of photos. The customer's typed
+// name is never used for this (see subjectPhrase); the photo decides. Failure is not fatal: null
+// means "unknown" and the prompt falls back to wording that does not name a species.
+async function detectSpecies(client: GoogleGenAI, photos: ImagePayload[]): Promise<DuoSpecies> {
+  try {
+    const response = await client.models.generateContent({
+      model: GEMINI_ANALYSIS_MODEL,
+      contents: [
+        ...buildReferenceParts(photos.slice(0, 2)),
+        {
+          text:
+            "What kind of animal is the main pet in these photos? Answer with JSON only: " +
+            "\"dog\" for any dog, \"cat\" for any cat, \"other\" for any other animal or if there is no animal.",
+        },
+      ],
+      config: { responseMimeType: "application/json", responseSchema: SPECIES_SCHEMA },
+    });
+    const parsed = JSON.parse(response.text ?? "{}") as { species?: string };
+    return parsed.species === "dog" || parsed.species === "cat" || parsed.species === "other"
+      ? parsed.species
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 // "おそろいセット" -- two different pets/objects sculpted together into ONE figurine (one
 // physical piece), rather than the single-subject figureGridPrompt above. Still one 2x2
 // turnaround grid, because the output is still one 3D mesh: the "subject" of the turnaround is
 // now the whole two-figure scene, not one figure alone.
 //
 // Tuned 2026-10 by generating dog+dog / dog+cat / cat+cat pairs (see company/reports/
-// 2026-10-05-ノブナガ-多頭プロンプト改善.md): the old wording let the two animals blend (both
-// ended up with the same markings), drift to a realistic photo look, and come out lopsided.
-// The fixes: spell out how A and B differ, force the same cute chibi treatment and size for both,
-// fuse the bodies along a broad contact patch (print-safe), forbid a base/disc, and require BOTH
-// animals in every quadrant with mirrored profile views.
+// 2026-10-05-ノブナガ-多頭プロンプト改善.md and ...-2匹生成の修正.md): the old wording let the two
+// animals blend, drift to a realistic photo look, come out lopsided, lose one animal in some
+// quadrants, turn a dog into a cat (especially with the same photo used twice), repeat the back view
+// instead of showing the right profile, and draw divider lines. Kept from the 2026-10-05 re-test:
+// the species of each animal is named (read from the photo), "same photo twice" gets twin wording,
+// and the generic layout sentence is dropped when a composition reference is attached (plus posture
+// wording for presets) so the two never conflict -- this made "lying-together" actually lie down.
+// NOT improved (the stronger "mirror image" / "no lines" / "both visible in every quadrant" wording
+// was tried and scored no better, see the report): one animal missing from a side view, and the
+// right view repeating the back view, still happen in roughly a third of generations.
 function figureGridPromptDuo(
-  subjectA: string,
-  subjectB: string,
   referencePhotoCountA: number,
   layout: SceneLayout,
   petDetailsA: PetDetails | undefined,
   petDetailsB: PetDetails | undefined,
   subjectType: SubjectType,
   photoCount = 0,
-  hasComposition = false
+  hasComposition = false,
+  extra: {
+    speciesA?: DuoSpecies;
+    speciesB?: DuoSpecies;
+    samePhoto?: boolean;
+    compositionHint?: string;
+    subjectA?: string;
+    subjectB?: string;
+  } = {}
 ): string {
   const isPet = subjectType === "pet";
   const noun = isPet ? "pets" : "objects";
+  const animals = isPet ? "animals" : "objects";
   const photosA = referencePhotoCountA > 1 ? `1-${referencePhotoCountA}` : "1";
-  const subjectAPhrase = isPet
-    ? "the pet in reference photo(s) " + photosA
-    : `${subjectPhrase(subjectA, subjectType)}, shown in reference photo(s) ${photosA}`;
-  const subjectBPhrase = isPet
-    ? "the pet in the remaining reference photo(s)"
-    : `${subjectPhrase(subjectB, subjectType)}, shown in the remaining reference photo(s)`;
+  const spA = isPet ? extra.speciesA ?? null : null;
+  const spB = isPet ? extra.speciesB ?? null : null;
+  const word = (s: DuoSpecies, fallback: string) =>
+    s === "dog" ? "DOG" : s === "cat" ? "CAT" : s === "other" ? "animal" : fallback;
+  const wA = word(spA, "animal");
+  const wB = word(spB, "animal");
+  const samePhoto = !!extra.samePhoto && isPet;
 
-  const identityPhrase = isPet
-    ? "They are two DIFFERENT animals: before drawing, note what makes them differ (coat color " +
-      "and markings, ear shape, face/muzzle shape, fur length, species) and keep those " +
-      "differences clearly visible in all four views — never draw two copies of the same " +
-      "animal, never swap or blend their features: a dog stays a dog and a cat stays a cat with " +
-      "its own species-correct face (cats: small nose, short flat muzzle, round face; dogs: a " +
-      "clear muzzle/snout), and neither animal borrows the other's markings, ear shape or coat " +
-      "pattern."
-    : "They are two DIFFERENT objects: keep each one's own shape, colors and decoration clearly " +
+  const subjectAPhrase = isPet
+    ? `the ${wA} in reference photo(s) ${photosA}`
+    : `${extra.subjectA ?? "the first object"}, shown in reference photo(s) ${photosA}`;
+  const subjectBPhrase = isPet
+    ? samePhoto
+      ? `a second ${wB} that looks exactly like A (same photo)`
+      : `the ${wB} in the remaining reference photo(s)`
+    : `${extra.subjectB ?? "the second object"}, shown in the remaining reference photo(s)`;
+
+  let identityPhrase: string;
+  if (!isPet) {
+    identityPhrase =
+      "They are two DIFFERENT objects: keep each one's own shape, colors and decoration clearly " +
       "visible in all four views — never draw two copies of the same object and never blend them.";
+  } else if (samePhoto) {
+    const kind = wA === "animal" ? "kind of animal" : wA;
+    identityPhrase =
+      "A and B were made from the SAME photo, so they are TWINS: two copies of the very same " +
+      `animal standing/sitting together, same species (a ${kind} — and ONLY that species, NEVER ` +
+      "a different animal, never a cat if the photo shows a dog and never a dog if the photo " +
+      "shows a cat), same face, same coat color and markings, same size. Do not invent a " +
+      "different animal for B and do not change B's species or coat. ";
+  } else {
+    const species =
+      spA && spB && spA === spB
+        ? `Both are ${wA}s (the same species) but two different individuals: `
+        : spA && spB
+          ? `A is a ${wA} and B is a ${wB} — they stay exactly these species in every view: `
+          : "";
+    identityPhrase =
+      "They are two DIFFERENT animals. " +
+      species +
+      "before drawing, note what makes them differ (coat color and markings, ear shape, " +
+      "face/muzzle shape, fur length, species) and keep those differences clearly visible in all " +
+      "four views — never draw two copies of the same animal, never swap or blend their " +
+      "features: a dog stays a dog and a cat stays a cat with its own species-correct face " +
+      "(cats: small nose, short flat muzzle, round face, pointed ears; dogs: a clear muzzle/snout), " +
+      "and neither animal borrows the other's markings, ear shape or coat pattern.";
+  }
+
   const cutenessPhrase = isPet
     ? "CUTENESS (very important): sculpt both as adorable chibi gashapon-style toys — a big " +
       "round head about as wide as the body, large glossy simple eyes set low and wide apart, " +
@@ -506,11 +602,24 @@ function figureGridPromptDuo(
       "and continuous — no thin handles, rims, blades or spindly parts, no gaps or holes, " +
       "nothing floating, and NO base, plate, stand, pedestal or disc under them. ";
 
+  // With a composition reference the arrangement comes from that image (and, for a preset, from the
+  // pose wording below) -- the generic layout sentence is left out so the two cannot conflict.
+  const arrangementPhrase = hasComposition
+    ? "Arrangement of A and B: copy the pose and arrangement of the composition reference image" +
+      (extra.compositionHint ? ` (${extra.compositionHint})` : "") +
+      ", but with the animals' real species and looks from their own photos. "
+    : `A and B are ${SCENE_LAYOUT_PHRASES[layout]}. `;
+  const eachQuadrant = `EVERY one of the four quadrants must contain BOTH ${animals} together (never a quadrant with only one); `;
+  const sideViews = hasComposition
+    ? "in the side views keep the same arrangement, just turned to the side. "
+    : "in the side views the two are lined up side by side along the viewing direction, one " +
+      "partly overlapping the other, both facing the same way. ";
+
   return (
     "Create ONE image: a precise 2x2 grid of four photos of the same small kawaii collectible " +
     `figurine (a single rigid sculpture) showing TWO different ${noun} together as one combined ` +
     `piece. Subject A is ${subjectAPhrase}; subject B is ${subjectBPhrase}. ` +
-    `${identityPhrase} Subject A and subject B are ${SCENE_LAYOUT_PHRASES[layout]}. ` +
+    `${identityPhrase} ${arrangementPhrase}` +
     cutenessPhrase +
     materialPhrase +
     structurePhrase +
@@ -518,9 +627,8 @@ function figureGridPromptDuo(
     "divider lines or grid lines. Same camera height, distance and scale in all four; the " +
     "figurine is a turntable object, only the rotation changes, and the arrangement of A and B " +
     "never changes. " +
-    `EVERY one of the four quadrants must contain BOTH ${isPet ? "animals" : "objects"} together (never a quadrant with only one); in the ` +
-    "side views the two are lined up side by side along the viewing direction, one partly " +
-    "overlapping the other, both facing the same way. " +
+    eachQuadrant +
+    sideViews +
     "Top-left: FRONT view, both faces/fronts looking at the camera. " +
     "Top-right: LEFT-SIDE view — a true 90 degree turn so we see the full side profile of both, " +
     "both heads/fronts pointing toward the LEFT edge. " +
@@ -533,18 +641,19 @@ function figureGridPromptDuo(
     "different angles of the same figurine. Whole figurine fully visible and centered in each " +
     "quadrant with generous white margin. Soft even studio light, no harsh shadows. No text, " +
     "letters, numbers or watermark anywhere (no captions or labels in any language). " +
-    "Use each subject's own reference photos only for its own identity and coloring." +
+    `Use each subject's own reference photos only for its own identity and coloring.` +
     OMIT_SURROUNDINGS_PHRASE +
     petDetailsPhrase(petDetailsA, subjectType) +
     petDetailsPhrase(petDetailsB, subjectType) +
     (hasComposition
       ? compositionPhrase(photoCount, true) +
-        " For this two-animal figurine, the reference's arrangement overrides the default " +
-        "arrangement described above, but both animals must still be fused into one piece with " +
-        "a broad contact area and no base."
+        ` For this two-${animals === "animals" ? "animal" : "object"} figurine, the composition reference decides ` +
+        "the arrangement, but both must still be fused into one piece with a broad contact area " +
+        "and no base."
       : "")
   );
 }
+
 
 export type ShapeRiskAssessment = {
   fragileRisk: boolean;
@@ -705,24 +814,46 @@ export async function generateWhiteClayViewsDuo(
   petDetailsA?: PetDetails,
   petDetailsB?: PetDetails,
   subjectType: SubjectType = "pet",
-  compositionRef?: ImagePayload
+  compositionRef?: ImagePayload,
+  // Id of a preset composition (e.g. "lying-together"); only adds posture wording to the prompt.
+  compositionId?: string
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
   const photos = [...referencePhotosA, ...referencePhotosB];
   const neutralRef = compositionRef ? await neutralizeCompositionRef(compositionRef) : undefined;
+  // The same photo used for both animals (e.g. twins): needs "two copies of the same animal"
+  // wording, otherwise the model invents a different animal for the second one.
+  const samePhoto = referencePhotosA.some((a) =>
+    referencePhotosB.some((b) => a.data === b.data)
+  );
+  const isPet = subjectType === "pet";
+  const [speciesA, speciesB] = isPet
+    ? samePhoto
+      ? await detectSpecies(client, referencePhotosA).then((s) => [s, s] as const)
+      : await Promise.all([
+          detectSpecies(client, referencePhotosA),
+          detectSpecies(client, referencePhotosB),
+        ])
+    : [null, null];
   const gridImage = await generateImage(
     client,
     neutralRef ? [...photos, neutralRef] : photos,
     figureGridPromptDuo(
-      subjectA,
-      subjectB,
       referencePhotosA.length,
       layout,
       petDetailsA,
       petDetailsB,
       subjectType,
       photos.length,
-      !!compositionRef
+      !!compositionRef,
+      {
+        speciesA,
+        speciesB,
+        samePhoto,
+        compositionHint: compositionId ? DUO_COMPOSITION_HINTS[compositionId] : undefined,
+        subjectA,
+        subjectB,
+      }
     )
   );
   return splitGridImage(gridImage);

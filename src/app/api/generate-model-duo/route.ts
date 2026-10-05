@@ -90,6 +90,9 @@ export async function POST(request: NextRequest) {
   if (!composition.ok) {
     return NextResponse.json({ error: composition.error }, { status: 400 });
   }
+  const presetCompositionId = formData.get("compositionId");
+  const upload = formData.get("compositionImage");
+  const hasUploadedComposition = upload instanceof File && upload.size > 0;
   const { allowed, usedPreviewCredit } = await checkAndConsumeGenerationAllowance(user.uid);
   if (!allowed) {
     return NextResponse.json(
@@ -120,7 +123,10 @@ export async function POST(request: NextRequest) {
         petDetailsA,
         petDetailsB,
         subjectType,
-        composition.payload
+        composition.payload,
+        typeof presetCompositionId === "string" && !hasUploadedComposition
+          ? presetCompositionId
+          : undefined
       ),
       uploadReferencePhotos(photoFilesA),
       uploadReferencePhotos(photoFilesB),

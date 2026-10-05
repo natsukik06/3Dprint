@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { LegalBackLink } from "@/components/site/LegalBackLink";
 
+export const metadata = { title: "返品・交換について" };
+
 export default function ReturnsPage() {
   return (
     <div className="min-h-full bg-slate-50">

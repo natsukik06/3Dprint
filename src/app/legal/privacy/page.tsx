@@ -1,5 +1,7 @@
 import { LegalBackLink } from "@/components/site/LegalBackLink";
 
+export const metadata = { title: "プライバシーポリシー" };
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">

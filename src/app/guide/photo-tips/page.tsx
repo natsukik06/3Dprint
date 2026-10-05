@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Check, X } from "lucide-react";
 
+export const metadata = { title: "きれいに作るための写真の撮り方" };
+
 type Example = { id: string; title: string; description: string };
 
 const GOOD_EXAMPLES: Example[] = [

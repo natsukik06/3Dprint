@@ -15,6 +15,8 @@ import {
 } from "@/lib/pricing";
 import { WEEKLY_SOLID_PIECE_CAP } from "@/lib/orderCap";
 
+export const metadata = { title: "特定商取引法に基づく表記" };
+
 type Row = { label: string; value: string };
 
 const ROWS: Row[] = [

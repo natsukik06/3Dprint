@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+export const metadata = { title: "よくある質問" };
+
 type QA = { q: string; a: string };
 
 const QAS: QA[] = [

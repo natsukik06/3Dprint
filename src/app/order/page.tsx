@@ -8,6 +8,8 @@ import { OrderForm } from "@/components/order/OrderForm";
 import { isOrderingOpen } from "@/lib/orderCap";
 import { CREDIT_PRICE_YEN } from "@/lib/creditPacks";
 
+export const metadata = { title: "ご注文（写真から作る）" };
+
 // Must be checked fresh on every request -- the monthly order-cap count would otherwise be
 // baked in once at build time and never re-checked.
 export const dynamic = "force-dynamic";

@@ -15,9 +15,25 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://diy-figure-app.vercel.app";
+const SITE_TITLE = "Charo 3D｜写真から作るオーダーメイド・クリアレジンのキーホルダー";
+const SITE_DESCRIPTION =
+  "愛犬・愛猫や大切なものの写真から、世界にひとつだけのクリアレジンのキーホルダーを作ります。1個ずつ手作りのオーダーメイド。写真を送るだけで3D形状を確認してから注文できます。";
+
 export const metadata: Metadata = {
-  title: "Charo 3D",
-  description: "写真から魔法のカラーで輝くクリスタルフィギュアを作成・注文できるサービス",
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: "%s｜Charo 3D" },
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: "Charo 3D",
+    locale: "ja_JP",
+    url: SITE_URL,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [{ url: "/logo-charo3d-v2.png", width: 938, height: 1004, alt: "Charo 3D" }],
+  },
+  twitter: { card: "summary", title: SITE_TITLE, description: SITE_DESCRIPTION },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

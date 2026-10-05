@@ -27,5 +27,5 @@ export const DEFAULT_COLOR_IMAGE_SRC: Record<MagicColor, string | null> = {
   clearGreen: "/colors/clearGreen.jpg",
   clearPurple: null,
   clearOrange: null,
-  frosted: null,
+  frosted: "/colors/frosted.jpg",
 };

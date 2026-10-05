@@ -19,6 +19,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { CustomerProfileSettings } from "@/components/account/CustomerProfileSettings";
 import { signInWithGoogle, signOut } from "@/lib/auth";
 import { loadDraftSlice } from "@/lib/draftStorage";
+import { orderDraftHasContent } from "@/lib/resumeDraft";
 import { downloadFileAs, sanitizeFilenamePart } from "@/lib/downloadFile";
 import { db } from "@/lib/firebase";
 import {
@@ -51,12 +52,7 @@ function InProgressDraftSection() {
   }, []);
 
   if (!draft) return null;
-  const hasContent =
-    draft.formValues.items.length > 0 ||
-    draft.formValues.photos.length > 0 ||
-    draft.generatedModelUrl !== null ||
-    draft.createMode !== null;
-  if (!hasContent) return null;
+  if (!orderDraftHasContent(draft)) return null;
 
   const itemCount = draft.formValues.items.length;
   const subject = draft.formValues.subject?.trim();

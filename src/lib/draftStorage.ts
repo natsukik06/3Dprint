@@ -24,6 +24,10 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
+function notifyChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("charo-draft-changed"));
+}
+
 export async function saveDraftSlice<T>(key: string, value: T): Promise<void> {
   if (!isSupported()) return;
   try {
@@ -35,6 +39,7 @@ export async function saveDraftSlice<T>(key: string, value: T): Promise<void> {
       tx.onerror = () => reject(tx.error);
     });
     db.close();
+    notifyChanged();
   } catch (error) {
     // Best-effort only -- a full/blocked IndexedDB (private browsing, quota) shouldn't break the
     // order form itself, just fall back to no persistence.
@@ -71,6 +76,7 @@ export async function clearDraftSlice(key: string): Promise<void> {
       tx.onerror = () => reject(tx.error);
     });
     db.close();
+    notifyChanged();
   } catch (error) {
     console.error(`clearDraftSlice(${key}) failed`, error);
   }

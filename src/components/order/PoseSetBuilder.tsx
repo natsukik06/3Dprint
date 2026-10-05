@@ -36,6 +36,12 @@ type SavedPoseSetDraft = {
   poseModels: Partial<Record<Pose, PoseModelState>>;
 };
 
+// The 5-pose generation is one long request. If the customer leaves this step (or this component is
+// otherwise unmounted) while it runs, the request itself keeps going -- this module-level handle lets
+// the next mount pick the result up instead of losing it, and the result is also written to IndexedDB
+// the moment it arrives so even a full page reload after completion restores it.
+let pendingPoseGeneration: Promise<BuilderState> | null = null;
+
 type PoseSetBuilderProps = {
   photos: File[];
   subject: string;
@@ -70,6 +76,36 @@ export function PoseSetBuilder({
   // pre-restore defaults before the async IndexedDB load has actually run (see PreviewPanel's
   // identical hasRestored for the same reason).
   const [hasRestored, setHasRestored] = useState(false);
+  const mountedRef = useRef(true);
+
+  async function adoptPendingGeneration(job: Promise<BuilderState>) {
+    const result = await job;
+    if (pendingPoseGeneration === job) pendingPoseGeneration = null;
+    if (!mountedRef.current) return;
+    if (result.phase === "reviewing") setSelected(new Set(POSE_OPTIONS));
+    setBuilder(result);
+  }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Warn before a reload/close while a generation is in flight -- the result would be lost.
+  const busy =
+    builder.phase === "generating" ||
+    Object.values(poseModels).some((s) => s?.phase === "starting");
+  useEffect(() => {
+    if (!busy) return;
+    function warn(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy]);
 
   useEffect(() => {
     return () => {
@@ -82,6 +118,14 @@ export function PoseSetBuilder({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const pending = pendingPoseGeneration;
+      if (pending) {
+        // A generation started before this mount is still running -- show it as in progress.
+        setBuilder({ phase: "generating" });
+        adoptPendingGeneration(pending);
+        setHasRestored(true);
+        return;
+      }
       const saved = await loadDraftSlice<SavedPoseSetDraft>("poseSetDraft");
       if (cancelled) return;
       if (saved) {
@@ -154,44 +198,54 @@ export function PoseSetBuilder({
     setPoseModels({});
     setBuilder({ phase: "generating" });
 
-    try {
-      const idToken = await user.getIdToken();
-      const formData = new FormData();
-      photos.forEach((file) => formData.append("photos", file));
-      formData.append("subject", subject);
-      formData.append("subjectType", subjectType);
-      formData.append("furColorNote", petDetails.furColorNote ?? "");
-      formData.append("breedNote", petDetails.breedNote ?? "");
-      formData.append("accessoryNote", petDetails.accessoryNote ?? "");
-      formData.append("bodyFeatureNote", petDetails.bodyFeatureNote ?? "");
+    const currentUser = user;
+    const job: Promise<BuilderState> = (async (): Promise<BuilderState> => {
+      try {
+        const idToken = await currentUser.getIdToken();
+        const formData = new FormData();
+        photos.forEach((file) => formData.append("photos", file));
+        formData.append("subject", subject);
+        formData.append("subjectType", subjectType);
+        formData.append("furColorNote", petDetails.furColorNote ?? "");
+        formData.append("breedNote", petDetails.breedNote ?? "");
+        formData.append("accessoryNote", petDetails.accessoryNote ?? "");
+        formData.append("bodyFeatureNote", petDetails.bodyFeatureNote ?? "");
 
-      const res = await fetch("/api/generate-model-poseset", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-        body: formData,
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setBuilder({
-          phase: "error",
-          message: json.error ?? "生成に失敗しました",
-          freeGenerationLimitReached: json.freeGenerationLimitReached === true,
+        const res = await fetch("/api/generate-model-poseset", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+          body: formData,
         });
-        return;
+        const json = await res.json();
+        if (!res.ok) {
+          return {
+            phase: "error",
+            message: json.error ?? "生成に失敗しました",
+            freeGenerationLimitReached: json.freeGenerationLimitReached === true,
+          };
+        }
+        const reviewing: Extract<BuilderState, { phase: "reviewing" }> = {
+          phase: "reviewing",
+          poseViews: json.poseViews as Record<Pose, ImagePayload>,
+          referenceImageUrls: (json.referenceImageUrls as string[]) ?? [],
+        };
+        // Saved right here, not from a render effect: if the customer already left this step, the
+        // result must still survive so it is there when they come back.
+        await saveDraftSlice<SavedPoseSetDraft>("poseSetDraft", {
+          builder: reviewing,
+          selected: [...POSE_OPTIONS],
+          poseModels: {},
+        }).catch(() => {});
+        return reviewing;
+      } catch (err) {
+        return {
+          phase: "error",
+          message: err instanceof Error ? err.message : "生成に失敗しました",
+        };
       }
-
-      setSelected(new Set(POSE_OPTIONS));
-      setBuilder({
-        phase: "reviewing",
-        poseViews: json.poseViews as Record<Pose, ImagePayload>,
-        referenceImageUrls: (json.referenceImageUrls as string[]) ?? [],
-      });
-    } catch (err) {
-      setBuilder({
-        phase: "error",
-        message: err instanceof Error ? err.message : "生成に失敗しました",
-      });
-    }
+    })();
+    pendingPoseGeneration = job;
+    adoptPendingGeneration(job);
   }
 
   function pollPoseStatus(pose: Pose, taskId: string, referenceImageUrls: string[]) {

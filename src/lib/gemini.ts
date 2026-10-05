@@ -356,24 +356,13 @@ function compositionPhrase(photoCount: number, hasComposition: boolean): string 
   );
 }
 
-// Layout for the pose-set grid below: 2 rows x 3 columns (6 cells), 5 used for the 5 POSE_OPTIONS
-// and the 6th (bottom-right) left blank. A uniform grid (rather than a 5-cell strip) keeps the
-// crop math simple/reliable -- same approach as GRID_CELLS above, just 6 cells instead of 4.
-const POSESET_GRID_CELLS: Record<Pose, { row: 0 | 1; col: 0 | 1 | 2 }> = {
-  sitting: { row: 0, col: 0 },
-  standing: { row: 0, col: 1 },
-  lying: { row: 0, col: 2 },
-  asPhoto: { row: 1, col: 0 },
-  auto: { row: 1, col: 1 },
-};
-
-// "5ポーズセット" -- ONE Gemini call producing a single image of the same subject in all 5
-// POSE_OPTIONS at once (one view per pose, not a 4-angle turnaround per pose -- this product is
-// reconstructed from a single view per pose via Tripo's single-image mode, not the full
-// multiview_to_model pipeline, since 5 x 4-view turnarounds would be both far more expensive and
-// far lower quality per panel to generate as one image). Costs the same as one figureGridPrompt
-// call, instead of 5 separate generations.
-function figureGridPromptPoseSet(
+// "5ポーズセット" -- the same subject in each of the 5 POSE_OPTIONS, ONE view per pose (reconstructed
+// from a single view per pose via Tripo's single-image mode). Each pose is generated as its OWN image
+// (5 parallel calls): an earlier version asked for all five in one 2x3 grid and cut the result into
+// equal cells, but the model does not place figures exactly in the cells, so figures were cut off or
+// shifted at the edges. One figure per image can never be cropped by a neighbour's cell.
+function figurePosePrompt(
+  pose: Pose,
   subject: string,
   petDetails: PetDetails | undefined,
   subjectType: SubjectType
@@ -389,68 +378,25 @@ function figureGridPromptPoseSet(
     subjectType === "pet" ? "Precise anatomical proportions" : "Precise proportions";
 
   return (
-    "A single image containing a precise 2-row by 3-column grid (6 equal-sized cells) of six " +
-    "photos on a shared plain white background, with no border, no divider lines, and no grid " +
-    `lines drawn between cells. Five of the six cells show the same small figurine of ${subjectPhrase(subject, subjectType)}, ` +
-    "photographed from the same front-facing 3/4 camera angle and distance in every cell, but " +
-    "posed differently in each: " +
-    `top-left: ${POSE_PHRASES.sitting}. top-middle: ${POSE_PHRASES.standing}. ` +
-    `top-right: ${POSE_PHRASES.lying}. bottom-left: ${POSE_PHRASES.asPhoto}. ` +
-    `bottom-middle: ${POSE_PHRASES.auto}. The bottom-right cell is left as plain empty white ` +
-    "background -- do not draw a sixth figure, object, or any other content in it. " +
-    "All five figures must be recognizably the exact same individual (identical size, coloring, " +
-    "markings, and identity), only the pose changes between cells. Leave generous plain white " +
-    "margin around the figurine within each cell so no part of it comes close to the cell " +
-    "boundary. " +
+    "A single square photo of one small figurine of " +
+    `${subjectPhrase(subject, subjectType)} on a plain white background, with no border and no ` +
+    "other objects. Pose: " +
+    `${POSE_PHRASES[pose]}. Photographed from a front-facing 3/4 camera angle. The whole figurine ` +
+    "is fully visible and centered, with generous plain white margin on every side so no part of " +
+    "it touches or comes near the image edge. " +
     TOY_STYLE_PHRASE +
     " Render the " +
     `figurine's actual colors, markings, and ${subjectType === "pet" ? "coat pattern" : "surface pattern/texture"} as closely as possible to the ` +
     "reference photos — do not simplify it to a plain or single-color material. This will be 3D " +
     `printed at only a few centimeters tall, so keep the sculpted form itself sturdy: ${printSafetyPhrase} ` +
     "Soft even studio lighting with no harsh shadows or reflections. " +
-    `${proportionsPhrase}, full body visible and centered within each cell, no text or watermark ` +
-    "anywhere." +
+    `${proportionsPhrase}, full body visible, no text or watermark anywhere.` +
     OMIT_SURROUNDINGS_PHRASE +
     " Use the attached reference photos to match the subject's shape, features, " +
     "coloring, and identity exactly." +
     petDetailsPhrase(petDetails, subjectType)
   );
 }
-
-async function splitPoseSetImage(image: ImagePayload): Promise<Record<Pose, ImagePayload>> {
-  const buffer = Buffer.from(image.data, "base64");
-  const { width, height } = await sharp(buffer).metadata();
-  if (!width || !height) {
-    throw new Error("Gemini pose-set grid image is missing dimensions");
-  }
-  const colWidths = [
-    Math.floor(width / 3),
-    Math.floor(width / 3),
-    width - 2 * Math.floor(width / 3),
-  ];
-  const colLefts = [0, colWidths[0], colWidths[0] + colWidths[1]];
-  const rowHeight = Math.floor(height / 2);
-  const rowHeights = [rowHeight, height - rowHeight];
-  const rowTops = [0, rowHeight];
-
-  const entries = await Promise.all(
-    (Object.keys(POSESET_GRID_CELLS) as Pose[]).map(async (pose) => {
-      const { row, col } = POSESET_GRID_CELLS[pose];
-      const cropped = await sharp(buffer)
-        .extract({
-          left: colLefts[col],
-          top: rowTops[row],
-          width: colWidths[col],
-          height: rowHeights[row],
-        })
-        .png()
-        .toBuffer();
-      return [pose, { data: cropped.toString("base64"), mimeType: "image/png" }] as const;
-    })
-  );
-  return Object.fromEntries(entries) as Record<Pose, ImagePayload>;
-}
-
 /**
  * Generates all 5 POSE_OPTIONS of the same subject as a single Gemini call (one 2x3 grid image,
  * split locally into 5 single-view images) -- mirrors generateWhiteClayViews's one-call-per-grid
@@ -465,12 +411,13 @@ export async function generatePoseSetViews(
   subjectType: SubjectType = "pet"
 ): Promise<Record<Pose, ImagePayload>> {
   const client = getClient();
-  const gridImage = await generateImage(
-    client,
-    referencePhotos,
-    figureGridPromptPoseSet(subject, petDetails, subjectType)
+  const poses = Object.keys(POSE_PHRASES) as Pose[];
+  const images = await Promise.all(
+    poses.map((pose) =>
+      generateImage(client, referencePhotos, figurePosePrompt(pose, subject, petDetails, subjectType))
+    )
   );
-  return splitPoseSetImage(gridImage);
+  return Object.fromEntries(poses.map((pose, i) => [pose, images[i]])) as Record<Pose, ImagePayload>;
 }
 
 const SCENE_LAYOUT_PHRASES: Record<SceneLayout, string> = {

@@ -373,7 +373,7 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
           2匹を1つのキーホルダーにします。<b>1匹ずつ別の写真</b>をアップしてください（2匹が一緒に写った写真だと、混ざってしまうことがあります）。
         </p>
         <p className="mt-1">
-          形の確認と作り直しは、1日2回まで無料です。確認してOKを押すと、3Dモデルの作成に1クレジット（2匹分でも1回分）を使います。
+          ステップ1：4方向のイメージ作り（1日2回まで無料）。ステップ2：イメージを確認してOKを押すと、3Dモデル作りに1クレジット（2匹分でも1回分）を使います。クレジットは1回100円で、アカウントごとに最初の1回は無料です。
         </p>
         <p className="mt-1">3匹以上をご希望の方は、メール（natsuki.ko006@gmail.com）でご相談ください。</p>
       </div>
@@ -449,7 +449,7 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
         {modelState.phase === "idle" && (
           <p className="text-xs text-slate-400">
             {ready
-              ? "「形状を生成する」を押してください（30秒〜1分ほどかかります）"
+              ? "「ステップ1」のボタンを押してください（30秒〜1分ほどかかります）"
               : `あとは${[
                   photosA.length === 0 && "1匹目の写真",
                   !subjectA.trim() && "1匹目のお名前",
@@ -478,7 +478,7 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
                 key={view}
                 src={`data:${modelState.views[view].mimeType};base64,${modelState.views[view].data}`}
                 alt={VIEW_LABELS[view]}
-                className="h-full w-full object-cover"
+                className="h-full w-full bg-white object-contain"
               />
             ))}
           </div>
@@ -522,8 +522,8 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
             className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {modelState.phase === "success" || modelState.phase === "error"
-              ? "もう一度形状を作り直す"
-              : "形状を生成する"}
+              ? "ステップ1をやり直す：4方向のイメージを作り直す"
+              : "ステップ1：4方向のイメージを作る（1日2回まで無料）"}
           </button>
         ) : (
           <button
@@ -588,12 +588,12 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
               }
               className="flex-1 rounded-lg bg-slate-800 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {modelState.confirming ? "作成中..." : "この形状でOK・3Dモデルを作成（1クレジット）"}
+              {modelState.confirming ? "作成中..." : "ステップ2：この形でOK → 3Dモデルを作る（1クレジット）"}
             </button>
           </div>
           {user && !hasCredits && (
             <p className="mt-2 text-center text-xs text-amber-600">
-              クレジットが不足しています。3Dモデルの作成には購入が必要です。
+              クレジットが足りません。3Dモデルを作るには、クレジットの購入が必要です（1回100円。アカウントごとに、最初の1回は無料です）。
             </p>
           )}
         </div>

@@ -752,7 +752,7 @@ export function PreviewPanel({
           {modelState.phase === "idle" && (
             <>
               <Box className="h-10 w-10 text-slate-300" strokeWidth={1.5} />
-              <p className="text-xs text-slate-400">3D形状プレビュー</p>
+              <p className="text-xs text-slate-400">ここに結果が表示されます</p>
             </>
           )}
           {(modelState.phase === "starting" || modelState.phase === "polling") && (
@@ -774,7 +774,7 @@ export function PreviewPanel({
                   key={view}
                   src={`data:${modelState.views[view].mimeType};base64,${modelState.views[view].data}`}
                   alt={VIEW_LABELS[view]}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full bg-white object-contain"
                 />
               ))}
             </div>
@@ -874,8 +874,8 @@ export function PreviewPanel({
             className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {modelState.phase === "success" || modelState.phase === "error"
-              ? "写真からもう一度、形状を作り直す（無料）"
-              : "写真から3D形状を作る（無料）"}
+              ? "ステップ1をやり直す：4方向のイメージを作り直す"
+              : "ステップ1：写真から4方向のイメージを作る（1日2回まで無料）"}
           </button>
         ) : (
           <button
@@ -883,7 +883,7 @@ export function PreviewPanel({
             onClick={() => signInWithGoogle()}
             className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
           >
-            ログインして3D形状を作る
+            ログインして、ステップ1（4方向のイメージ作り）を始める
           </button>
         ))}
 
@@ -900,7 +900,7 @@ export function PreviewPanel({
                   <img
                     src={`data:${modelState.views[view].mimeType};base64,${modelState.views[view].data}`}
                     alt={VIEW_LABELS[view]}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full bg-white object-contain"
                   />
                 </div>
                 <p className="text-center text-[10px] text-slate-500">
@@ -946,7 +946,7 @@ export function PreviewPanel({
               disabled={modelState.confirming}
               className="flex-1 rounded-lg border border-slate-300 bg-white py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              作り直す（無料）
+              イメージを作り直す
             </button>
             <button
               type="button"
@@ -959,7 +959,7 @@ export function PreviewPanel({
               }
               className="flex-1 rounded-lg bg-slate-800 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {modelState.confirming ? "作成中..." : "この形状でOK・3Dモデルを作成（1クレジット）"}
+              {modelState.confirming ? "作成中..." : "ステップ2：この形でOK → 3Dモデルを作る（1クレジット）"}
             </button>
           </div>
         </div>
@@ -1056,7 +1056,7 @@ export function PreviewPanel({
       )}
       {mode === "ai" && user && modelState.phase === "reviewingViews" && !hasCredits && (
         <p className="text-center text-xs text-amber-600">
-          クレジットが不足しています。3Dモデルの作成には購入が必要です（形状の確認・作り直しは無料です）。
+          クレジットが足りません。3Dモデルを作るには、クレジットの購入が必要です（1回100円。アカウントごとに、最初の1回は無料です）。4方向のイメージ作りは、1日2回まで無料です。
         </p>
       )}
 

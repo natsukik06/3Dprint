@@ -48,7 +48,7 @@ export default async function OrderPage() {
             ペットや大切なものの写真から、魔法のカラーで輝くクリスタルフィギュアを作成・注文できます。
           </p>
           <p className="mt-2 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-            形状のプレビューは1日2回まで無料です。3Dモデルの作成は1回¥{CREDIT_PRICE_YEN}（初回は無料）で、仕上がりを確認してからご注文いただけます
+            ①写真から4方向のイメージを作る工程は1日2回まで無料、②3Dモデルを作る工程は1回¥{CREDIT_PRICE_YEN}（初回は無料）で、仕上がりを確認してからご注文いただけます
           </p>
         </header>
         {orderingOpen ? (

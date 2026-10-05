@@ -191,6 +191,15 @@ async function generateImage(
   throw new Error(`Gemini did not return an image (${lastReason})`);
 }
 
+// Only what the subject is actually wearing may appear. Props around the subject in the customer's
+// photo (baskets, blankets, mats, furniture, toys, bowls, leashes, people, other animals) would end up
+// fused into the 3D print, so they are explicitly left out.
+const OMIT_SURROUNDINGS_PHRASE =
+  " Draw ONLY the subject itself and anything it is actually wearing (collar, clothing, hat, ribbon, " +
+  "harness). Leave out everything that merely surrounds it in the reference photos: baskets, blankets, " +
+  "mats, cushions, furniture, toys, food, bowls, leashes held by a person, plants, background scenery, " +
+  "and any people or other animals that are not one of the requested subjects. Plain empty white " +
+  "background only.";
 // Shared style anchor for both figureGridPrompt and figureGridPromptDuo -- pins the output to a
 // recognizable, well-represented aesthetic category (gashapon/mascot figurines) instead of just
 // saying "figurine", which on its own wasn't stopping the model from drifting toward a
@@ -293,7 +302,9 @@ function figureGridPrompt(
     `printed at only a few centimeters tall, so keep the sculpted form itself sturdy: ${printSafetyPhrase} ` +
     "Soft even studio lighting with no harsh shadows or reflections. " +
     `${proportionsPhrase}, full body visible and centered within each quadrant, no text ` +
-    "or watermark anywhere (no letters, numbers, captions or labels in any language). Use the attached reference photos to match the subject's shape, " +
+    "or watermark anywhere (no letters, numbers, captions or labels in any language)." +
+    OMIT_SURROUNDINGS_PHRASE +
+    " Use the attached reference photos to match the subject's shape, " +
     "features, coloring, and identity exactly." +
     (wantsSelfStanding ? STABILITY_PHRASE : "") +
     petDetailsPhrase(petDetails, subjectType) +
@@ -398,7 +409,9 @@ function figureGridPromptPoseSet(
     `printed at only a few centimeters tall, so keep the sculpted form itself sturdy: ${printSafetyPhrase} ` +
     "Soft even studio lighting with no harsh shadows or reflections. " +
     `${proportionsPhrase}, full body visible and centered within each cell, no text or watermark ` +
-    "anywhere. Use the attached reference photos to match the subject's shape, features, " +
+    "anywhere." +
+    OMIT_SURROUNDINGS_PHRASE +
+    " Use the attached reference photos to match the subject's shape, features, " +
     "coloring, and identity exactly." +
     petDetailsPhrase(petDetails, subjectType)
   );
@@ -574,6 +587,7 @@ function figureGridPromptDuo(
     "quadrant with generous white margin. Soft even studio light, no harsh shadows. No text, " +
     "letters, numbers or watermark anywhere (no captions or labels in any language). " +
     "Use each subject's own reference photos only for its own identity and coloring." +
+    OMIT_SURROUNDINGS_PHRASE +
     petDetailsPhrase(petDetailsA, subjectType) +
     petDetailsPhrase(petDetailsB, subjectType) +
     (hasComposition

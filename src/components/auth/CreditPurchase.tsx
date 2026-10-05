@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { CREDIT_PACKS, CREDIT_PRICE_YEN, MAX_CUSTOM_CREDITS } from "@/lib/creditPacks";
 
@@ -9,6 +9,19 @@ export function CreditPurchase() {
   const [pending, setPending] = useState<string | "custom" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [customCredits, setCustomCredits] = useState(1);
+  const [returned, setReturned] = useState<"success" | "cancel" | null>(null);
+
+  // Back from Stripe (see returnTo in /api/stripe/checkout): the unfinished build was restored from
+  // the saved draft, so just say what happened and tidy the URL.
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get("credit");
+    if (result === "success" || result === "cancel") {
+      setReturned(result);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("credit");
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+  }, []);
 
   if (!user) return null;
 
@@ -24,7 +37,7 @@ export function CreditPurchase() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, returnTo: window.location.pathname }),
       });
       const json = await res.json();
       if (!res.ok || !json.url) {
@@ -39,6 +52,14 @@ export function CreditPurchase() {
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
+      {returned === "success" && (
+        <p className="w-full text-right text-xs font-medium text-emerald-700">
+          購入ありがとうございます。入力した内容はそのまま残っています。続きからお進みください（反映まで数秒かかることがあります）
+        </p>
+      )}
+      {returned === "cancel" && (
+        <p className="w-full text-right text-xs text-slate-500">購入は完了していません。入力した内容は残っています。</p>
+      )}
       {CREDIT_PACKS.map((pack) => (
         <button
           key={pack.id}

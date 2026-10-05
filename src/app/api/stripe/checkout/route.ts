@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+﻿import { NextResponse, type NextRequest } from "next/server";
 import {
   CREDIT_PACKS,
   CREDIT_PRICE_YEN,
@@ -14,7 +14,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
   }
 
-  const { packId, customCredits, kind } = await request.json();
+  const { packId, customCredits, kind, returnTo } = await request.json();
+
+  // Where Stripe sends the customer afterwards. Buying a credit in the middle of /order must come
+  // back to /order (the unfinished build is restored from the saved draft) instead of dumping them
+  // on the home page. Allow-listed paths only -- never a client-supplied URL. The "credit" query
+  // param is deliberately NOT "checkout": /order treats checkout=success as a finished order and
+  // wipes the draft.
+  const returnPath = returnTo === "/order" || returnTo === "/mypage" ? (returnTo as string) : null;
+  const returnUrls = (origin: string) =>
+    returnPath
+      ? { success_url: `${origin}${returnPath}?credit=success`, cancel_url: `${origin}${returnPath}?credit=cancel` }
+      : { success_url: `${origin}/?checkout=success`, cancel_url: `${origin}/?checkout=cancel` };
 
   // A single ¥50 shape-preview credit (see PREVIEW_CREDIT_PRICE_YEN) -- a separate, much smaller
   // purchase from the main per-model credit packs below, so it's handled as its own line item
@@ -36,8 +47,7 @@ export async function POST(request: NextRequest) {
             },
           },
         ],
-        success_url: `${origin}/?checkout=success`,
-        cancel_url: `${origin}/?checkout=cancel`,
+        ...returnUrls(origin),
       });
       return NextResponse.json({ url: session.url });
     } catch (error) {
@@ -92,8 +102,7 @@ export async function POST(request: NextRequest) {
           },
         },
       ],
-      success_url: `${origin}/?checkout=success`,
-      cancel_url: `${origin}/?checkout=cancel`,
+      ...returnUrls(origin),
     });
 
     return NextResponse.json({ url: session.url });

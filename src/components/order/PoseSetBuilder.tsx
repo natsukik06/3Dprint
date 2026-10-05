@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -336,7 +336,7 @@ export function PoseSetBuilder({
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "preview" }),
+        body: JSON.stringify({ kind: "preview", returnTo: "/order" }),
       });
       const json = await res.json();
       if (!res.ok || !json.url) throw new Error(json.error ?? "決済ページの作成に失敗しました");

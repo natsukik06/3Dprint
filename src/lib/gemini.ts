@@ -232,16 +232,29 @@ const OMIT_SURROUNDINGS_PHRASE =
 // saying "figurine", which on its own wasn't stopping the model from drifting toward a
 // photorealistic photo of a real living animal, especially in the two-subject (duo) case.
 const TOY_STYLE_PHRASE =
-  "This must read unmistakably as a cute collectible toy sculpture — the kind of chibi-style " +
-  "mascot figurine sold in Japanese gashapon capsule-toy machines — NEVER as a photograph of a " +
-  "real living animal or object. Smooth, simplified, slightly rounded toy-like surfaces; soft " +
-  "sculpted forms rather than photorealistic skin/fur/scale/feather texture or individual hair " +
-  "strands; a bit of cute stylized exaggeration in the proportions is expected and desired.";
+  "STYLE = DEFORMED (super-deformed chibi toy). This must read unmistakably as a cute vinyl " +
+  "collectible toy — a matte soft-vinyl / resin sofubi figure like the chibi mascot figurines sold " +
+  "in Japanese gashapon capsule-toy machines — and NEVER as a photograph or realistic sculpture of " +
+  "a real living animal or object. Strongly exaggerated, simplified, rounded forms: the whole " +
+  "figure is only about 2 to 2.5 heads tall, with an oversized round head that is as big as the " +
+  "entire body; huge, round, glossy black eyes with one small white highlight; a tiny simple " +
+  "nose and mouth; short, thick, stubby tube-like legs with rounded paw ends; a small " +
+  "plump rounded body. The body structure stays that of a real four-legged ANIMAL, never a " +
+  "human-like doll: no arms, no hands, no fingers, no upright two-legged human posture, no " +
+  "standing like a person. Dogs and cats have four legs: the front legs are short thick legs " +
+  "going straight down under the chest to the ground (or folded neatly together when sitting), " +
+  "the hind legs are short and thick; a sitting dog/cat sits like a real animal on its haunches " +
+  "with both front paws planted on the ground. Fur/feathers/skin are NOT drawn as fine individual hairs: they are " +
+  "simplified into smooth, rounded, sculpted masses and a few chunky tufts, with a uniform matte " +
+  "painted-vinyl surface finish like a Pop Mart / Sonny Angel designer toy: the coat colors appear as smooth painted color " +
+  "areas on a smooth molded surface, with no hair strands, no fluff and no fur fibers visible " +
+  "anywhere. Keep the subject's real colors, markings and " +
+  "recognizable features, but the body shape must NOT follow the real animal's anatomy.";
 
 // The alternative to TOY_STYLE_PHRASE above -- true-to-life proportions instead of a cute
 // chibi/toy caricature, for the customer-facing 実写風 (realistic) style choice.
 const REALISTIC_STYLE_PHRASE =
-  "This must read as a faithful, true-to-life miniature sculpture of the actual subject — " +
+  "STYLE = REALISTIC. This must read as a faithful, true-to-life miniature sculpture of the actual subject — " +
   "anatomically accurate proportions and real body shape/silhouette exactly as it appears in " +
   "the reference photos, NOT chibi-style, NOT cartoonishly exaggerated, and NOT simplified " +
   "into a toy-like caricature. Still a sculpted three-dimensional form (never a flat " +
@@ -294,10 +307,16 @@ function figureGridPrompt(
       : "keep every part of the object thick and continuous, and avoid any thin handle, rim, " +
         "blade, or protrusion that tapers down to a sharp or fragile edge.";
   const proportionsPhrase =
-    subjectType === "pet" ? "Precise anatomical proportions" : "Precise proportions";
+    style === "deformed" && subjectType === "pet"
+      ? "Consistent chibi proportions across all four views"
+      : subjectType === "pet"
+        ? "Precise anatomical proportions"
+        : "Precise proportions";
 
   return (
-    "A single image containing a precise 2x2 grid of four photos of the same small figurine of " +
+    "A single image containing a precise 2x2 grid of four photos of the same small " +
+    (style === "deformed" ? "chibi soft-vinyl toy (sofubi) figurine, NOT a realistic animal, " : "figurine ") +
+    "of " +
     `${subjectPhrase(subject, subjectType)}, in ${posePhrase(pose, subjectType)}. ` +
     (isExplicitPose(pose) && subjectType === "pet"
       ? "The pose is the most important requirement and must be identical in all four photos. "
@@ -330,9 +349,18 @@ function figureGridPrompt(
     "within each quadrant so no part of it comes close to the quadrant boundary. " +
     stylePhrase(style) +
     (style === "deformed" && subjectType === "pet"
-      ? " Proportions: about 2 to 2.5 heads tall — a big round head about as wide as the body, " +
-        "large glossy simple eyes, short chubby limbs and a soft plump body — and this chibi " +
-        "proportion applies even if the photographed animal looks slim or long-haired."
+      ? " Proportions (mandatory): about 2 to 2.5 heads tall — a big round head about as wide and " +
+        "as tall as the whole body, huge round black eyes with a small highlight, short chubby " +
+        "stubby legs (four-legged animal body, NOT humanoid: no arms, not standing upright like a " +
+        "person) and a soft plump body — and this chibi proportion applies even if the " +
+        "photographed animal looks slim, long-legged or long-haired. A fluffy chest ruff or mane " +
+        "becomes a simple smooth rounded bib shape, not hair. Ears and tail are short, " +
+        "thick and rounded (no thin or pointed tips). Even long-haired or fluffy animals get a " +
+        "clean, smooth, rounded outline built from a few big chunky tufts — no fuzzy, wispy or " +
+        "hairy edge and no visible hair texture. The two eyes are big and round but clearly " +
+        "separated by a gap and placed low on the face, never touching each other. The result " +
+        "must look obviously different " +
+        "from a realistic version of the same animal."
       : "") +
     " Render the " +
     `figurine's actual colors, markings, and ${subjectType === "pet" ? "coat pattern" : "surface pattern/texture"} as closely as possible to the ` +
@@ -344,8 +372,13 @@ function figureGridPrompt(
     `${proportionsPhrase}, full body visible and centered within each quadrant, no text ` +
     "or watermark anywhere (no letters, numbers, captions or labels in any language)." +
     OMIT_SURROUNDINGS_PHRASE +
-    " Use the attached reference photos to match the subject's shape, " +
-    "features, coloring, and identity exactly." +
+    (style === "deformed" && subjectType === "pet"
+      ? " Use the attached reference photos ONLY for the animal's species, coat colors, markings, " +
+        "ear shape and accessories. Do NOT copy the photo's realistic body shape, proportions, " +
+        "face detail, eye style or fur texture — redraw it fully as the chibi vinyl toy described " +
+        "above, even if the photo itself looks like a realistic 3D render."
+      : " Use the attached reference photos to match the subject's shape, " +
+        "features, coloring, and identity exactly.") +
     (wantsSelfStanding ? STABILITY_PHRASE : "") +
     petDetailsPhrase(petDetails, subjectType) +
     (hasComposition
@@ -380,6 +413,20 @@ async function neutralizeCompositionRef(image: ImagePayload): Promise<ImagePaylo
     .png()
     .toBuffer();
   return { data: out.toString("base64"), mimeType: "image/png" };
+}
+
+async function softenReferencePhoto(image: ImagePayload): Promise<ImagePayload> {
+  try {
+    const out = await sharp(Buffer.from(image.data, "base64"))
+      .rotate()
+      .resize(512, 512, { fit: "inside", withoutEnlargement: true })
+      .blur(4)
+      .jpeg({ quality: 88 })
+      .toBuffer();
+    return { data: out.toString("base64"), mimeType: "image/jpeg" };
+  } catch {
+    return image;
+  }
 }
 
 function compositionPhrase(photoCount: number, hasComposition: boolean): string {
@@ -827,9 +874,16 @@ export async function generateWhiteClayViews(
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
   const neutralRef = compositionRef ? await neutralizeCompositionRef(compositionRef) : undefined;
+  // Deformed pets: soften the photos (small + blurred) so the model keeps colors/markings but does
+  // not copy the real fur texture and realistic anatomy (tests showed fluffy long-haired pets came
+  // out nearly identical to the realistic style otherwise).
+  const photos =
+    style === "deformed" && subjectType === "pet"
+      ? await Promise.all(referencePhotos.map(softenReferencePhoto))
+      : referencePhotos;
   const gridImage = await generateImage(
     client,
-    neutralRef ? [...referencePhotos, neutralRef] : referencePhotos,
+    neutralRef ? [...photos, neutralRef] : photos,
     figureGridPrompt(
       subject,
       pose,

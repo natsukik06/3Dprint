@@ -43,7 +43,10 @@ export const FREE_SHIPPING_SUBTOTAL_YEN = 2200;
 // Friend-referral reward: both the referrer and the new customer they referred get this much off
 // their next order's merchandise subtotal (not shipping), once, when claimed via a referral link
 // on new account signup -- see src/lib/referral.ts.
-export const REFERRAL_DISCOUNT_RATE = 0.2;
+export const REFERRAL_DISCOUNT_RATE = 0.1;
+// The referral discount only applies when the item subtotal reaches this -- on a single small
+// piece it would eat most of the margin.
+export const REFERRAL_MIN_SUBTOTAL_YEN = 1500;
 
 export const SUBJECT_TYPE_LABELS: Record<SubjectType, string> = {
   pet: "ペット",
@@ -197,7 +200,7 @@ export function calculateEstimate({
     subtotalYen < GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN
       ? 0
       : Math.min(generationCreditsUsed, MAX_DISCOUNTABLE_CREDITS) * CREDIT_PRICE_YEN;
-  const referralDiscountYen = referralDiscountActive
+  const referralDiscountYen = referralDiscountActive && subtotalYen >= REFERRAL_MIN_SUBTOTAL_YEN
     ? Math.round(subtotalYen * REFERRAL_DISCOUNT_RATE)
     : 0;
 

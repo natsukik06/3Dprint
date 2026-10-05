@@ -108,7 +108,7 @@ function ReferralSection({ uid }: { uid: string }) {
       <p className="text-sm font-semibold text-slate-900">お友達紹介</p>
       <p className="mt-1 text-xs text-slate-500">
         このリンクから友達が新規登録すると、お互い次回の注文が{Math.round(REFERRAL_DISCOUNT_RATE * 100)}
-        %オフになります。
+        %オフになります（商品代金1,500円以上のご注文が対象）。
       </p>
       <div className="mt-2 flex gap-2">
         <input

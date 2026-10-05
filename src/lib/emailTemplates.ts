@@ -108,7 +108,7 @@ export function buildShippedNotificationEmail(
       <div style="margin-top:20px;border:1px solid #cbd5e1;border-radius:8px;padding:16px;">
         <h2 style="font-size:14px;margin:0 0 8px;">お友達紹介</h2>
         <p style="margin:0 0 10px;font-size:13px;color:#475569;">
-          このリンクから友達が新規登録すると、お互い次回のご注文が${referralPercent}%オフになります。
+          このリンクから友達が新規登録すると、お互い次回のご注文が${referralPercent}%オフになります（商品代金1,500円以上のご注文が対象）。
         </p>
         <p style="margin:0;font-size:13px;word-break:break-all;">
           <a href="${escapeHtml(referralUrl)}" style="color:#0369a1;">${escapeHtml(referralUrl)}</a>

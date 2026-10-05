@@ -141,7 +141,7 @@ export function EstimateSummary() {
       {referralDiscountYen > 0 && (
         <div className="mt-2 flex items-center justify-between rounded-lg bg-emerald-400/15 px-2.5 py-2 ring-1 ring-emerald-400/40">
           <span className="text-sm font-semibold text-emerald-200">
-            ✓ お友達紹介割引（20%）
+            ✓ お友達紹介割引（10%）
           </span>
           <span className="text-base font-bold tabular-nums text-emerald-300">
             -{formatYen(referralDiscountYen)}

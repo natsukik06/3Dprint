@@ -13,7 +13,7 @@ import {
 // FIGURE_PRICE_YEN's comment in pricing.ts. Counts PIECES (physical figures), not orders, since
 // that's what actually takes production time. Resets every Monday 00:00 JST.
 export const WEEKLY_HOLLOW_PIECE_CAP = 150;
-export const WEEKLY_SOLID_PIECE_CAP = 300;
+export const WEEKLY_SOLID_PIECE_CAP = 30;
 // 50mm+ pieces are made in small nightly batches, so they get their own tiny pool (and are NOT
 // counted against the 30-40mm solid pool above). Only matters once those sizes are switched on
 // via AVAILABLE_SIZE_OPTIONS in types/order.ts.
@@ -40,6 +40,17 @@ function productLineOf(size: SizeOption): ProductLine {
   if (size === "M") return "hollow";
   if ((LARGE_SIZE_OPTIONS as readonly SizeOption[]).includes(size)) return "large";
   return "solid";
+}
+
+// Manual stop switch: set `paused: true` on the Firestore doc site_settings/ordering to close the shop
+// at once (e.g. when the backlog is full), and back to false to reopen. Server-only collection.
+async function isOrderingPaused(): Promise<boolean> {
+  try {
+    const snap = await adminDb.collection("site_settings").doc("ordering").get();
+    return snap.exists && snap.data()?.paused === true;
+  } catch {
+    return false;
+  }
 }
 
 async function getWeeklyUsage(): Promise<WeeklyUsage> {
@@ -75,6 +86,7 @@ async function getWeeklyUsage(): Promise<WeeklyUsage> {
 
 /** Page-load gate: is there room for at least one more piece in EITHER product line right now? */
 export async function isOrderingOpen(): Promise<boolean> {
+  if (await isOrderingPaused()) return false;
   const { hollowUsed, solidUsed, largeUsed } = await getWeeklyUsage();
   // Only the product lines that are actually on sale (AVAILABLE_SIZE_OPTIONS) can keep the shop
   // "open" -- a line that can't be ordered (e.g. hollow M, large sizes) must not count as room.
@@ -99,6 +111,9 @@ export type CapacityCheck = { ok: true } | { ok: false; reason: string };
 export async function checkWeeklyCapacity(
   items: { sizeOption: SizeOption; colorQuantities: ColorQuantities }[]
 ): Promise<CapacityCheck> {
+  if (await isOrderingPaused()) {
+    return { ok: false, reason: "現在、ご注文の受付を一時停止しています。しばらくしてからお試しください。" };
+  }
   const { hollowUsed, solidUsed, largeUsed } = await getWeeklyUsage();
 
   let hollowWanted = 0;

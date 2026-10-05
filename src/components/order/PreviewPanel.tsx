@@ -25,7 +25,9 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { signInWithGoogle } from "@/lib/auth";
 import { PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
-import { clearDraftSlice, loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
+import { CompositionPicker } from "@/components/order/CompositionPicker";
+import { SINGLE_COMPOSITIONS } from "@/lib/compositions";
+import { clearDraftSlice,loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
 import { db } from "@/lib/firebase";
 import { uploadCustomModel } from "@/lib/orders";
 import { CHARO_PREMADE_MODEL } from "@/lib/premadeModels";
@@ -255,6 +257,9 @@ export function PreviewPanel({
   const [customUpload, setCustomUpload] = useState<
     { phase: "idle" } | { phase: "uploading" } | { phase: "error"; message: string }
   >({ phase: "idle" });
+  // Optional composition reference (not saved in the draft: it just resets on reload).
+  const [compositionId, setCompositionId] = useState<string | null>(null);
+  const [compositionFile, setCompositionFile] = useState<File | null>(null);
   const [gallery, setGallery] = useState<GeneratedModel[]>(
     mode === "reuse" ? [CHARO_PREMADE_MODEL] : []
   );
@@ -553,6 +558,8 @@ export function PreviewPanel({
       formData.append("wantsSelfStanding", String(wantsSelfStanding));
       formData.append("checkHollowFill", String((colorQuantities.furCavity ?? 0) > 0));
       appendPetDetails(formData, petDetails);
+      if (compositionFile) formData.append("compositionImage", compositionFile);
+      else if (compositionId) formData.append("compositionId", compositionId);
 
       const res = await fetch("/api/generate-model", {
         method: "POST",
@@ -840,6 +847,16 @@ export function PreviewPanel({
             寸法・強度・厚みなどの造形上の理由で、お預かりしたモデルをそのまま製作できない場合があります。あらかじめご了承ください。
           </p>
         </div>
+      )}
+
+      {mode === "ai" && modelState.phase !== "reviewingViews" && (
+        <CompositionPicker
+          presets={SINGLE_COMPOSITIONS}
+          compositionId={compositionId}
+          onCompositionIdChange={setCompositionId}
+          compositionFile={compositionFile}
+          onCompositionFileChange={setCompositionFile}
+        />
       )}
 
       {mode === "ai" &&

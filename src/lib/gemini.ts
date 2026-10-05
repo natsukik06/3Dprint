@@ -244,7 +244,9 @@ function figureGridPrompt(
   petDetails: PetDetails | undefined,
   subjectType: SubjectType,
   style: ModelStyle,
-  wantsSelfStanding: boolean
+  wantsSelfStanding: boolean,
+  photoCount = 0,
+  hasComposition = false
 ): string {
   // The engineering constraint (nothing print-fragile) is the same for both, just phrased in
   // terms of what actually appears on each kind of subject.
@@ -294,7 +296,52 @@ function figureGridPrompt(
     "or watermark anywhere (no letters, numbers, captions or labels in any language). Use the attached reference photos to match the subject's shape, " +
     "features, coloring, and identity exactly." +
     (wantsSelfStanding ? STABILITY_PHRASE : "") +
-    petDetailsPhrase(petDetails, subjectType)
+    petDetailsPhrase(petDetails, subjectType) +
+    (hasComposition
+      ? compositionPhrase(photoCount, true) +
+        " The pose and body orientation shown in the composition reference REPLACE the pose " +
+        "described earlier; the subject is still just the single animal from the pet photos."
+      : "")
+  );
+}
+
+// Optional "composition reference" (構図の参考画像): ONE extra image appended AFTER the pet photos.
+// It may be a plain gray clay silhouette preset or a customer-uploaded photo of any animal, so the
+// wording must make it pose/arrangement-only and never an appearance source. Returns "" when no
+// composition reference is attached, so behavior without one is unchanged.
+// Strips appearance information from a composition reference before it reaches the model: the
+// image is flattened to grayscale and heavily blurred so only the rough silhouette / pose /
+// arrangement survives (no coat color, pattern, facial detail or accessories to copy). Added after
+// tests showed that an unprocessed photo of a different animal leaked its species and coat into
+// the result even with a strong "do not copy" instruction.
+async function neutralizeCompositionRef(image: ImagePayload): Promise<ImagePayload> {
+  const out = await sharp(Buffer.from(image.data, "base64"))
+    .rotate()
+    .resize(512, 512, { fit: "contain", background: "#ffffff" })
+    .grayscale()
+    .blur(9)
+    .normalise()
+    .png()
+    .toBuffer();
+  return { data: out.toString("base64"), mimeType: "image/png" };
+}
+
+function compositionPhrase(photoCount: number, hasComposition: boolean): string {
+  if (!hasComposition) return "";
+  return (
+    ` IMPORTANT - COMPOSITION REFERENCE: the attached images are ${photoCount} pet photo(s) ` +
+    "followed by exactly ONE final extra image (the LAST image). That last image is a " +
+    "COMPOSITION-ONLY reference: use it solely for body orientation, pose, how the animals are " +
+    "arranged and their positions relative to each other (it has been deliberately turned into a " +
+    "blurry gray silhouette; any missing detail or color is intentional and must NOT be " +
+    "invented from it). Do NOT copy ANYTHING about the " +
+    "appearance of what is drawn in that last image: not its species, breed, fur/coat color, " +
+    "markings or patterns, face, ears, tail shape, accessories/clothing, material, texture or " +
+    "colors. Its subject is a stand-in only (it may be a plain gray silhouette, a mannequin, or a " +
+    "photo of a completely different animal - treat all of these identically). The appearance of " +
+    "every animal in the output must be decided ONLY from the pet photos listed before the last " +
+    "image, never from the last image. Do not include the last image's background or any " +
+    "extra animals/objects from it."
   );
 }
 
@@ -444,7 +491,9 @@ function figureGridPromptDuo(
   layout: SceneLayout,
   petDetailsA: PetDetails | undefined,
   petDetailsB: PetDetails | undefined,
-  subjectType: SubjectType
+  subjectType: SubjectType,
+  photoCount = 0,
+  hasComposition = false
 ): string {
   const isPet = subjectType === "pet";
   const noun = isPet ? "pets" : "objects";
@@ -526,7 +575,13 @@ function figureGridPromptDuo(
     "letters, numbers or watermark anywhere (no captions or labels in any language). " +
     "Use each subject's own reference photos only for its own identity and coloring." +
     petDetailsPhrase(petDetailsA, subjectType) +
-    petDetailsPhrase(petDetailsB, subjectType)
+    petDetailsPhrase(petDetailsB, subjectType) +
+    (hasComposition
+      ? compositionPhrase(photoCount, true) +
+        " For this two-animal figurine, the reference's arrangement overrides the default " +
+        "arrangement described above, but both animals must still be fused into one piece with " +
+        "a broad contact area and no base."
+      : "")
   );
 }
 
@@ -652,13 +707,24 @@ export async function generateWhiteClayViews(
   petDetails?: PetDetails,
   subjectType: SubjectType = "pet",
   style: ModelStyle = "deformed",
-  wantsSelfStanding = false
+  wantsSelfStanding = false,
+  compositionRef?: ImagePayload
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
+  const neutralRef = compositionRef ? await neutralizeCompositionRef(compositionRef) : undefined;
   const gridImage = await generateImage(
     client,
-    referencePhotos,
-    figureGridPrompt(subject, pose, petDetails, subjectType, style, wantsSelfStanding)
+    neutralRef ? [...referencePhotos, neutralRef] : referencePhotos,
+    figureGridPrompt(
+      subject,
+      pose,
+      petDetails,
+      subjectType,
+      style,
+      wantsSelfStanding,
+      referencePhotos.length,
+      !!compositionRef
+    )
   );
   return splitGridImage(gridImage);
 }
@@ -677,12 +743,15 @@ export async function generateWhiteClayViewsDuo(
   layout: SceneLayout,
   petDetailsA?: PetDetails,
   petDetailsB?: PetDetails,
-  subjectType: SubjectType = "pet"
+  subjectType: SubjectType = "pet",
+  compositionRef?: ImagePayload
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
+  const photos = [...referencePhotosA, ...referencePhotosB];
+  const neutralRef = compositionRef ? await neutralizeCompositionRef(compositionRef) : undefined;
   const gridImage = await generateImage(
     client,
-    [...referencePhotosA, ...referencePhotosB],
+    neutralRef ? [...photos, neutralRef] : photos,
     figureGridPromptDuo(
       subjectA,
       subjectB,
@@ -690,7 +759,9 @@ export async function generateWhiteClayViewsDuo(
       layout,
       petDetailsA,
       petDetailsB,
-      subjectType
+      subjectType,
+      photos.length,
+      !!compositionRef
     )
   );
   return splitGridImage(gridImage);

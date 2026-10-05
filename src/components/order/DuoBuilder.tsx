@@ -8,6 +8,8 @@ import { useCredits } from "@/components/auth/useCredits";
 import { PhotoUploader } from "@/components/order/PhotoUploader";
 import { signInWithGoogle } from "@/lib/auth";
 import { PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
+import { CompositionPicker } from "@/components/order/CompositionPicker";
+import { DUO_COMPOSITIONS } from "@/lib/compositions";
 import { loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
 import { SCENE_LAYOUT_LABELS } from "@/lib/pricing";
@@ -116,6 +118,10 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
   const [subjectA, setSubjectA] = useState("");
   const [subjectB, setSubjectB] = useState("");
   const [layout, setLayout] = useState<SceneLayout>("sideBySide");
+  // Optional composition reference (not saved in the draft). When chosen it takes priority over
+  // `layout` in the prompt; the upload wins over a preset.
+  const [compositionId, setCompositionId] = useState<string | null>(null);
+  const [compositionFile, setCompositionFile] = useState<File | null>(null);
   const [modelState, setModelState] = useState<ModelState>({ phase: "idle" });
   const [purchasingPreview, setPurchasingPreview] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -276,6 +282,8 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
       formData.append("layout", layout);
       formData.append("subjectType", "pet");
       formData.append("checkHollowFill", String((colorQuantities.furCavity ?? 0) > 0));
+      if (compositionFile) formData.append("compositionImage", compositionFile);
+      else if (compositionId) formData.append("compositionId", compositionId);
 
       const res = await fetch("/api/generate-model-duo", {
         method: "POST",
@@ -418,6 +426,14 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
           ))}
         </div>
       </fieldset>
+
+      <CompositionPicker
+        presets={DUO_COMPOSITIONS}
+        compositionId={compositionId}
+        onCompositionIdChange={setCompositionId}
+        compositionFile={compositionFile}
+        onCompositionFileChange={setCompositionFile}
+      />
 
       <div className="relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-3 text-center">
         {modelState.phase === "success" && (

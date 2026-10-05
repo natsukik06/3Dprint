@@ -5,6 +5,7 @@ import {
 } from "@/lib/credits";
 import { analyzeShapeRisk, generateWhiteClayViewsDuo, type ImagePayload } from "@/lib/gemini";
 import { uploadReferencePhotos } from "@/lib/storageServer";
+import { readCompositionRef } from "@/lib/compositionServer";
 import { readPetDetails } from "@/lib/petDetails";
 import { guardTripoCapacity } from "@/lib/tripoCapacity";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
@@ -85,6 +86,10 @@ export async function POST(request: NextRequest) {
   const layout = layoutRaw as SceneLayout;
   const checkHollowFill = formData.get("checkHollowFill") === "true";
 
+  const composition = await readCompositionRef(formData);
+  if (!composition.ok) {
+    return NextResponse.json({ error: composition.error }, { status: 400 });
+  }
   const { allowed, usedPreviewCredit } = await checkAndConsumeGenerationAllowance(user.uid);
   if (!allowed) {
     return NextResponse.json(
@@ -114,7 +119,8 @@ export async function POST(request: NextRequest) {
         layout,
         petDetailsA,
         petDetailsB,
-        subjectType
+        subjectType,
+        composition.payload
       ),
       uploadReferencePhotos(photoFilesA),
       uploadReferencePhotos(photoFilesB),

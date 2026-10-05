@@ -11,6 +11,8 @@ type PhotoUploaderProps = {
   photos: File[];
   onChange: (photos: File[]) => void;
   error?: string;
+  // Lower than MAX_REFERENCE_PHOTOS where several uploaders share one request (the duo builder).
+  maxPhotos?: number;
 };
 
 const SLOT_LABELS: Record<number, string> = {
@@ -74,14 +76,15 @@ function PhotoThumbnail({
   );
 }
 
-export function PhotoUploader({ photos, onChange, error }: PhotoUploaderProps) {
+export function PhotoUploader({ photos, onChange, error, maxPhotos }: PhotoUploaderProps) {
+  const max = Math.min(maxPhotos ?? MAX_REFERENCE_PHOTOS, MAX_REFERENCE_PHOTOS);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
 
   async function handleFilesSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const remaining = MAX_REFERENCE_PHOTOS - photos.length;
+    const remaining = max - photos.length;
     const selected = Array.from(files).slice(0, remaining);
     if (inputRef.current) inputRef.current.value = "";
     // Large phone photos are shrunk here so they fit the server's request-size limit -- see
@@ -103,7 +106,7 @@ export function PhotoUploader({ photos, onChange, error }: PhotoUploaderProps) {
     <div className="space-y-2">
       <p className="text-sm text-slate-600">
         1枚目は<b>全体像</b>がわかる写真、2枚目は<b>特徴</b>
-        がわかる写真がおすすめです（正面・横・後ろなど角度違いがあるとさらに精度が上がります・最大{MAX_REFERENCE_PHOTOS}枚）
+        がわかる写真がおすすめです（正面・横・後ろなど角度違いがあるとさらに精度が上がります・最大{max}枚）
       </p>
       <Link
         href="/guide/photo-tips"
@@ -131,7 +134,7 @@ export function PhotoUploader({ photos, onChange, error }: PhotoUploaderProps) {
             onRemove={() => handleRemove(index)}
           />
         ))}
-        {photos.length < MAX_REFERENCE_PHOTOS && (
+        {photos.length < max && (
           <button
             type="button"
             disabled={isProcessing}

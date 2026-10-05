@@ -167,7 +167,12 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
           });
         } else if (saved.modelState.phase === "polling") {
           setModelState({ phase: "polling", progress: 0 });
-          pollStatus(saved.modelState.taskId, saved.modelState.referenceImageUrls);
+          pollStatus(
+            saved.modelState.taskId,
+            saved.modelState.referenceImageUrls,
+            saved.subjectA,
+            saved.subjectB
+          );
         }
       }
       setHasRestored(true);
@@ -210,7 +215,9 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
   const ready = photosA.length > 0 && photosB.length > 0 && subjectA.trim() && subjectB.trim();
   const currentModelUrl = modelState.phase === "success" ? modelState.modelUrl : undefined;
 
-  function pollStatus(taskId: string, referenceImageUrls: string[]) {
+  // The two names are passed in (not read from state) because a poll restored after a page reload
+  // starts from this render's still-empty state; the saved draft holds the real names.
+  function pollStatus(taskId: string, referenceImageUrls: string[], nameA: string, nameB: string) {
     pollContextRef.current = { taskId, referenceImageUrls };
     let consecutiveFailures = 0;
     async function tick() {
@@ -223,7 +230,7 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
         if (json.status === "success") {
           pollContextRef.current = null;
           setModelState({ phase: "success", modelUrl: json.modelUrl });
-          setValue("subject", `${subjectA.trim()} & ${subjectB.trim()}`, { shouldValidate: true });
+          setValue("subject", `${nameA.trim()} & ${nameB.trim()}`, { shouldValidate: true });
           setValue("subjectType", "pet");
           setValue("chainPositionNote", "");
           onGenerated({
@@ -323,7 +330,7 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
       // A duo item still spends one generation credit, same as a single-subject one -- tracked
       // the same way so the credit-usage discount (see calculateEstimate) applies here too.
       setValue("generationCreditsUsed", getValues("generationCreditsUsed") + 1);
-      pollStatus(json.taskId as string, referenceImageUrls);
+      pollStatus(json.taskId as string, referenceImageUrls, subjectA, subjectB);
     } catch (err) {
       setModelState({
         phase: "error",
@@ -353,6 +360,15 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+        <p>
+          2匹を1つのキーホルダーにします。<b>1匹ずつ別の写真</b>をアップしてください（2匹が一緒に写った写真だと、混ざってしまうことがあります）。
+        </p>
+        <p className="mt-1">
+          形の確認と作り直しは、1日2回まで無料です。確認してOKを押すと、3Dモデルの作成に1クレジット（2匹分でも1回分）を使います。
+        </p>
+        <p className="mt-1">3匹以上をご希望の方は、メール（natsuki.ko006@gmail.com）でご相談ください。</p>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 rounded-xl border border-slate-200 p-3">
           <p className="text-sm font-semibold text-slate-900">1匹目</p>
@@ -360,10 +376,11 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
             type="text"
             value={subjectA}
             onChange={(e) => setSubjectA(e.target.value)}
-            placeholder="例：ポチ（お名前・管理用）"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+            placeholder="お名前（必須）例：ポチ"
+            aria-label="1匹目のお名前"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 sm:text-sm"
           />
-          <PhotoUploader photos={photosA} onChange={setPhotosA} />
+          <PhotoUploader photos={photosA} onChange={setPhotosA} maxPhotos={3} />
         </div>
         <div className="space-y-2 rounded-xl border border-slate-200 p-3">
           <p className="text-sm font-semibold text-slate-900">2匹目</p>
@@ -371,10 +388,11 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
             type="text"
             value={subjectB}
             onChange={(e) => setSubjectB(e.target.value)}
-            placeholder="例：タマ（お名前・管理用）"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+            placeholder="お名前（必須）例：タマ"
+            aria-label="2匹目のお名前"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base text-slate-900 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 sm:text-sm"
           />
-          <PhotoUploader photos={photosB} onChange={setPhotosB} />
+          <PhotoUploader photos={photosB} onChange={setPhotosB} maxPhotos={3} />
         </div>
       </div>
 
@@ -414,7 +432,16 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
         )}
         {modelState.phase === "idle" && (
           <p className="text-xs text-slate-400">
-            2匹分の写真と名前、配置を入力すると生成できます
+            {ready
+              ? "「形状を生成する」を押してください（30秒〜1分ほどかかります）"
+              : `あとは${[
+                  photosA.length === 0 && "1匹目の写真",
+                  !subjectA.trim() && "1匹目のお名前",
+                  photosB.length === 0 && "2匹目の写真",
+                  !subjectB.trim() && "2匹目のお名前",
+                ]
+                  .filter(Boolean)
+                  .join("、")}を入力すると生成できます`}
           </p>
         )}
         {(modelState.phase === "starting" || modelState.phase === "polling") && (
@@ -479,8 +506,8 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
             className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {modelState.phase === "success" || modelState.phase === "error"
-              ? "もう一度形状を生成する（無料）"
-              : "形状を生成する（無料）"}
+              ? "もう一度形状を作り直す"
+              : "形状を生成する"}
           </button>
         ) : (
           <button
@@ -532,7 +559,7 @@ export function DuoBuilder({ colorQuantities, onGenerated }: DuoBuilderProps) {
               disabled={modelState.confirming}
               className="flex-1 rounded-lg border border-slate-300 bg-white py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              作り直す（無料）
+              作り直す
             </button>
             <button
               type="button"

@@ -52,6 +52,9 @@ export async function POST(request: NextRequest) {
     ? (subjectTypeRaw as SubjectType)
     : "pet";
 
+  if (photoFilesA.length > 5 || photoFilesB.length > 5) {
+    return NextResponse.json({ error: "写真は1匹につき5枚までです" }, { status: 400 });
+  }
   if (photoFilesA.length === 0 || photoFilesB.length === 0) {
     return NextResponse.json(
       { error: "2匹それぞれの写真を1枚以上アップロードしてください" },
@@ -60,13 +63,13 @@ export async function POST(request: NextRequest) {
   }
   if (typeof subjectA !== "string" || subjectA.trim().length === 0) {
     return NextResponse.json(
-      { error: "1匹目が何かを入力してください" },
+      { error: "1匹目のお名前を入力してください" },
       { status: 400 }
     );
   }
   if (typeof subjectB !== "string" || subjectB.trim().length === 0) {
     return NextResponse.json(
-      { error: "2匹目が何かを入力してください" },
+      { error: "2匹目のお名前を入力してください" },
       { status: 400 }
     );
   }

@@ -1,4 +1,4 @@
-import type { MagicColor } from "@/types/order";
+﻿import type { MagicColor } from "@/types/order";
 
 // Code-level fallback swatch photos, used whenever a color has no admin-uploaded override (see
 // ColorSetting.imageUrl in colorSettings.ts) -- shared by the customer-facing picker
@@ -14,17 +14,17 @@ export const DEFAULT_COLOR_IMAGE_SRC: Record<MagicColor, string | null> = {
   marsRed: "/colors/marsRed.jpg",
   furCavity: null,
   pureClear: "/colors/pureClear.jpg",
-  smokeOnyx: null,
+  smokeOnyx: "/colors/smokeOnyx.jpg",
   stardustBlack: null,
   // No swatch photo yet -- shows a placeholder icon until real product photos are shot and
   // uploaded from /admin/colors.
   pureBlack: null,
   pureWhite: null,
-  clearBlue: null,
-  clearRed: null,
-  clearYellow: null,
+  clearBlue: "/colors/clearBlue.jpg",
+  clearRed: "/colors/clearRed.jpg",
+  clearYellow: "/colors/clearYellow.jpg",
   clearPink: null,
-  clearGreen: null,
+  clearGreen: "/colors/clearGreen.jpg",
   clearPurple: null,
   clearOrange: null,
   frosted: null,

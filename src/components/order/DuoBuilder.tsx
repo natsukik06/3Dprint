@@ -14,9 +14,12 @@ import { loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
 import { SCENE_LAYOUT_LABELS } from "@/lib/pricing";
 import {
+  MODEL_STYLE_LABELS,
+  MODEL_STYLE_OPTIONS,
   SCENE_LAYOUT_OPTIONS,
   type ColorQuantities,
   type MagicColor,
+  type ModelStyle,
   type OrderFormValues,
   type SceneLayout,
 } from "@/types/order";
@@ -47,6 +50,8 @@ type SavedDuoDraft = {
   subjectA: string;
   subjectB: string;
   layout: SceneLayout;
+  // Optional: drafts saved before the style choice existed have none.
+  modelStyle?: ModelStyle;
   modelState:
     | { phase: "idle" }
     | {
@@ -124,6 +129,9 @@ export function DuoBuilder({
   const [subjectA, setSubjectA] = useState("");
   const [subjectB, setSubjectB] = useState("");
   const [layout, setLayout] = useState<SceneLayout>("sideBySide");
+  // デフォルメ / リアル. Defaults to リアル here: with two animals together, the old always-chibi
+  // result surprised customers who expected their pets to look like their photos.
+  const [modelStyle, setModelStyle] = useState<ModelStyle>("realistic");
   // Optional composition reference (not saved in the draft). When chosen it takes priority over
   // `layout` in the prompt; the upload wins over a preset.
   const [compositionId, setCompositionId] = useState<string | null>(
@@ -170,6 +178,7 @@ export function DuoBuilder({
         setSubjectA(saved.subjectA);
         setSubjectB(saved.subjectB);
         setLayout(saved.layout);
+        if (saved.modelStyle) setModelStyle(saved.modelStyle);
         if (saved.modelState.phase === "reviewingViews") {
           setModelState({
             phase: "reviewingViews",
@@ -220,11 +229,12 @@ export function DuoBuilder({
         subjectA,
         subjectB,
         layout,
+        modelStyle,
         modelState: savedModelState,
       });
     }, 500);
     return () => clearTimeout(timer);
-  }, [hasRestored, photosA, photosB, subjectA, subjectB, layout, modelState]);
+  }, [hasRestored, photosA, photosB, subjectA, subjectB, layout, modelStyle, modelState]);
 
   const ready = photosA.length > 0 && photosB.length > 0 && subjectA.trim() && subjectB.trim();
   const currentModelUrl = modelState.phase === "success" ? modelState.modelUrl : undefined;
@@ -288,6 +298,7 @@ export function DuoBuilder({
       formData.append("subjectA", subjectA);
       formData.append("subjectB", subjectB);
       formData.append("layout", layout);
+      formData.append("modelStyle", modelStyle);
       formData.append("subjectType", "pet");
       formData.append("checkHollowFill", String((colorQuantities.furCavity ?? 0) > 0));
       if (compositionFile) formData.append("compositionImage", compositionFile);
@@ -411,6 +422,30 @@ export function DuoBuilder({
           <PhotoUploader photos={photosB} onChange={setPhotosB} maxPhotos={3} />
         </div>
       </div>
+
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-slate-700">仕上がりのスタイル</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {MODEL_STYLE_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setModelStyle(option)}
+              aria-pressed={modelStyle === option}
+              className={`rounded-xl border p-2.5 text-center text-sm font-medium transition-colors ${
+                modelStyle === option
+                  ? "border-slate-800 bg-slate-800 text-white"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {MODEL_STYLE_LABELS[option]}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500">
+          リアル＝写真に近い体つき／デフォルメ＝頭が大きいかわいいトイ風。スタイルを変えたら、ステップ1を作り直してください
+        </p>
+      </fieldset>
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-slate-700">配置</legend>

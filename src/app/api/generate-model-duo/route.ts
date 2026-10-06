@@ -10,8 +10,10 @@ import { readPetDetails } from "@/lib/petDetails";
 import { guardTripoCapacity } from "@/lib/tripoCapacity";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 import {
+  MODEL_STYLE_OPTIONS,
   SCENE_LAYOUT_OPTIONS,
   SUBJECT_TYPE_OPTIONS,
+  type ModelStyle,
   type SceneLayout,
   type SubjectType,
 } from "@/types/order";
@@ -88,6 +90,10 @@ export async function POST(request: NextRequest) {
     );
   }
   const layout = layoutRaw as SceneLayout;
+  const modelStyleRaw = formData.get("modelStyle");
+  const modelStyle: ModelStyle = MODEL_STYLE_OPTIONS.includes(modelStyleRaw as ModelStyle)
+    ? (modelStyleRaw as ModelStyle)
+    : "deformed";
   const checkHollowFill = formData.get("checkHollowFill") === "true";
 
   const composition = await readCompositionRef(formData);
@@ -130,7 +136,9 @@ export async function POST(request: NextRequest) {
         composition.payload,
         typeof presetCompositionId === "string" && !hasUploadedComposition
           ? presetCompositionId
-          : undefined
+          : undefined,
+        undefined,
+        modelStyle
       ),
       uploadReferencePhotos(photoFilesA),
       uploadReferencePhotos(photoFilesB),

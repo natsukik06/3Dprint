@@ -629,9 +629,13 @@ function figureGridPromptDuo(
     compositionHint?: string;
     subjectA?: string;
     subjectB?: string;
+    modelStyle?: ModelStyle;
   } = {}
 ): string {
   const isPet = subjectType === "pet";
+  // The customer's デフォルメ / リアル choice. Only pets get a realistic option (objects were always
+  // sculpted as plain faithful models); before this the duo prompt was always chibi.
+  const realistic = extra.modelStyle === "realistic" && isPet;
   const noun = isPet ? "pets" : "objects";
   const animals = isPet ? "animals" : "objects";
   const photosA = referencePhotoCountA > 1 ? `1-${referencePhotoCountA}` : "1";
@@ -683,7 +687,14 @@ function figureGridPromptDuo(
       "and neither animal borrows the other's markings, ear shape or coat pattern.";
   }
 
-  const cutenessPhrase = isPet
+  const cutenessPhrase = realistic
+    ? REALISTIC_STYLE_PHRASE +
+      " Sculpt both animals exactly as they really look: the real head-to-body ratio, real " +
+      "leg length, real ears, muzzle and tail shape and the real coat length and texture of each " +
+      "animal in its own photos — NOT chibi, NOT a toy, NOT cute-ified or simplified, no " +
+      "oversized head or eyes. Keep their real relative sizes (a cat can be smaller than a " +
+      "dog), but both fully visible and neither hidden. "
+    : isPet
     ? "CUTENESS (very important): sculpt both as adorable chibi gashapon-style toys — a big " +
       "round head about as wide as the body, large glossy simple eyes set low and wide apart, " +
       "tiny nose and mouth, short chubby limbs, a soft plump rounded body, about 2 to 2.5 heads " +
@@ -698,7 +709,11 @@ function figureGridPromptDuo(
     : "CUTENESS: sculpt both as cute, softly rounded collectible toy versions of the real " +
       "objects, about the same overall size (neither much larger or smaller, neither hidden), " +
       "each keeping its own recognizable shape, colors and decoration from its own photos. ";
-  const materialPhrase = isPet
+  const materialPhrase = realistic
+    ? "MATERIAL: a finely sculpted miniature with natural sculpted fur (clustered locks and " +
+      "fine fur lines following the real coat), real faces and eyes — still a sculpture, NOT a " +
+      "photograph of a living animal. "
+    : isPet
     ? "MATERIAL: smooth matte resin toy surfaces with softly sculpted fur tufts and simple " +
       "painted-on color patches — NOT a photo of a real animal, no individual hair strands, no " +
       "photorealistic fur. "
@@ -706,7 +721,11 @@ function figureGridPromptDuo(
   const structurePhrase = isPet
     ? "STRUCTURE FOR 3D PRINTING (a few cm tall keychain): the two bodies are fused together " +
       "along a broad contact area (at least a third of the body width), sitting on the same " +
-      "flat ground line, with thick short legs, thick ears and a short thick tail — no thin " +
+      "flat ground line, with " +
+      (realistic
+        ? "sturdy legs, sturdy ears and a sturdy tail (true to life but not paper-thin)"
+        : "thick short legs, thick ears and a short thick tail") +
+      " — no thin " +
       "spindly parts, no gaps or holes, nothing floating, and NO base, plate, stand, pedestal " +
       "or disc under them. "
     : "STRUCTURE FOR 3D PRINTING (a few cm tall keychain): the two objects are fused together " +
@@ -728,7 +747,9 @@ function figureGridPromptDuo(
       "partly overlapping the other, both facing the same way. ";
 
   return (
-    "Create ONE image: a precise 2x2 grid of four photos of the same small kawaii collectible " +
+    "Create ONE image: a precise 2x2 grid of four photos of the same small " +
+    (realistic ? "" : "kawaii ") +
+    "collectible " +
     `figurine (a single rigid sculpture) showing TWO different ${noun} together as one combined ` +
     `piece. Subject A is ${subjectAPhrase}; subject B is ${subjectBPhrase}. ` +
     `${identityPhrase} ${arrangementPhrase}` +
@@ -937,7 +958,8 @@ export async function generateWhiteClayViewsDuo(
   // Id of a preset composition (e.g. "lying-together"); only adds posture wording to the prompt.
   compositionId?: string,
   // Test hook: receives the first auto-check result and whether a regeneration happened.
-  onCheck?: (info: { first: DuoCheckResult | null; retried: boolean }) => void
+  onCheck?: (info: { first: DuoCheckResult | null; retried: boolean }) => void,
+  modelStyle: ModelStyle = "deformed"
 ): Promise<Record<View, ImagePayload>> {
   const client = getClient();
   const photos = [...referencePhotosA, ...referencePhotosB];
@@ -971,6 +993,7 @@ export async function generateWhiteClayViewsDuo(
       compositionHint: compositionId ? DUO_COMPOSITION_HINTS[compositionId] : undefined,
       subjectA,
       subjectB,
+      modelStyle,
     }
   );
   const refs = neutralRef ? [...photos, neutralRef] : photos;

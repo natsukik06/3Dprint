@@ -695,17 +695,19 @@ function figureGridPromptDuo(
       "oversized head or eyes. Keep their real relative sizes (a cat can be smaller than a " +
       "dog), but both fully visible and neither hidden. "
     : isPet
-    ? "CUTENESS (very important): sculpt both as adorable chibi gashapon-style toys — a big " +
-      "round head about as wide as the body, large glossy simple eyes set low and wide apart, " +
-      "tiny nose and mouth, short chubby limbs, a soft plump rounded body, about 2 to 2.5 heads " +
-      "tall. Sweet, gentle, happy faces. This chibi simplification applies even to fluffy or " +
-      "long-haired animals: turn their fluff into smooth rounded toy shapes with a few soft " +
-      "tufts and give them the same big glossy bead eyes, so none of them looks like a " +
-      "realistic photographed animal — redraw every animal as a toy even if its reference photo " +
-      "looks very realistic. Same cute chibi treatment and about the same overall size for " +
-      "BOTH (neither one much larger or smaller than the other, neither hidden), each keeping " +
-      "its own recognizable traits (ear shape, face markings, coat colors and patches, tail, " +
-      "fur length) from its own photos. "
+    ? TOY_STYLE_PHRASE +
+      " CUTENESS (very important): both animals get exactly this treatment — like two matching " +
+      "pieces of a premium collectible toy line: a big round head, large shiny dark eyes with a " +
+      "bright highlight set low and wide apart, a tiny nose and a small smiling mouth, soft " +
+      "rounded pink inner ears where the animal has pale ears, small pink paw pads, a plump " +
+      "bean-shaped body, sweet happy faces. Clean, smooth, polished surfaces with crisp, " +
+      "evenly painted color areas (no rough, flocked, felt-like or fuzzy texture, no muddy or " +
+      "dull colors). BOTH animals must be stylized EQUALLY: a fluffy or long-haired one still " +
+      "gets the same big glossy bead eyes, the same tiny nose and smile and a smooth sculpted " +
+      "(not realistic, not furry) coat of chunky locks — never leave one animal realistic while " +
+      "the other is a toy. The two must be about the same overall size (neither much larger or " +
+      "smaller, neither hidden), each keeping its own recognizable traits (ear shape, face " +
+      "markings, coat colors and patches, tail) from its own photos. "
     : "CUTENESS: sculpt both as cute, softly rounded collectible toy versions of the real " +
       "objects, about the same overall size (neither much larger or smaller, neither hidden), " +
       "each keeping its own recognizable shape, colors and decoration from its own photos. ";
@@ -714,9 +716,10 @@ function figureGridPromptDuo(
       "fine fur lines following the real coat), real faces and eyes — still a sculpture, NOT a " +
       "photograph of a living animal. "
     : isPet
-    ? "MATERIAL: smooth matte resin toy surfaces with softly sculpted fur tufts and simple " +
-      "painted-on color patches — NOT a photo of a real animal, no individual hair strands, no " +
-      "photorealistic fur. "
+    ? "MATERIAL: smooth, clean, softly satin-finished vinyl/resin toy surfaces with gentle " +
+      "highlights, bold chunky sculpted fur tufts only where the animal is fluffy, and simple " +
+      "crisp painted-on color patches — NOT a photo of a real animal, no individual hair " +
+      "strands, no photorealistic fur, no fuzzy texture. "
     : "MATERIAL: smooth matte resin toy surfaces — NOT a photograph of the real objects. ";
   const structurePhrase = isPet
     ? "STRUCTURE FOR 3D PRINTING (a few cm tall keychain): the two bodies are fused together " +

@@ -34,7 +34,7 @@ const ROWS: Row[] = [
   { label: "メールアドレス", value: "natsuki.ko006@gmail.com" },
   {
     label: "販売価格",
-    value: `30mmサイズ 1個${SOLID_PRICE_YEN.solid30.toLocaleString()}円、35mmサイズ 1個${SOLID_PRICE_YEN.solid35.toLocaleString()}円、40mmサイズ 1個${SOLID_PRICE_YEN.solid40.toLocaleString()}円（いずれも税込）。表示価格はすべて税込です。`,
+    value: `20mmサイズ 1個${SOLID_PRICE_YEN.solid20.toLocaleString()}円、30mmサイズ 1個${SOLID_PRICE_YEN.solid30.toLocaleString()}円、35mmサイズ 1個${SOLID_PRICE_YEN.solid35.toLocaleString()}円、40mmサイズ 1個${SOLID_PRICE_YEN.solid40.toLocaleString()}円（いずれも税込）。表示価格はすべて税込です。`,
   },
   {
     label: "商品代金以外の必要料金",
@@ -64,7 +64,7 @@ const ROWS: Row[] = [
   },
   {
     label: "販売数量の制限",
-    value: `一人で製作しているため、週間の製作数に上限を設けております（30〜40mmサイズ：合計週${WEEKLY_SOLID_PIECE_CAP.toLocaleString()}個）。上限に達した場合、当週の注文受付を締め切り、翌週まで新規注文をお待ちいただきます。`,
+    value: `一人で製作しているため、週間の製作数に上限を設けております（20〜40mmサイズ：合計週${WEEKLY_SOLID_PIECE_CAP.toLocaleString()}個）。上限に達した場合、当週の注文受付を締め切り、翌週まで新規注文をお待ちいただきます。`,
   },
 ];
 

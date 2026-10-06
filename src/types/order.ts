@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 export const POSE_OPTIONS = [
   "sitting",
@@ -66,6 +66,7 @@ export const MODEL_STYLE_OPTIONS = ["deformed", "realistic"] as const;
 // furCavity ("毛入れ用") color for the same reason -- there's no cavity to pack fur into. SS/S/L
 // from the original launch lineup are retired in favor of this split.
 export const SIZE_OPTIONS = [
+  "solid20",
   "solid30",
   "solid35",
   "solid40",
@@ -79,8 +80,9 @@ export const SIZE_OPTIONS = [
 // night in small numbers, at higher prices, once the 30-40mm lineup is running smoothly. Add them
 // here to switch them on; /api/order-checkout rejects anything not in this list.
 // "M" (中空, the 毛入れ用 size) is not sold for now.
-export const AVAILABLE_SIZE_OPTIONS = ["solid30", "solid35", "solid40"] as const;
+export const AVAILABLE_SIZE_OPTIONS = ["solid20", "solid30", "solid35", "solid40"] as const;
 export const SOLID_SIZE_OPTIONS = [
+  "solid20",
   "solid30",
   "solid35",
   "solid40",
@@ -129,6 +131,7 @@ export type PaymentStatus = (typeof PAYMENT_STATUS_OPTIONS)[number];
 export type BoundingBoxMm = { x: number; y: number; z: number };
 
 export const SIZE_TARGET_MM: Record<SizeOption, number> = {
+  solid20: 20,
   solid30: 30,
   solid35: 35,
   solid40: 40,
@@ -140,6 +143,7 @@ export const SIZE_TARGET_MM: Record<SizeOption, number> = {
 // 40mm is the largest that's expected to fit クリックポスト's 3cm thickness limit once packed --
 // measure a real packed piece before relying on it (see the QA checklist's shipping section).
 export const SHIPPING_METHOD_BY_SIZE: Record<SizeOption, string> = {
+  solid20: "クリックポスト",
   solid30: "クリックポスト",
   solid35: "クリックポスト",
   solid40: "クリックポスト",
@@ -160,6 +164,7 @@ export function sizeShortLabel(size: SizeOption): string {
 }
 
 export const SIZE_LABELS: Record<SizeOption, string> = {
+  solid20: "20mmサイズ（最大辺2.0cm・中実・クリックポスト配送）",
   solid30: "30mmサイズ（最大辺3.0cm・中実・クリックポスト配送）",
   solid35: "35mmサイズ（最大辺3.5cm・中実・クリックポスト配送）",
   solid40: "40mmサイズ（最大辺4.0cm・中実・クリックポスト配送）",

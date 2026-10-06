@@ -14,6 +14,7 @@ import { MAGIC_COLOR_OPTIONS, SIZE_OPTIONS, type MagicColor, type SizeOption } f
 // customer-facing sentence ("小サイズ（最大辺2.5cm・中実・クリックポスト配送）"), too long for a
 // compact admin row.
 const SIZE_SHORT_LABELS: Record<SizeOption, string> = {
+  solid20: "20",
   solid30: "30",
   solid35: "35",
   solid40: "40",

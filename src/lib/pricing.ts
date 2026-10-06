@@ -23,6 +23,8 @@ export const ADDITIONAL_UNIT_PRICE_YEN = 1000;
 // Solid (中実) sizes -- flat per-piece pricing, no quantity-discount ladder, since they skip
 // hollowing entirely and are priced by size alone. Replaces the original SS/S/L lineup.
 export const SOLID_PRICE_YEN: Record<SolidSizeOption, number> = {
+  // Added as the lowest-priced entry size so a first-time buyer can try the shop for less.
+  solid20: 300,
   solid30: 400,
   solid35: 500,
   solid40: 600,
@@ -38,7 +40,7 @@ export const HARDWARE_ADDON_PRICE_YEN = 50;
 // Per physical piece -- covers picking/positioning a 3D-text font in the slicer and the extra
 // slice/print verification per order, on top of the hardware addon's own labor.
 export const ENGRAVING_PRICE_YEN = 300;
-export const SHIPPING_FEE_YEN = 700;
+export const SHIPPING_FEE_YEN = 330;
 export const FREE_SHIPPING_SUBTOTAL_YEN = 2200;
 // Friend-referral reward: both the referrer and the new customer they referred get this much off
 // their next order's merchandise subtotal (not shipping), once, when claimed via a referral link

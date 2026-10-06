@@ -30,6 +30,12 @@ const COMING_SOON: { id: string; name: string; image: string | null }[] = [
 // actually charges.
 const PRICE_LIST: { key: string; label: string; note: string; priceLabel: string }[] = [
   {
+    key: "solid20",
+    label: "20mmサイズ",
+    note: `最大辺${SIZE_TARGET_MM.solid20}mm・中実`,
+    priceLabel: `¥${SOLID_PRICE_YEN.solid20.toLocaleString()}`,
+  },
+  {
     key: "solid30",
     label: "30mmサイズ",
     note: `最大辺${SIZE_TARGET_MM.solid30}mm・中実`,
@@ -131,7 +137,7 @@ export default function ProductsPage() {
               <div className="p-2">
                 <p className="truncate text-[11px] leading-tight">ちゃろ</p>
                 <p className="text-xs font-bold tabular-nums">
-                  ¥{SOLID_PRICE_YEN.solid30.toLocaleString()}〜
+                  ¥{SOLID_PRICE_YEN.solid20.toLocaleString()}〜
                 </p>
               </div>
             </Link>
@@ -153,7 +159,7 @@ export default function ProductsPage() {
               <div className="p-2">
                 <p className="truncate text-[11px] leading-tight">キーホルダー（小）</p>
                 <p className="text-xs font-bold tabular-nums">
-                  ¥{SOLID_PRICE_YEN.solid30.toLocaleString()}〜
+                  ¥{SOLID_PRICE_YEN.solid20.toLocaleString()}〜
                 </p>
               </div>
             </div>

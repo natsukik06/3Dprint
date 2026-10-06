@@ -137,7 +137,7 @@ export async function checkWeeklyCapacity(
   if (solidWanted > 0 && solidUsed + solidWanted > WEEKLY_SOLID_PIECE_CAP) {
     return {
       ok: false,
-      reason: "30〜40mmサイズは今週の受付上限に達しました。来週の受付開始までお待ちください。",
+      reason: "20〜40mmサイズは今週の受付上限に達しました。来週の受付開始までお待ちください。",
     };
   }
   if (largeWanted > 0 && largeUsed + largeWanted > WEEKLY_LARGE_PIECE_CAP) {

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { LAB_CLOSED_MESSAGE, canUseLabFeatures } from "@/lib/labFeatures";
 import { addDiscountableCredit, consumeCredits, refundCredits } from "@/lib/credits";
 import { POSE_SET_CREDITS_PER_POSE } from "@/lib/creditPacks";
 import type { ImagePayload } from "@/lib/gemini";
@@ -28,6 +29,10 @@ export async function POST(request: NextRequest) {
   const user = await verifyRequestUser(request);
   if (!user) {
     return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
+  }
+  // 準備中: closed to customers for now (the shop owner can still test it) -- see src/lib/labFeatures.ts.
+  if (!canUseLabFeatures(user.email)) {
+    return NextResponse.json({ error: LAB_CLOSED_MESSAGE }, { status: 403 });
   }
 
   // Paused (503) while the Tripo account is out of credits -- see guardTripoCapacity.

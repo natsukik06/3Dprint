@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { ComingSoonOverlay } from "@/components/ui/ComingSoon";
+import { canUseLabFeatures } from "@/lib/labFeatures";
 import { useState, type ReactNode } from "react";
 import {
   DUO_COMPOSITIONS,
@@ -46,13 +49,13 @@ const HOW_IT_WORKS = {
 
 // One square card of the composition picker. Shows the showcase photo when it exists and falls back
 // to the plain composition icon when it does not (or fails to load).
-function CompositionCard({ preset }: { preset: CompositionPreset }) {
+function CompositionCard({ preset, closed }: { preset: CompositionPreset; closed: boolean }) {
   const [useIcon, setUseIcon] = useState(false);
-  return (
-    <Link
-      href={`/order?composition=${preset.id}`}
-      className="group block overflow-hidden rounded-2xl border border-[#d9cbb0] bg-white transition-colors hover:border-[#0f766e] dark:border-[#232726] dark:bg-[#121415] dark:hover:border-[#7fd8cb]"
-    >
+  // 準備中 (the 2-pet modes): shown, but not clickable, with diagonal stripes over the card.
+  const cardClass =
+    "group relative block overflow-hidden rounded-2xl border border-[#d9cbb0] bg-white transition-colors hover:border-[#0f766e] dark:border-[#232726] dark:bg-[#121415] dark:hover:border-[#7fd8cb]";
+  const inner = (
+    <>
       <div className="aspect-square overflow-hidden bg-[#f4ecdc] dark:bg-white/5">
         {/* eslint-disable-next-line @next/next/no-img-element -- showcase image may not exist yet; onError falls back to the icon */}
         <img
@@ -75,6 +78,14 @@ function CompositionCard({ preset }: { preset: CompositionPreset }) {
           {preset.catchCopy}
         </p>
       </div>
+      {closed && <ComingSoonOverlay open={false} labTest={false} />}
+    </>
+  );
+  return closed ? (
+    <div className={cardClass}>{inner}</div>
+  ) : (
+    <Link href={`/order?composition=${preset.id}`} className={cardClass}>
+      {inner}
     </Link>
   );
 }
@@ -83,6 +94,8 @@ function CompositionCard({ preset }: { preset: CompositionPreset }) {
 // because this component is a client component and cannot fetch from firebase-admin itself.
 export function HomeClient({ showcase }: { showcase?: ReactNode }) {
   const [compositionKind, setCompositionKind] = useState<CompositionKind>("single");
+  const { user } = useAuth();
+  const labOpen = canUseLabFeatures(user?.email);
   const shownCompositions =
     compositionKind === "single" ? SINGLE_COMPOSITIONS : DUO_COMPOSITIONS;
   return (
@@ -236,7 +249,11 @@ export function HomeClient({ showcase }: { showcase?: ReactNode }) {
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
               {shownCompositions.map((preset) => (
-                <CompositionCard key={preset.id} preset={preset} />
+                <CompositionCard
+                  key={preset.id}
+                  preset={preset}
+                  closed={preset.kind === "duo" && !labOpen}
+                />
               ))}
             </div>
           </div>

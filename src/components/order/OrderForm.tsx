@@ -17,6 +17,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { FormProvider, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { LAB_FEATURES_PUBLIC, canUseLabFeatures } from "@/lib/labFeatures";
 import { ConsentSection } from "@/components/order/ConsentSection";
 import { CustomerInfoForm } from "@/components/order/CustomerInfoForm";
 import { DuoBuilder } from "@/components/order/DuoBuilder";
@@ -26,6 +27,7 @@ import { PoseSetBuilder } from "@/components/order/PoseSetBuilder";
 import { PreviewPanel } from "@/components/order/PreviewPanel";
 import { SpecOptions } from "@/components/order/SpecOptions";
 import { SubjectPoseFields } from "@/components/order/SubjectPoseFields";
+import { ComingSoonOverlay } from "@/components/ui/ComingSoon";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { signInWithGoogle } from "@/lib/auth";
 import { COMPOSITION_PRESETS } from "@/lib/compositions";
@@ -318,6 +320,8 @@ export function OrderForm() {
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const { user, isLoading: authLoading } = useAuth();
+  // 準備中 modes (duo / 5-pose): usable only by the shop owner while being tested (see labFeatures.ts).
+  const labOpen = canUseLabFeatures(user?.email);
   // Latest signed-in email, readable from the one-time draft restore below (which runs once on
   // mount and would otherwise overwrite a prefilled email with the draft's saved blank).
   const userEmailRef = useRef<string | null>(null);
@@ -408,7 +412,19 @@ export function OrderForm() {
     "ai" | "custom" | "duo" | "poseset" | null
   >(null);
 
+  // A customer must never end up inside a closed mode (a restored draft, or a ?composition= link to a
+  // 2-pet composition) -- send them back to the chooser once we know who is signed in.
+  useEffect(() => {
+    if (authLoading || labOpen) return;
+    if (createMode === "duo" || createMode === "poseset" || mountedCreateMode === "duo" || mountedCreateMode === "poseset") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCreateMode(null);
+      setMountedCreateMode(null);
+    }
+  }, [authLoading, labOpen, createMode, mountedCreateMode]);
+
   function chooseCreateMode(next: "ai" | "custom" | "duo" | "poseset") {
+    if ((next === "duo" || next === "poseset") && !labOpen) return;
     setCreateMode(next);
     setMountedCreateMode(next);
   }
@@ -1046,10 +1062,12 @@ export function OrderForm() {
                           ペットや思い出の品の写真をアップロードして、AIに3Dモデルを生成してもらいます
                         </span>
                       </button>
+                      <div className="relative">
                       <button
                         type="button"
                         onClick={() => chooseCreateMode("duo")}
-                        className="flex flex-col items-center gap-2 rounded-xl border border-slate-300 bg-white p-4 text-center transition-colors hover:border-slate-500 hover:bg-slate-50"
+                        disabled={!labOpen}
+                        className="flex h-full w-full flex-col items-center gap-2 rounded-xl border border-slate-300 bg-white p-4 text-center transition-colors hover:border-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-300 disabled:hover:bg-white"
                       >
                         <Users className="h-7 w-7 text-slate-400" strokeWidth={1.5} />
                         <span className="text-sm font-semibold text-slate-900">
@@ -1059,10 +1077,14 @@ export function OrderForm() {
                           2匹の写真から、1つのフィギュアに並べて製作します
                         </span>
                       </button>
+                      <ComingSoonOverlay open={labOpen} labTest={!LAB_FEATURES_PUBLIC} />
+                      </div>
+                      <div className="relative">
                       <button
                         type="button"
                         onClick={() => chooseCreateMode("poseset")}
-                        className="flex flex-col items-center gap-2 rounded-xl border border-slate-300 bg-white p-4 text-center transition-colors hover:border-slate-500 hover:bg-slate-50"
+                        disabled={!labOpen}
+                        className="flex h-full w-full flex-col items-center gap-2 rounded-xl border border-slate-300 bg-white p-4 text-center transition-colors hover:border-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-300 disabled:hover:bg-white"
                       >
                         <LayoutGrid className="h-7 w-7 text-slate-400" strokeWidth={1.5} />
                         <span className="text-sm font-semibold text-slate-900">
@@ -1072,6 +1094,8 @@ export function OrderForm() {
                           同じ子を5つのポーズでまとめて生成し、好きなポーズだけ選んでモデル化します（1ポーズ2クレジット・5ポーズで10クレジット）
                         </span>
                       </button>
+                      <ComingSoonOverlay open={labOpen} labTest={!LAB_FEATURES_PUBLIC} />
+                      </div>
                       <button
                         type="button"
                         onClick={() => chooseCreateMode("custom")}

@@ -21,6 +21,7 @@ import {
 } from "@/types/order";
 import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
+import { SavedImageSets, type LoadedImageSet } from "@/components/order/SavedImageSets";
 
 type PoseModelState =
   | { phase: "starting" }
@@ -297,6 +298,28 @@ export function PoseSetBuilder({
     adoptPendingGeneration(job);
   }
 
+  // Use a set saved to the customer's account (see SavedImageSets).
+  function handleLoadSavedSet(set: LoadedImageSet) {
+    if (anyModeling || !POSE_SET_POSES.every((pose) => !!set.images[pose])) return;
+    if (builder.phase === "reviewing") {
+      const current: PoseVersion = {
+        id: `${Date.now()}`,
+        poseViews: builder.poseViews,
+        referenceImageUrls: builder.referenceImageUrls,
+        modelStyle,
+      };
+      setHistory((prev) => [current, ...prev].slice(0, MAX_HISTORY));
+    }
+    setPoseModels({});
+    setSelected(new Set<Pose>(POSE_SET_POSES));
+    if (set.style) setModelStyle(set.style);
+    setBuilder({
+      phase: "reviewing",
+      poseViews: set.images as Record<Pose, ImagePayload>,
+      referenceImageUrls: set.referenceImageUrls,
+    });
+  }
+
   // Switch back to an earlier result; the one on screen takes its place in the history.
   function handleRestoreVersion(id: string) {
     if (anyModeling) return;
@@ -464,6 +487,12 @@ export function PoseSetBuilder({
   return (
     <div className="space-y-4">
       <GenerationAllowance creditsNeeded={Math.max(1, creditsNeeded)} />
+      <SavedImageSets
+        kind="poseset"
+        onLoad={handleLoadSavedSet}
+        refreshKey={builder.phase}
+        disabled={anyModeling || builder.phase === "generating"}
+      />
       {builder.phase !== "generating" && styleToggle}
       {builder.phase !== "reviewing" && (
         <button

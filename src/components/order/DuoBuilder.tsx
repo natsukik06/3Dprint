@@ -8,6 +8,7 @@ import { useCredits } from "@/components/auth/useCredits";
 import { PhotoUploader } from "@/components/order/PhotoUploader";
 import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
+import { SavedImageSets, type LoadedImageSet } from "@/components/order/SavedImageSets";
 import { signInWithGoogle } from "@/lib/auth";
 import { PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
 import { CompositionPicker } from "@/components/order/CompositionPicker";
@@ -364,6 +365,33 @@ export function DuoBuilder({
     }
   }
 
+  // Use a set saved to the customer's account (see SavedImageSets).
+  function handleLoadSavedSet(set: LoadedImageSet) {
+    if (modelState.phase === "starting" || modelState.phase === "polling") return;
+    if (modelState.phase === "reviewingViews" && modelState.confirming) return;
+    if (!(["front", "left", "back", "right"] as const).every((view) => !!set.images[view])) return;
+    if (modelState.phase === "reviewingViews") {
+      const current: DuoVersion = {
+        id: `${Date.now()}`,
+        views: modelState.views,
+        referenceImageUrls: modelState.referenceImageUrls,
+        riskAssessment: modelState.riskAssessment,
+        modelStyle,
+      };
+      setHistory((prev) => [current, ...prev].slice(0, MAX_HISTORY));
+    }
+    if (set.style) setModelStyle(set.style);
+    onGenerated(null);
+    setModelState({
+      phase: "reviewingViews",
+      views: set.images as Record<View, ImagePayload>,
+      referenceImageUrls: set.referenceImageUrls,
+      confirming: false,
+      riskAssessment: set.riskAssessment,
+      riskAcknowledged: false,
+    });
+  }
+
   // Switch back to an earlier result; the one on screen takes its place in the history.
   function handleRestoreVersion(id: string) {
     if (modelState.phase === "starting" || modelState.phase === "polling") return;
@@ -638,6 +666,12 @@ export function DuoBuilder({
         ))}
 
       <GenerationAllowance />
+      <SavedImageSets
+        kind="duo"
+        onLoad={handleLoadSavedSet}
+        refreshKey={modelState.phase}
+        disabled={modelState.phase === "starting" || modelState.phase === "polling"}
+      />
       {modelState.phase !== "starting" && modelState.phase !== "polling" && (
         <PreviousVersions
           versions={history.map((v, i) => ({

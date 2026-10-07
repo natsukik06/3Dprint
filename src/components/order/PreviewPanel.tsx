@@ -34,6 +34,7 @@ import { CHARO_PREMADE_MODEL, PREMADE_MODELS } from "@/lib/premadeModels";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
 import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
+import { SavedImageSets, type LoadedImageSet } from "@/components/order/SavedImageSets";
 import {
   MAX_CUSTOM_MODEL_SIZE_BYTES,
   MODEL_STYLE_LABELS,
@@ -680,6 +681,34 @@ export function PreviewPanel({
     }
   }
 
+  // Use a set saved to the customer's account (see SavedImageSets). The inputs on screen are left alone.
+  function handleLoadSavedSet(set: LoadedImageSet) {
+    if (modelState.phase === "starting" || modelState.phase === "polling") return;
+    if (modelState.phase === "reviewingViews" && modelState.confirming) return;
+    if (!(VIEWS).every((view) => !!set.images[view])) return;
+    if (modelState.phase === "reviewingViews") {
+      const current: PreviewVersion = {
+        id: `${Date.now()}`,
+        views: modelState.views,
+        referenceImageUrls: modelState.referenceImageUrls,
+        finishedPreviewUrls: modelState.finishedPreviewUrls,
+        riskAssessment: modelState.riskAssessment,
+        modelStyle,
+      };
+      setHistory((prev) => [current, ...prev].slice(0, MAX_HISTORY));
+    }
+    onGenerated(null);
+    setModelState({
+      phase: "reviewingViews",
+      views: set.images as Record<View, ImagePayload>,
+      referenceImageUrls: set.referenceImageUrls,
+      finishedPreviewUrls: {},
+      confirming: false,
+      riskAssessment: set.riskAssessment,
+      riskAcknowledged: false,
+    });
+  }
+
   // Switch back to an earlier result; the one on screen takes its place in the history. The inputs
   // (photos / pose) are left as they are now: the restored result keeps its own images.
   function handleRestoreVersion(id: string) {
@@ -1011,6 +1040,14 @@ export function PreviewPanel({
         ))}
 
       {mode === "ai" && <GenerationAllowance />}
+      {mode === "ai" && (
+        <SavedImageSets
+          kind="single"
+          onLoad={handleLoadSavedSet}
+          refreshKey={modelState.phase}
+          disabled={modelState.phase === "starting" || modelState.phase === "polling"}
+        />
+      )}
       {mode === "ai" && modelState.phase !== "starting" && modelState.phase !== "polling" && (
         <PreviousVersions
           versions={history.map((v, i) => ({

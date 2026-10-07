@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { saveImageSet } from "@/lib/imageSets";
 import {
   checkAndConsumeGenerationAllowance,
   refundGenerationAllowance,
@@ -151,6 +152,14 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    await saveImageSet(user.uid, {
+      kind: "duo",
+      style: modelStyle,
+      subject: `${subjectA}・${subjectB}`,
+      images: whiteClayViews,
+      referenceImageUrls: [...referenceImageUrlsA, ...referenceImageUrlsB],
+      riskAssessment,
+    });
     return NextResponse.json({
       views: whiteClayViews,
       referenceImageUrls: [...referenceImageUrlsA, ...referenceImageUrlsB],

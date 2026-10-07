@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { saveImageSet } from "@/lib/imageSets";
 import {
   checkAndConsumeGenerationAllowance,
   refundGenerationAllowance,
@@ -153,6 +154,15 @@ export async function POST(request: NextRequest) {
     // (see checkAndConsumeGenerationAllowance) -- the paid model credit is spent later, in
     // /api/generate-model/confirm, only once the customer commits to the actual Tripo
     // reconstruction.
+    // Saved to the customer's account so the set survives paying / reloading / another device.
+    await saveImageSet(user.uid, {
+      kind: "single",
+      style: modelStyle,
+      subject,
+      images: whiteClayViews,
+      referenceImageUrls,
+      riskAssessment,
+    });
     return NextResponse.json({ views: whiteClayViews, referenceImageUrls, riskAssessment });
   } catch (error) {
     console.error("generate-model failed", error);

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { saveImageSet } from "@/lib/imageSets";
 import {
   checkAndConsumeGenerationAllowance,
   refundGenerationAllowance,
@@ -93,6 +94,13 @@ export async function POST(request: NextRequest) {
       uploadReferencePhotos(photoFiles),
     ]);
 
+    await saveImageSet(user.uid, {
+      kind: "poseset",
+      style: modelStyle,
+      subject,
+      images: poseViews,
+      referenceImageUrls,
+    });
     return NextResponse.json({ poseViews, referenceImageUrls });
   } catch (error) {
     console.error("generate-model-poseset failed", error);

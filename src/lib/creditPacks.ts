@@ -1,4 +1,7 @@
 export const CREDIT_PRICE_YEN = 100;
+// 5ポーズセット: credits spent per pose that is turned into a 3D model (5 poses = 10 credits). The other
+// products spend 1 credit per model.
+export const POSE_SET_CREDITS_PER_POSE = 2;
 export const MAX_DISCOUNTABLE_CREDITS = 2;
 // The generation fee only comes back (as a discount at checkout) when the merchandise subtotal --
 // before shipping and discounts -- reaches this. Below it the order simply isn't discounted and the

@@ -1069,7 +1069,7 @@ export function OrderForm() {
                           5ポーズセットで作る
                         </span>
                         <span className="text-xs text-slate-500">
-                          同じ子を5つのポーズでまとめて生成し、好きなポーズだけ選んでモデル化します
+                          同じ子を5つのポーズでまとめて生成し、好きなポーズだけ選んでモデル化します（1ポーズ2クレジット・5ポーズで10クレジット）
                         </span>
                       </button>
                       <button

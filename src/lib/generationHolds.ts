@@ -1,5 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { refundCredit, removeDiscountableCredit } from "@/lib/credits";
+import { refundCredits, removeDiscountableCredit } from "@/lib/credits";
 import { adminDb } from "@/lib/firebaseAdmin";
 
 // Server-only record of "this paid 3D generation (Tripo task) was bought with this user's credit" --
@@ -7,10 +7,15 @@ import { adminDb } from "@/lib/firebaseAdmin";
 // credit back to the right person, exactly once, no matter who polls the task or how often.
 const holds = () => adminDb.collection("generation_holds");
 
-export async function recordGenerationHold(taskId: string, uid: string): Promise<void> {
+export async function recordGenerationHold(
+  taskId: string,
+  uid: string,
+  credits = 1
+): Promise<void> {
   try {
     await holds().doc(taskId).set({
       uid,
+      credits,
       refunded: false,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -28,15 +33,17 @@ export async function recordGenerationHold(taskId: string, uid: string): Promise
  */
 export async function refundFailedGeneration(taskId: string): Promise<boolean> {
   const ref = holds().doc(taskId);
-  const claimedUid = await adminDb.runTransaction(async (tx) => {
+  const claimed = await adminDb.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const data = snap.data();
     if (!snap.exists || data?.refunded) return null;
     tx.update(ref, { refunded: true, refundedAt: FieldValue.serverTimestamp() });
-    return (data?.uid as string) ?? null;
+    const uid = (data?.uid as string) ?? null;
+    return uid ? { uid, credits: (data?.credits as number) ?? 1 } : null;
   });
-  if (!claimedUid) return false;
-  await refundCredit(claimedUid);
+  if (!claimed) return false;
+  const claimedUid = claimed.uid;
+  await refundCredits(claimedUid, claimed.credits);
   await removeDiscountableCredit(claimedUid).catch((error) =>
     console.error(`removeDiscountableCredit failed for ${taskId}`, error)
   );

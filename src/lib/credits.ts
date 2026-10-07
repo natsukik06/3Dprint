@@ -26,6 +26,25 @@ export async function getOrCreateUserCredits(
   return FREE_SIGNUP_CREDITS;
 }
 
+/** Atomically deducts `amount` credits (all or nothing). Returns false if the user has fewer. */
+export async function consumeCredits(uid: string, amount: number): Promise<boolean> {
+  const ref = userRef(uid);
+  return adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const credits = (snap.data()?.credits as number) ?? 0;
+    if (credits < amount) return false;
+    tx.update(ref, { credits: credits - amount, creditsLastActivityAt: FieldValue.serverTimestamp() });
+    return true;
+  });
+}
+
+export async function refundCredits(uid: string, amount: number): Promise<void> {
+  await userRef(uid).set(
+    { credits: FieldValue.increment(amount), creditsLastActivityAt: FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+}
+
 /** Atomically deducts one credit. Returns false if the user has none left. */
 export async function consumeCredit(uid: string): Promise<boolean> {
   const ref = userRef(uid);

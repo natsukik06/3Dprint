@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { addDiscountableCredit, consumeCredit, refundCredit } from "@/lib/credits";
+import { addDiscountableCredit, consumeCredits, refundCredits } from "@/lib/credits";
+import { POSE_SET_CREDITS_PER_POSE } from "@/lib/creditPacks";
 import type { ImagePayload } from "@/lib/gemini";
 import { recordGenerationHold } from "@/lib/generationHolds";
 import { createMultiviewTask, uploadImageToTripo } from "@/lib/tripo";
@@ -19,7 +20,7 @@ function isImagePayload(value: unknown): value is ImagePayload {
  * Per-pose model kickoff for the 5-pose-set product -- mirrors /api/generate-model/confirm, but
  * takes only ONE already-colored single-view pose image (from /api/generate-model-poseset) instead
  * of a 4-direction turnaround, and calls Tripo in single-image mode (front only). The customer's
- * frontend calls this once per pose they selected, in parallel -- each call spends its own credit
+ * frontend calls this once per pose they selected, in parallel -- each call spends its own credits (POSE_SET_CREDITS_PER_POSE)
  * and returns its own taskId, polled via the existing (view-count-agnostic) /api/generate-model/
  * [taskId] route.
  */
@@ -39,10 +40,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "ポーズ画像が正しく渡されていません" }, { status: 400 });
   }
 
-  const hasCredit = await consumeCredit(user.uid);
+  const hasCredit = await consumeCredits(user.uid, POSE_SET_CREDITS_PER_POSE);
   if (!hasCredit) {
     return NextResponse.json(
-      { error: "クレジットが不足しています。購入してからお試しください。" },
+      {
+        error: `クレジットが不足しています（1ポーズにつき${POSE_SET_CREDITS_PER_POSE}回分）。購入してからお試しください。`,
+      },
       { status: 402 }
     );
   }
@@ -59,12 +62,12 @@ export async function POST(request: NextRequest) {
     // generate-model/confirm/route.ts.
     await addDiscountableCredit(user.uid);
     // So a task that later fails gets its credit back -- see refundFailedGeneration.
-    await recordGenerationHold(taskId, user.uid);
+    await recordGenerationHold(taskId, user.uid, POSE_SET_CREDITS_PER_POSE);
 
     return NextResponse.json({ taskId });
   } catch (error) {
     console.error("generate-model-poseset/confirm failed", error);
-    await refundCredit(user.uid);
+    await refundCredits(user.uid, POSE_SET_CREDITS_PER_POSE);
     return NextResponse.json(
       { error: "3Dモデル生成の開始に失敗しました" },
       { status: 502 }

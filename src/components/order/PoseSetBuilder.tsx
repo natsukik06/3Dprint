@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { signInWithGoogle } from "@/lib/auth";
-import { PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
+import { POSE_SET_CREDITS_PER_POSE, PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
 import { clearDraftSlice, loadDraftSlice, saveDraftSlice } from "@/lib/draftStorage";
 import type { ImagePayload } from "@/lib/gemini";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
@@ -216,7 +216,8 @@ export function PoseSetBuilder({
   const anyModeling = Object.values(poseModels).some(
     (s) => s?.phase === "starting" || s?.phase === "polling"
   );
-  const hasEnoughCredits = (credits ?? 0) >= selectedCount;
+  const creditsNeeded = selectedCount * POSE_SET_CREDITS_PER_POSE;
+  const hasEnoughCredits = (credits ?? 0) >= creditsNeeded;
 
   function toggleSelected(pose: Pose) {
     if (anyModeling) return;
@@ -462,7 +463,7 @@ export function PoseSetBuilder({
 
   return (
     <div className="space-y-4">
-      <GenerationAllowance creditsNeeded={Math.max(1, selectedCount)} />
+      <GenerationAllowance creditsNeeded={Math.max(1, creditsNeeded)} />
       {builder.phase !== "generating" && styleToggle}
       {builder.phase !== "reviewing" && (
         <button
@@ -594,12 +595,12 @@ export function PoseSetBuilder({
             >
               {anyModeling
                 ? "作成中..."
-                : `選んだ${selectedCount}体をモデル化してカートに追加（${selectedCount}クレジット）`}
+                : `選んだ${selectedCount}体をモデル化してカートに追加（${creditsNeeded}クレジット）`}
             </button>
           </div>
           {!hasEnoughCredits && selectedCount > 0 && (
             <p className="text-center text-xs text-amber-600">
-              クレジットが不足しています（{selectedCount}体には{selectedCount}クレジット必要です）。購入してからお試しください。
+              クレジットが不足しています（{selectedCount}体には{creditsNeeded}クレジット必要です。1体につき{POSE_SET_CREDITS_PER_POSE}クレジット）。購入してからお試しください。
             </p>
           )}
         </div>

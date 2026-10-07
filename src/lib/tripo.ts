@@ -1,3 +1,4 @@
+import sharp from "sharp";
 const TRIPO_API_BASE = "https://api.tripo3d.ai/v2/openapi";
 const MODEL_VERSION = "v3.0-20250812";
 
@@ -79,6 +80,14 @@ export async function uploadImageToTripo(
   filename: string,
   mimeType: string
 ): Promise<string> {
+  // Tripo's /task call rejected tasks built from JPEG uploads (code 1004 "parameter is invalid") while
+  // PNG uploads are accepted -- the generated images are stored as JPEG to keep the site light, so they
+  // are converted back to PNG here, right before the upload.
+  if (mimeType !== "image/png") {
+    buffer = await sharp(buffer).png().toBuffer();
+    mimeType = "image/png";
+    filename = filename.replace(/\.[A-Za-z0-9]+$/, "") + ".png";
+  }
   const formData = new FormData();
   formData.append("file", new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
 
@@ -110,6 +119,24 @@ export async function createMultiviewTask(
     body: JSON.stringify({
       type: "multiview_to_model",
       files,
+      model_version: MODEL_VERSION,
+      texture: false,
+      pbr: false,
+    }),
+  });
+  return json.data.task_id as string;
+}
+
+// ONE image -> 3D model (the 5-pose set sends a single view per pose). multiview_to_model with only a
+// front view is rejected by Tripo (code 1004 "parameter is invalid"), so single-image jobs must use
+// image_to_model. The uploaded image is always a PNG here (see uploadImageToTripo), hence type "png".
+export async function createImageToModelTask(fileToken: string): Promise<string> {
+  const json = await tripoFetch("/task", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "image_to_model",
+      file: { type: "png", file_token: fileToken },
       model_version: MODEL_VERSION,
       texture: false,
       pbr: false,

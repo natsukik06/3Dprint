@@ -3,7 +3,7 @@ import { addDiscountableCredit, consumeCredits, refundCredits } from "@/lib/cred
 import { POSE_SET_CREDITS_PER_POSE } from "@/lib/creditPacks";
 import type { ImagePayload } from "@/lib/gemini";
 import { recordGenerationHold } from "@/lib/generationHolds";
-import { createMultiviewTask, uploadImageToTripo } from "@/lib/tripo";
+import { createImageToModelTask, uploadImageToTripo } from "@/lib/tripo";
 import { guardTripoCapacity } from "@/lib/tripoCapacity";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       image.mimeType === "image/jpeg" ? "pose.jpg" : "pose.png",
       image.mimeType
     );
-    const taskId = await createMultiviewTask({ front: token });
+    const taskId = await createImageToModelTask(token);
 
     // Only once the (paid) Tripo task is actually successfully queued -- see the same comment in
     // generate-model/confirm/route.ts.

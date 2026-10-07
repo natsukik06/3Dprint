@@ -998,7 +998,7 @@ export function PreviewPanel({
           >
             {modelState.phase === "success" || modelState.phase === "error"
               ? "ステップ1をやり直す：4方向のイメージを作り直す"
-              : "ステップ1：写真から4方向のイメージを作る（1日2回まで無料）"}
+              : "ステップ1：写真から4方向のイメージを作る（1日6回まで無料）"}
           </button>
         ) : (
           <button
@@ -1198,7 +1198,7 @@ export function PreviewPanel({
       )}
       {mode === "ai" && user && modelState.phase === "reviewingViews" && !hasCredits && (
         <p className="text-center text-xs text-amber-600">
-          クレジットが足りません。3Dモデルを作るには、クレジットの購入が必要です（1回100円。アカウントごとに、最初の1回は無料です）。4方向のイメージ作りは、1日2回まで無料です。
+          クレジットが足りません。3Dモデルを作るには、クレジットの購入が必要です（1回100円。アカウントごとに、最初の1回は無料です）。4方向のイメージ作りは、1日6回まで無料です。
         </p>
       )}
 

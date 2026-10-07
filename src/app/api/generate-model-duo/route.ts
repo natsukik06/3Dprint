@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "本日の無料プレビュー回数（2回）を使い切りました。また明日お試しいただくか、ご注文いただくとリセットされます。",
+          "本日の無料プレビュー回数（6回）を使い切りました。また明日お試しいただくか、ご注文いただくとリセットされます。",
         freeGenerationLimitReached: true,
       },
       { status: 429 }

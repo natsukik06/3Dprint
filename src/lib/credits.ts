@@ -71,7 +71,7 @@ export async function addCredits(uid: string, amount: number): Promise<void> {
   );
 }
 
-const FREE_GENERATIONS_PER_DAY = 2;
+import { FREE_GENERATIONS_PER_DAY } from "@/lib/creditPacks";
 
 // Day boundary in JST (the shop's own timezone), not UTC or the server's local time -- en-CA
 // gives an unambiguous YYYY-MM-DD.

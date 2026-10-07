@@ -3,10 +3,10 @@
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
+import { FREE_GENERATIONS_PER_DAY, PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
 import { db } from "@/lib/firebase";
 
-const FREE_GENERATIONS_PER_DAY = 2; // keep in step with src/lib/credits.ts
+
 
 type Allowance = { freeLeft: number; previewCredits: number; credits: number };
 

@@ -202,7 +202,7 @@ export default function ProductsPage() {
 
         <div className="mt-2 text-center">
           <p className="mb-2 text-xs text-[#8a7c5e] dark:text-[#6d7c79]">
-            ①写真から4方向のイメージを作る工程は1日2回まで無料、②3Dモデルを作る工程は1回¥{CREDIT_PRICE_YEN}（初回は無料）で、仕上がりを確認してからご注文をご検討いただけます
+            ①写真から4方向のイメージを作る工程は1日6回まで無料、②3Dモデルを作る工程は1回¥{CREDIT_PRICE_YEN}（初回は無料）で、仕上がりを確認してからご注文をご検討いただけます
           </p>
           <Link
             href="/order"

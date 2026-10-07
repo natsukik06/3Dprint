@@ -1,4 +1,7 @@
 export const CREDIT_PRICE_YEN = 100;
+// Free 4-view / 5-pose image generations per account per day (JST). The server (credits.ts) and the
+// order-page counter (GenerationAllowance) both read this.
+export const FREE_GENERATIONS_PER_DAY = 6;
 // 5ポーズセット: credits spent per pose that is turned into a 3D model (5 poses = 10 credits). The other
 // products spend 1 credit per model.
 export const POSE_SET_CREDITS_PER_POSE = 2;

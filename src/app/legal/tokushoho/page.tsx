@@ -43,7 +43,7 @@ const ROWS: Row[] = [
   {
     label: "3Dモデル作成クレジット",
     value:
-      `3Dモデルの作成は1回${CREDIT_PRICE_YEN.toLocaleString()}円（税込）で、初回は無料クレジットが付いています。まとめ買いのパックは、${CREDIT_PACKS.map((p) => `${p.credits}回分${p.priceYen.toLocaleString()}円`).join("・")}です（いずれも税込）。4方向のイメージ作り（ステップ1）は1日2回まで無料で、それを超える分は1回${PREVIEW_CREDIT_PRICE_YEN.toLocaleString()}円（税込）で追加できます。商品代金が${GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文では、使用した3Dモデル作成代（最大${MAX_DISCOUNTABLE_CREDITS}回分）がご注文時に割引されます。【返金】ご購入・ご利用済みのクレジット（3Dモデル作成クレジット、追加プレビュー、割引の残りを含みます）は、お客様都合による返金はできません。3Dモデルの作成に失敗した場合は、使用したクレジットをお返しします。【有効期限】最後にクレジットをご購入・ご利用いただいた日から1年間です。期限を過ぎた残高は失効し、0になります。`,
+      `3Dモデルの作成は1回${CREDIT_PRICE_YEN.toLocaleString()}円（税込）で、初回は無料クレジットが付いています。まとめ買いのパックは、${CREDIT_PACKS.map((p) => `${p.credits}回分${p.priceYen.toLocaleString()}円`).join("・")}です（いずれも税込）。4方向のイメージ作り（ステップ1）は1日6回まで無料で、それを超える分は1回${PREVIEW_CREDIT_PRICE_YEN.toLocaleString()}円（税込）で追加できます。商品代金が${GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN.toLocaleString()}円以上のご注文では、使用した3Dモデル作成代（最大${MAX_DISCOUNTABLE_CREDITS}回分）がご注文時に割引されます。【返金】ご購入・ご利用済みのクレジット（3Dモデル作成クレジット、追加プレビュー、割引の残りを含みます）は、お客様都合による返金はできません。3Dモデルの作成に失敗した場合は、使用したクレジットをお返しします。【有効期限】最後にクレジットをご購入・ご利用いただいた日から1年間です。期限を過ぎた残高は失効し、0になります。`,
   },
   { label: "お支払い方法", value: "クレジットカード決済・PayPay（Stripe）" },
   { label: "お支払い時期", value: "ご注文時に全額前払いとなります。" },

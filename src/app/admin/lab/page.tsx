@@ -54,7 +54,7 @@ export default function AdminLabPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-sm font-semibold text-slate-900">5ポーズセット</p>
           <p className="mt-1 text-xs text-slate-500">
-            同じ子の5つのポーズを、1枚の絵からまとめて作る機能です。3Dにするのは、1ポーズ2クレジットです。
+            同じ子の5つのポーズを、1枚の絵からまとめて作り、選んだポーズを、1枚の画像から直接3Dにする機能です（1ポーズ2クレジット）。お客様向けの「いろんなポーズを試す」（ポーズを見て選ぶだけ）は、通常の「写真からAIで作る」の中で、すでに公開しています。
           </p>
           <Link
             href="/order"

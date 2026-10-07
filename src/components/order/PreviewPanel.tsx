@@ -33,6 +33,7 @@ import { uploadCustomModel } from "@/lib/orders";
 import { CHARO_PREMADE_MODEL, PREMADE_MODELS } from "@/lib/premadeModels";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
 import { GenerationAllowance } from "@/components/order/GenerationAllowance";
+import { PoseTryOut } from "@/components/order/PoseTryOut";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
 import { SavedImageSets, type LoadedImageSet } from "@/components/order/SavedImageSets";
 import {
@@ -1040,6 +1041,16 @@ export function PreviewPanel({
         ))}
 
       {mode === "ai" && <GenerationAllowance />}
+      {mode === "ai" && subjectType === "pet" && modelState.phase !== "starting" && modelState.phase !== "polling" && (
+        <PoseTryOut
+          photos={photos}
+          subject={subject}
+          petDetails={petDetails}
+          modelStyle={modelStyle}
+          pose={pose}
+          onPick={(p) => setValue("pose", p, { shouldValidate: true })}
+        />
+      )}
       {mode === "ai" && (
         <SavedImageSets
           kind="single"

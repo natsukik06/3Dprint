@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { LAB_CLOSED_MESSAGE, canUseLabFeatures } from "@/lib/labFeatures";
 import { saveImageSet } from "@/lib/imageSets";
 import {
   checkAndConsumeGenerationAllowance,
@@ -37,10 +36,9 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
   }
-  // 準備中: closed to customers for now (the shop owner can still test it) -- see src/lib/labFeatures.ts.
-  if (!canUseLabFeatures(user.email)) {
-    return NextResponse.json({ error: LAB_CLOSED_MESSAGE }, { status: 403 });
-  }
+  // Open to everyone: this only draws the 5 pose pictures (the 「いろんなポーズを試す」 preview inside the
+  // normal flow). Making 3D models straight from those single pictures stays owner-only, see
+  // generate-model-poseset/confirm and src/lib/labFeatures.ts.
 
   // Paused (503) while the Tripo account is out of credits -- see guardTripoCapacity.
   const paused = await guardTripoCapacity();

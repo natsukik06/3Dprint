@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 :root {
+  /* Japanese text uses the device's own fonts (no web-font download) -- see src/lib/fonts.ts. */
+  --font-zen-gothic: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", "Noto Sans JP", Meiryo, sans-serif;
+  --font-zen-mincho: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", "MS PMincho", serif;
+}
+
+:root {
   --background: #ffffff;
   --foreground: #171717;
 }

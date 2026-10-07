@@ -1,17 +1,10 @@
-import { Zen_Old_Mincho, Zen_Kaku_Gothic_New } from "next/font/google";
-
-// Shared across every top-level marketing page (/, /products, /story) so next/font only loads
-// each family once and every page's typography stays pixel-identical.
-export const zenMincho = Zen_Old_Mincho({
-  weight: ["400", "600"],
-  subsets: ["latin"],
-  variable: "--font-zen-mincho",
-});
-
-export const zenGothic = Zen_Kaku_Gothic_New({
-  weight: ["300", "400", "500", "700"],
-  subsets: ["latin"],
-  variable: "--font-zen-gothic",
-});
+﻿// Zen Kaku Gothic New / Zen Old Mincho used to be loaded here through next/font/google. For a Japanese
+// font Google splits the file into ~120 slices per weight (485 @font-face rules), and every page that
+// showed Japanese text downloaded around a hundred of them -- about 7MB of fonts on the home page, the
+// biggest reason the site felt slow. They are replaced by the phone/PC's own Japanese fonts (the CSS
+// variables below, set in globals.css), so nothing is downloaded. The exports keep their old shape so
+// the pages that use them did not need to change.
+export const zenMincho = { variable: "" };
+export const zenGothic = { variable: "" };
 
 export const displayFont = { fontFamily: "var(--font-zen-mincho), serif" };

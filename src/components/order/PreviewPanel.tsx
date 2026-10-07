@@ -32,6 +32,7 @@ import { db } from "@/lib/firebase";
 import { uploadCustomModel } from "@/lib/orders";
 import { CHARO_PREMADE_MODEL, PREMADE_MODELS } from "@/lib/premadeModels";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
+import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
 import {
   MAX_CUSTOM_MODEL_SIZE_BYTES,
@@ -294,10 +295,20 @@ export function PreviewPanel({
   const [isClearMaterial, setIsClearMaterial] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [expandedView, setExpandedView] = useState<"model" | null>(null);
+  // In "reuse" mode (the ちゃろ / past-model picker that opens first) the 3D model is a 27MB download;
+  // it used to start on every /order visit and made the page crawl. Now a still picture is shown and the
+  // 3D model is only fetched when the customer taps "3Dで見る". Generated models (ai/custom) show
+  // straight away since they were just made.
+  const [viewer3dOn, setViewer3dOn] = useState(mode !== "reuse");
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modelViewerRef = useRef<ModelViewerElement | null>(null);
   const modalModelViewerRef = useRef<ModelViewerElement | null>(null);
   const suppressResetRef = useRef(false);
+  // True for a few seconds after a saved in-progress result was restored from the draft. The order
+  // form restores the photos / subject / pose a moment later than this panel restores the result, and
+  // that late arrival used to look like "the customer changed the photos" and wiped the restored result
+  // (this is what lost the images after coming back from paying).
+  const restoreGraceRef = useRef(false);
   // Companion data for whichever taskId modelState is currently "polling" -- see
   // SavedPreviewDraft above for why this can't just live inside ModelState itself.
   const pollContextRef = useRef<{
@@ -328,7 +339,7 @@ export function PreviewPanel({
 
   // The 3D viewer library is large; only fetch it once a 3D model is actually on screen (a finished
   // generation, or the reuse/custom modes that show one right away) instead of on every /order visit.
-  const needsViewer = modelState.phase === "success" || mode !== "ai";
+  const needsViewer = modelState.phase === "success" && viewer3dOn;
   useEffect(() => {
     if (needsViewer) import("@google/model-viewer");
   }, [needsViewer]);
@@ -369,6 +380,12 @@ export function PreviewPanel({
     (async () => {
       const saved = await loadDraftSlice<SavedPreviewDraft>("previewDraft");
       if (cancelled) return;
+      if (saved?.phase === "reviewingViews" || saved?.phase === "polling") {
+        restoreGraceRef.current = true;
+        setTimeout(() => {
+          restoreGraceRef.current = false;
+        }, 8000);
+      }
       if (saved?.phase === "reviewingViews") {
         setModelState({
           phase: "reviewingViews",
@@ -428,6 +445,8 @@ export function PreviewPanel({
     setPrevInputs({ photos, subject, subjectType, pose });
     if (suppressResetRef.current) {
       suppressResetRef.current = false;
+    } else if (restoreGraceRef.current) {
+      // Inputs are still being restored from the draft -- keep the restored result.
     } else {
       // Changing photos / pose / subject discards the on-screen result -- keep it in the history so it
       // can be brought back.
@@ -797,6 +816,7 @@ export function PreviewPanel({
 
   function handleSelectGalleryItem(entry: GeneratedModel) {
     if (entry.taskId === selectedTaskId) return;
+    if (mode === "reuse") setViewer3dOn(false);
     setValue("chainPositionNote", "");
     suppressResetRef.current = true;
     setValue("subject", entry.subject, { shouldValidate: true });
@@ -822,7 +842,10 @@ export function PreviewPanel({
           {modelState.phase === "success" && (
             <button
               type="button"
-              onClick={() => setExpandedView("model")}
+              onClick={() => {
+                setViewer3dOn(true);
+                setExpandedView("model");
+              }}
               aria-label="3Dモデルを拡大表示"
               className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1.5 text-slate-600 shadow hover:bg-white"
             >
@@ -859,7 +882,27 @@ export function PreviewPanel({
               ))}
             </div>
           )}
-          {modelState.phase === "success" && (
+          {modelState.phase === "success" && !viewer3dOn && (
+            <button
+              type="button"
+              onClick={() => setViewer3dOn(true)}
+              aria-label="3Dモデルを表示する"
+              className="group relative h-full w-full"
+            >
+              {gallery.find((g) => g.taskId === selectedTaskId)?.renderedImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={gallery.find((g) => g.taskId === selectedTaskId)?.renderedImageUrl ?? undefined}
+                  alt="3Dモデルの写真"
+                  className="h-full w-full object-contain"
+                />
+              ) : null}
+              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-800/90 px-3 py-1.5 text-[11px] font-semibold text-white shadow group-hover:bg-slate-700">
+                タップして3Dで回して見る（読み込みに少し時間がかかります）
+              </span>
+            </button>
+          )}
+          {modelState.phase === "success" && viewer3dOn && (
             <model-viewer
               ref={modelViewerRef}
               src={displayModelUrl}
@@ -967,6 +1010,7 @@ export function PreviewPanel({
           </button>
         ))}
 
+      {mode === "ai" && <GenerationAllowance />}
       {mode === "ai" && modelState.phase !== "starting" && modelState.phase !== "polling" && (
         <PreviousVersions
           versions={history.map((v, i) => ({

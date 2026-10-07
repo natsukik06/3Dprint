@@ -19,6 +19,7 @@ import {
   type Pose,
   type SubjectType,
 } from "@/types/order";
+import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
 
 type PoseModelState =
@@ -461,6 +462,7 @@ export function PoseSetBuilder({
 
   return (
     <div className="space-y-4">
+      <GenerationAllowance creditsNeeded={Math.max(1, selectedCount)} />
       {builder.phase !== "generating" && styleToggle}
       {builder.phase !== "reviewing" && (
         <button

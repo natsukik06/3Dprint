@@ -56,6 +56,25 @@ const PET_POSE_PHRASES: Partial<Record<Pose, string>> = {
     "plain upright sitting pose",
 };
 
+// Which attached photo matters most. The customer can mark one photo as the 全体像 (main) and one as the
+// 特徴 (feature close-up) -- they are sent first, in that order -- and the rest are only extra angles.
+// Without saying so, every photo got equal weight and the result drifted toward an "average" animal of
+// that breed (e.g. a smooth short coat for a fluffy long-haired dog) instead of the actual pet.
+function referenceRolesPhrase(photoCount: number, subjectType: SubjectType): string {
+  if (photoCount < 2) return "";
+  const what = subjectType === "pet" ? "animal" : "object";
+  return (
+    ` REFERENCE PHOTO ROLES: the ${photoCount} attached photos are in priority order. Photo 1 is the ` +
+    `MAIN whole-body reference: it decides this ${what}'s body shape and proportions, coat length and ` +
+    "texture, coat colors and where each color patch sits — follow it most closely. Photo 2 is the " +
+    "FEATURE close-up: use it for the face, eye color, nose, ear shape and fine markings. Any further " +
+    "photos are only supplementary extra angles; where they disagree with photos 1 and 2, ignore them. " +
+    `Do NOT drift toward the typical look of the breed or toward a different-looking ${what}: if the ` +
+    "coat is long and fluffy in the main photo it must stay long and fluffy, if short it stays short. " +
+    "Never copy photo backgrounds, people or hands."
+  );
+}
+
 function posePhrase(pose: Pose, subjectType: SubjectType): string {
   return (subjectType === "pet" ? PET_POSE_PHRASES[pose] : undefined) ?? POSE_PHRASES[pose];
 }
@@ -422,6 +441,7 @@ function figureGridPrompt(
       : " Use the attached reference photos to match the subject's shape, " +
         "features, coloring, and identity exactly.") +
     (wantsSelfStanding ? STABILITY_PHRASE : "") +
+    referenceRolesPhrase(photoCount, subjectType) +
     petDetailsPhrase(petDetails, subjectType) +
     (hasComposition
       ? compositionPhrase(photoCount, true) +
@@ -500,7 +520,8 @@ function figurePosePrompt(
   subject: string,
   petDetails: PetDetails | undefined,
   subjectType: SubjectType,
-  style: ModelStyle = "deformed"
+  style: ModelStyle = "deformed",
+  photoCount = 0
 ): string {
   const printSafetyPhrase =
     subjectType === "pet"
@@ -533,6 +554,7 @@ function figurePosePrompt(
     OMIT_SURROUNDINGS_PHRASE +
     " Use the attached reference photos to match the subject's shape, features, " +
     "coloring, and identity exactly." +
+    referenceRolesPhrase(photoCount, subjectType) +
     petDetailsPhrase(petDetails, subjectType)
   );
 }
@@ -557,7 +579,7 @@ export async function generatePoseSetViews(
       generateImage(
         client,
         referencePhotos,
-        figurePosePrompt(pose, subject, petDetails, subjectType, style)
+        figurePosePrompt(pose, subject, petDetails, subjectType, style, referencePhotos.length)
       ).then(toJpeg)
     )
   );

@@ -6,6 +6,7 @@ import { useFormContext } from "react-hook-form";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { PhotoUploader } from "@/components/order/PhotoUploader";
+import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
 import { signInWithGoogle } from "@/lib/auth";
 import { PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
@@ -636,6 +637,7 @@ export function DuoBuilder({
           </button>
         ))}
 
+      <GenerationAllowance />
       {modelState.phase !== "starting" && modelState.phase !== "polling" && (
         <PreviousVersions
           versions={history.map((v, i) => ({

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { optimizedImageUrl } from "@/lib/imageUrl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ComingSoonOverlay } from "@/components/ui/ComingSoon";
 import { canUseLabFeatures } from "@/lib/labFeatures";
@@ -327,7 +328,7 @@ export function HomeClient({ showcase }: { showcase?: ReactNode }) {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         key={view}
-                        src={HOW_IT_WORKS[col.key][view]}
+                        src={optimizedImageUrl(HOW_IT_WORKS[col.key][view], 384)}
                         alt={`${col.alt} ${view === "front" ? "正面" : view === "left" ? "左側面" : view === "back" ? "背面" : "右側面"}`}
                         loading="lazy"
                         className="h-full w-full object-cover"
@@ -348,7 +349,7 @@ export function HomeClient({ showcase }: { showcase?: ReactNode }) {
                   <div className="mt-1.5 aspect-square overflow-hidden rounded-lg bg-white dark:bg-white/90">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={HOW_IT_WORKS[col.key].model3d}
+                      src={optimizedImageUrl(HOW_IT_WORKS[col.key].model3d, 640)}
                       alt={`${col.alt}の3Dモデル`}
                       loading="lazy"
                       className="h-full w-full object-contain p-1"

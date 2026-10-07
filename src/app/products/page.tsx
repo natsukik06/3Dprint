@@ -4,6 +4,7 @@ import { Camera } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { LikeButton } from "@/components/home/LikeButton";
+import { optimizedImageUrl } from "@/lib/imageUrl";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { displayFont as display, zenGothic, zenMincho } from "@/lib/fonts";
@@ -129,7 +130,7 @@ export default function ProductsPage() {
                 </span>
                 {/* eslint-disable-next-line @next/next/no-img-element -- Firebase Storage URL, not a local/next.config-whitelisted remote domain */}
                 <img
-                  src={CHARO_PREMADE_MODEL.renderedImageUrl ?? undefined}
+                  src={CHARO_PREMADE_MODEL.renderedImageUrl ? optimizedImageUrl(CHARO_PREMADE_MODEL.renderedImageUrl, 384) : undefined}
                   alt="ちゃろ（既製フィギュア）"
                   className="h-full w-full object-cover"
                 />

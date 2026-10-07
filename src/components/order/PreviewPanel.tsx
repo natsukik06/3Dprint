@@ -34,6 +34,7 @@ import { CHARO_PREMADE_MODEL, PREMADE_MODELS } from "@/lib/premadeModels";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
 import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PoseTryOut } from "@/components/order/PoseTryOut";
+import { optimizedImageUrl } from "@/lib/imageUrl";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
 import { SavedImageSets, type LoadedImageSet } from "@/components/order/SavedImageSets";
 import {
@@ -922,7 +923,7 @@ export function PreviewPanel({
               {gallery.find((g) => g.taskId === selectedTaskId)?.renderedImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={gallery.find((g) => g.taskId === selectedTaskId)?.renderedImageUrl ?? undefined}
+                  src={optimizedImageUrl(gallery.find((g) => g.taskId === selectedTaskId)?.renderedImageUrl ?? "", 640) || undefined}
                   alt="3Dモデルの写真"
                   className="h-full w-full object-contain"
                 />
@@ -1215,7 +1216,7 @@ export function PreviewPanel({
                 {entry.renderedImageUrl && !failedThumbnails.has(entry.taskId) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={entry.renderedImageUrl}
+                    src={optimizedImageUrl(entry.renderedImageUrl, 128)}
                     alt={entry.subject || "生成済みモデル"}
                     className="h-full w-full object-cover"
                     onError={() =>

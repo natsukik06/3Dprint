@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { AlertTriangle, Loader2, Maximize2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -6,6 +6,7 @@ import { useFormContext } from "react-hook-form";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { PhotoUploader } from "@/components/order/PhotoUploader";
+import { PreviousVersions } from "@/components/order/PreviousVersions";
 import { signInWithGoogle } from "@/lib/auth";
 import { PREVIEW_CREDIT_PRICE_YEN } from "@/lib/creditPacks";
 import { CompositionPicker } from "@/components/order/CompositionPicker";
@@ -34,6 +35,16 @@ const VIEW_LABELS: Record<View, string> = {
   right: "右側面",
 };
 
+// An earlier 4-view result kept after 作り直す so the customer can switch back to it.
+type DuoVersion = {
+  id: string;
+  views: Record<View, ImagePayload>;
+  referenceImageUrls: string[];
+  riskAssessment: ShapeRiskAssessment | null;
+  modelStyle?: ModelStyle;
+};
+const MAX_HISTORY = 3;
+
 type GeneratedResult = {
   modelUrl: string;
   finishedPreviewUrls: Partial<Record<MagicColor, string>>;
@@ -52,6 +63,7 @@ type SavedDuoDraft = {
   layout: SceneLayout;
   // Optional: drafts saved before the style choice existed have none.
   modelStyle?: ModelStyle;
+  history?: DuoVersion[];
   modelState:
     | { phase: "idle" }
     | {
@@ -132,6 +144,7 @@ export function DuoBuilder({
   // デフォルメ / リアル. Defaults to リアル here: with two animals together, the old always-chibi
   // result surprised customers who expected their pets to look like their photos.
   const [modelStyle, setModelStyle] = useState<ModelStyle>("realistic");
+  const [history, setHistory] = useState<DuoVersion[]>([]);
   // Optional composition reference (not saved in the draft). When chosen it takes priority over
   // `layout` in the prompt; the upload wins over a preset.
   const [compositionId, setCompositionId] = useState<string | null>(
@@ -156,9 +169,11 @@ export function DuoBuilder({
   const hasCredits = (credits ?? 0) > 0;
   const { setValue, getValues } = useFormContext<OrderFormValues>();
 
+  // Only fetch the (large) 3D viewer library once a model is actually shown.
+  const needsViewer = modelState.phase === "success";
   useEffect(() => {
-    import("@google/model-viewer");
-  }, []);
+    if (needsViewer) import("@google/model-viewer");
+  }, [needsViewer]);
   useEffect(() => {
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -179,6 +194,7 @@ export function DuoBuilder({
         setSubjectB(saved.subjectB);
         setLayout(saved.layout);
         if (saved.modelStyle) setModelStyle(saved.modelStyle);
+        if (saved.history) setHistory(saved.history);
         if (saved.modelState.phase === "reviewingViews") {
           setModelState({
             phase: "reviewingViews",
@@ -230,11 +246,12 @@ export function DuoBuilder({
         subjectB,
         layout,
         modelStyle,
+        history,
         modelState: savedModelState,
       });
     }, 500);
     return () => clearTimeout(timer);
-  }, [hasRestored, photosA, photosB, subjectA, subjectB, layout, modelStyle, modelState]);
+  }, [hasRestored, photosA, photosB, subjectA, subjectB, layout, modelStyle, history, modelState]);
 
   const ready = photosA.length > 0 && photosB.length > 0 && subjectA.trim() && subjectB.trim();
   const currentModelUrl = modelState.phase === "success" ? modelState.modelUrl : undefined;
@@ -288,6 +305,17 @@ export function DuoBuilder({
     if (!ready || !user) return;
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     onGenerated(null);
+    // Keep the result being replaced so the customer can switch back to it.
+    if (modelState.phase === "reviewingViews") {
+      const previous: DuoVersion = {
+        id: `${Date.now()}`,
+        views: modelState.views,
+        referenceImageUrls: modelState.referenceImageUrls,
+        riskAssessment: modelState.riskAssessment,
+        modelStyle,
+      };
+      setHistory((prev) => [previous, ...prev].slice(0, MAX_HISTORY));
+    }
     setModelState({ phase: "starting" });
 
     try {
@@ -333,6 +361,36 @@ export function DuoBuilder({
         message: err instanceof Error ? err.message : "生成開始に失敗しました",
       });
     }
+  }
+
+  // Switch back to an earlier result; the one on screen takes its place in the history.
+  function handleRestoreVersion(id: string) {
+    if (modelState.phase === "starting" || modelState.phase === "polling") return;
+    if (modelState.phase === "reviewingViews" && modelState.confirming) return;
+    const target = history.find((v) => v.id === id);
+    if (!target) return;
+    setHistory((prev) => {
+      const rest = prev.filter((v) => v.id !== id);
+      if (modelState.phase !== "reviewingViews") return rest;
+      const current: DuoVersion = {
+        id: `${Date.now()}`,
+        views: modelState.views,
+        referenceImageUrls: modelState.referenceImageUrls,
+        riskAssessment: modelState.riskAssessment,
+        modelStyle,
+      };
+      return [current, ...rest].slice(0, MAX_HISTORY);
+    });
+    if (target.modelStyle) setModelStyle(target.modelStyle);
+    onGenerated(null);
+    setModelState({
+      phase: "reviewingViews",
+      views: target.views,
+      referenceImageUrls: target.referenceImageUrls,
+      confirming: false,
+      riskAssessment: target.riskAssessment,
+      riskAcknowledged: false,
+    });
   }
 
   async function handleConfirmViews() {
@@ -577,6 +635,20 @@ export function DuoBuilder({
             ログインして生成する
           </button>
         ))}
+
+      {modelState.phase !== "starting" && modelState.phase !== "polling" && (
+        <PreviousVersions
+          versions={history.map((v, i) => ({
+            id: v.id,
+            thumbs: (["front", "left", "back", "right"] as View[]).map(
+              (view) => `data:${v.views[view].mimeType};base64,${v.views[view].data}`
+            ),
+            label: `${i + 1}つ前（${MODEL_STYLE_LABELS[v.modelStyle ?? "deformed"]}）`,
+          }))}
+          onRestore={handleRestoreVersion}
+          disabled={modelState.phase === "reviewingViews" && modelState.confirming}
+        />
+      )}
 
       {modelState.phase === "reviewingViews" && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">

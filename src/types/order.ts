@@ -4,9 +4,14 @@ export const POSE_OPTIONS = [
   "sitting",
   "standing",
   "lying",
+  "paw",
+  "headTilt",
   "asPhoto",
   "auto",
 ] as const;
+// The 5 fixed, clearly different poses of the 5ポーズセット (famous dog poses). "asPhoto"/"auto" are
+// deliberately NOT part of it: they overlap with the explicit poses and produced near-duplicates.
+export const POSE_SET_POSES = ["sitting", "lying", "paw", "standing", "headTilt"] as const;
 export const MAGIC_COLOR_OPTIONS = [
   "starryBlue",
   "nebulaPink",

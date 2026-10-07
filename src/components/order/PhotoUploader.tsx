@@ -102,11 +102,20 @@ export function PhotoUploader({ photos, onChange, error, maxPhotos }: PhotoUploa
     onChange(photos.filter((_, i) => i !== index));
   }
 
+  // The first photo is read as the 全体像 (main reference) and the second as the 特徴 (feature close-up),
+  // so choosing a role afterwards is just moving that photo into the slot.
+  function moveTo(from: number, to: number) {
+    if (from === to || from < 0 || from >= photos.length) return;
+    const next = [...photos];
+    const [moved] = next.splice(from, 1);
+    next.splice(Math.min(to, next.length), 0, moved);
+    onChange(next);
+  }
+
   return (
     <div className="space-y-2">
       <p className="text-sm text-slate-600">
-        1枚目は<b>全体像</b>がわかる写真、2枚目は<b>特徴</b>
-        がわかる写真がおすすめです（正面・横・後ろなど角度違いがあるとさらに精度が上がります・最大{max}枚）
+        「全体像」は一番参考にしたい写真、「特徴」は顔のアップや模様がわかる写真です。写真を追加したあとでも、「全体像にする」「特徴にする」で選び直せます（正面・横・後ろなど角度違いがあるとさらに精度が上がります・最大{max}枚）
       </p>
       <Link
         href="/guide/photo-tips"
@@ -127,12 +136,35 @@ export function PhotoUploader({ photos, onChange, error, maxPhotos }: PhotoUploa
 
       <div className="flex flex-wrap gap-2">
         {photos.map((file, index) => (
-          <PhotoThumbnail
-            key={`${file.name}-${index}`}
-            file={file}
-            slotLabel={SLOT_LABELS[index]}
-            onRemove={() => handleRemove(index)}
-          />
+          <div key={`${file.name}-${index}`} className="flex w-20 shrink-0 flex-col gap-1">
+            <PhotoThumbnail
+              file={file}
+              slotLabel={SLOT_LABELS[index] ?? "参考"}
+              onRemove={() => handleRemove(index)}
+            />
+            {photos.length > 1 && (
+              <>
+                {index !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => moveTo(index, 0)}
+                    className="rounded border border-slate-300 bg-white py-0.5 text-[10px] text-slate-600 hover:bg-slate-50"
+                  >
+                    全体像にする
+                  </button>
+                )}
+                {index !== 1 && (
+                  <button
+                    type="button"
+                    onClick={() => moveTo(index, 1)}
+                    className="rounded border border-slate-300 bg-white py-0.5 text-[10px] text-slate-600 hover:bg-slate-50"
+                  >
+                    特徴にする
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         ))}
         {photos.length < max && (
           <button

@@ -94,6 +94,8 @@ export function HomeClient({ showcase }: { showcase?: ReactNode }) {
       <header className="relative flex h-[100svh] min-h-[560px] items-center justify-center overflow-hidden text-center text-[#f3ece0]">
         <video
           src="/hero-video.mp4"
+          poster="/hero-poster.jpg"
+          preload="metadata"
           autoPlay
           muted
           loop

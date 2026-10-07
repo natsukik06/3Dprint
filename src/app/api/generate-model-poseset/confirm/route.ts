@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   try {
     const token = await uploadImageToTripo(
       Buffer.from(image.data, "base64"),
-      "pose.png",
+      image.mimeType === "image/jpeg" ? "pose.jpg" : "pose.png",
       image.mimeType
     );
     const taskId = await createMultiviewTask({ front: token });

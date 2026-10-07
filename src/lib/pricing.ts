@@ -58,7 +58,9 @@ export const SUBJECT_TYPE_LABELS: Record<SubjectType, string> = {
 export const POSE_LABELS: Record<Pose, string> = {
   sitting: "お座り",
   standing: "立ち姿",
-  lying: "寝そべり",
+  lying: "伏せ（寝そべり）",
+  paw: "お手",
+  headTilt: "首かしげ",
   asPhoto: "写真のまま",
   auto: "おまかせ",
 };

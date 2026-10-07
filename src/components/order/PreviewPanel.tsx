@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   collection,
@@ -32,8 +32,10 @@ import { db } from "@/lib/firebase";
 import { uploadCustomModel } from "@/lib/orders";
 import { CHARO_PREMADE_MODEL, PREMADE_MODELS } from "@/lib/premadeModels";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
+import { PreviousVersions } from "@/components/order/PreviousVersions";
 import {
   MAX_CUSTOM_MODEL_SIZE_BYTES,
+  MODEL_STYLE_LABELS,
   type ColorQuantities,
   type MagicColor,
   type ModelStyle,
@@ -144,6 +146,18 @@ type ModelState =
   | { phase: "polling"; progress: number }
   | { phase: "success"; modelUrl: string }
   | { phase: "error"; message: string; freeGenerationLimitReached?: boolean };
+
+// An earlier 4-view result kept after 作り直す (or after the inputs change) so the customer can switch back
+// to it. Kept in memory for this visit only.
+type PreviewVersion = {
+  id: string;
+  views: Record<View, ImagePayload>;
+  referenceImageUrls: string[];
+  finishedPreviewUrls: FinishedPreviewUrls;
+  riskAssessment: ShapeRiskAssessment | null;
+  modelStyle: ModelStyle;
+};
+const MAX_HISTORY = 3;
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -257,6 +271,7 @@ export function PreviewPanel({
       ? { phase: "success", modelUrl: effectiveInitialModel.modelUrl }
       : { phase: "idle" }
   );
+  const [history, setHistory] = useState<PreviewVersion[]>([]);
   const [customUpload, setCustomUpload] = useState<
     { phase: "idle" } | { phase: "uploading" } | { phase: "error"; message: string }
   >({ phase: "idle" });
@@ -311,9 +326,12 @@ export function PreviewPanel({
 
   const displayModelUrl = currentModelUrl ?? undefined;
 
+  // The 3D viewer library is large; only fetch it once a 3D model is actually on screen (a finished
+  // generation, or the reuse/custom modes that show one right away) instead of on every /order visit.
+  const needsViewer = modelState.phase === "success" || mode !== "ai";
   useEffect(() => {
-    import("@google/model-viewer");
-  }, []);
+    if (needsViewer) import("@google/model-viewer");
+  }, [needsViewer]);
 
   useEffect(() => {
     return () => {
@@ -411,6 +429,19 @@ export function PreviewPanel({
     if (suppressResetRef.current) {
       suppressResetRef.current = false;
     } else {
+      // Changing photos / pose / subject discards the on-screen result -- keep it in the history so it
+      // can be brought back.
+      if (modelState.phase === "reviewingViews") {
+        const previous: PreviewVersion = {
+          id: `${Date.now()}`,
+          views: modelState.views,
+          referenceImageUrls: modelState.referenceImageUrls,
+          finishedPreviewUrls: modelState.finishedPreviewUrls,
+          riskAssessment: modelState.riskAssessment,
+          modelStyle,
+        };
+        setHistory((prev) => [previous, ...prev].slice(0, MAX_HISTORY));
+      }
       setModelState({ phase: "idle" });
     }
   }
@@ -550,6 +581,18 @@ export function PreviewPanel({
     onGenerated(null);
     setValue("chainPositionNote", "");
     const finishedPreviewUrls: FinishedPreviewUrls = {};
+    // Keep the result being replaced so the customer can switch back to it.
+    if (modelState.phase === "reviewingViews") {
+      const previous: PreviewVersion = {
+        id: `${Date.now()}`,
+        views: modelState.views,
+        referenceImageUrls: modelState.referenceImageUrls,
+        finishedPreviewUrls: modelState.finishedPreviewUrls,
+        riskAssessment: modelState.riskAssessment,
+        modelStyle,
+      };
+      setHistory((prev) => [previous, ...prev].slice(0, MAX_HISTORY));
+    }
     setModelState({ phase: "starting" });
 
     try {
@@ -616,6 +659,38 @@ export function PreviewPanel({
       console.error("preview credit purchase failed", err);
       setPurchasingPreview(false);
     }
+  }
+
+  // Switch back to an earlier result; the one on screen takes its place in the history. The inputs
+  // (photos / pose) are left as they are now: the restored result keeps its own images.
+  function handleRestoreVersion(id: string) {
+    if (modelState.phase === "starting" || modelState.phase === "polling") return;
+    if (modelState.phase === "reviewingViews" && modelState.confirming) return;
+    const target = history.find((v) => v.id === id);
+    if (!target) return;
+    setHistory((prev) => {
+      const rest = prev.filter((v) => v.id !== id);
+      if (modelState.phase !== "reviewingViews") return rest;
+      const current: PreviewVersion = {
+        id: `${Date.now()}`,
+        views: modelState.views,
+        referenceImageUrls: modelState.referenceImageUrls,
+        finishedPreviewUrls: modelState.finishedPreviewUrls,
+        riskAssessment: modelState.riskAssessment,
+        modelStyle,
+      };
+      return [current, ...rest].slice(0, MAX_HISTORY);
+    });
+    onGenerated(null);
+    setModelState({
+      phase: "reviewingViews",
+      views: target.views,
+      referenceImageUrls: target.referenceImageUrls,
+      finishedPreviewUrls: target.finishedPreviewUrls,
+      confirming: false,
+      riskAssessment: target.riskAssessment,
+      riskAcknowledged: false,
+    });
   }
 
   async function handleConfirmViews() {
@@ -891,6 +966,18 @@ export function PreviewPanel({
             ログインして、ステップ1（4方向のイメージ作り）を始める
           </button>
         ))}
+
+      {mode === "ai" && modelState.phase !== "starting" && modelState.phase !== "polling" && (
+        <PreviousVersions
+          versions={history.map((v, i) => ({
+            id: v.id,
+            thumbs: VIEWS.map((view) => `data:${v.views[view].mimeType};base64,${v.views[view].data}`),
+            label: `${i + 1}つ前（${MODEL_STYLE_LABELS[v.modelStyle]}）`,
+          }))}
+          onRestore={handleRestoreVersion}
+          disabled={modelState.phase === "reviewingViews" && modelState.confirming}
+        />
+      )}
 
       {mode === "ai" && modelState.phase === "reviewingViews" && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">

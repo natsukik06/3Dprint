@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         const image = views[view] as ImagePayload;
         const token = await uploadImageToTripo(
           Buffer.from(image.data, "base64"),
-          `${view}.png`,
+          `${view}.${image.mimeType === "image/jpeg" ? "jpg" : "png"}`,
           image.mimeType
         );
         return [view, token] as const;

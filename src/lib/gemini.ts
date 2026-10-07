@@ -1,5 +1,6 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import sharp from "sharp";
+import { POSE_SET_POSES } from "@/types/order";
 import type {
   MagicColor,
   ModelStyle,
@@ -22,6 +23,8 @@ const POSE_PHRASES: Record<Pose, string> = {
   sitting: "a sitting pose",
   standing: "a standing pose",
   lying: "a lying down pose",
+  paw: "a sitting pose with one front paw raised",
+  headTilt: "a sitting pose with the head tilted to one side",
   asPhoto: "the same pose as shown in the reference photos",
   auto: "a natural, well-balanced pose",
 };
@@ -41,6 +44,16 @@ const PET_POSE_PHRASES: Partial<Record<Pose, string>> = {
     "a LYING-DOWN pose: the animal MUST be lying flat on its belly on the ground, body low and " +
     "touching the ground, legs tucked under or stretched forward, head resting low — it is NOT " +
     "sitting upright, NOT standing and NOT crouching",
+  paw:
+    "a PAW-GIVING (shake-hands, お手) pose: the animal sits upright on its haunches and lifts ONE " +
+    "short, thick front paw forward in front of its chest as if offering a handshake, the other " +
+    "front leg planted straight on the ground, looking at the camera",
+  headTilt:
+    "a HEAD-TILT pose: the animal sits upright on its haunches with all four paws on the ground " +
+    "and tilts its head clearly to ONE side (about 30 to 35 degrees): the whole head is visibly " +
+    "rolled sideways so the line through the two eyes is slanted, one ear is clearly lower than " +
+    "the other, and the face is NOT level — a curious, cute expression, clearly different from a " +
+    "plain upright sitting pose",
 };
 
 function posePhrase(pose: Pose, subjectType: SubjectType): string {
@@ -50,7 +63,13 @@ function posePhrase(pose: Pose, subjectType: SubjectType): string {
 // An explicit pose (sitting / standing / lying) must win over the model's habit of drawing a sitting
 // pet; "auto" and "asPhoto" leave the model free.
 function isExplicitPose(pose: Pose): boolean {
-  return pose === "sitting" || pose === "standing" || pose === "lying";
+  return (
+    pose === "sitting" ||
+    pose === "standing" ||
+    pose === "lying" ||
+    pose === "paw" ||
+    pose === "headTilt"
+  );
 }
 
 // What the customer types into "subject" (see SubjectPoseFields.tsx) used to be spliced straight
@@ -185,6 +204,16 @@ function buildReferenceParts(referencePhotos: ImagePayload[]) {
   return referencePhotos.map((photo) => ({
     inlineData: { mimeType: photo.mimeType, data: photo.data },
   }));
+}
+
+// Re-encodes a generated image as a JPEG (same pixels, a fraction of the bytes).
+async function toJpeg(image: ImagePayload): Promise<ImagePayload> {
+  try {
+    const out = await sharp(Buffer.from(image.data, "base64")).jpeg({ quality: 90 }).toBuffer();
+    return { data: out.toString("base64"), mimeType: "image/jpeg" };
+  } catch {
+    return image;
+  }
 }
 
 async function generateImage(
@@ -470,7 +499,8 @@ function figurePosePrompt(
   pose: Pose,
   subject: string,
   petDetails: PetDetails | undefined,
-  subjectType: SubjectType
+  subjectType: SubjectType,
+  style: ModelStyle = "deformed"
 ): string {
   const printSafetyPhrase =
     subjectType === "pet"
@@ -486,10 +516,14 @@ function figurePosePrompt(
     "A single square photo of one small figurine of " +
     `${subjectPhrase(subject, subjectType)} on a plain white background, with no border and no ` +
     "other objects. Pose: " +
-    `${POSE_PHRASES[pose]}. Photographed from a front-facing 3/4 camera angle. The whole figurine ` +
+    `${posePhrase(pose, subjectType)}. ` +
+    (isExplicitPose(pose) && subjectType === "pet"
+      ? "This pose is the most important requirement and must be clearly recognizable. "
+      : "") +
+    "Photographed from a front-facing 3/4 camera angle. The whole figurine " +
     "is fully visible and centered, with generous plain white margin on every side so no part of " +
     "it touches or comes near the image edge. " +
-    TOY_STYLE_PHRASE +
+    stylePhrase(style) +
     " Render the " +
     `figurine's actual colors, markings, and ${subjectType === "pet" ? "coat pattern" : "surface pattern/texture"} as closely as possible to the ` +
     "reference photos — do not simplify it to a plain or single-color material. This will be 3D " +
@@ -513,13 +547,18 @@ export async function generatePoseSetViews(
   referencePhotos: ImagePayload[],
   subject: string,
   petDetails?: PetDetails,
-  subjectType: SubjectType = "pet"
+  subjectType: SubjectType = "pet",
+  style: ModelStyle = "deformed"
 ): Promise<Record<Pose, ImagePayload>> {
   const client = getClient();
-  const poses = Object.keys(POSE_PHRASES) as Pose[];
+  const poses = [...POSE_SET_POSES] as Pose[];
   const images = await Promise.all(
     poses.map((pose) =>
-      generateImage(client, referencePhotos, figurePosePrompt(pose, subject, petDetails, subjectType))
+      generateImage(
+        client,
+        referencePhotos,
+        figurePosePrompt(pose, subject, petDetails, subjectType, style)
+      ).then(toJpeg)
     )
   );
   return Object.fromEntries(poses.map((pose, i) => [pose, images[i]])) as Record<Pose, ImagePayload>;
@@ -893,9 +932,12 @@ async function splitGridImage(image: ImagePayload): Promise<Record<View, ImagePa
       const cropHeight = row === 1 ? height - halfH : halfH;
       const cropped = await sharp(buffer)
         .extract({ left, top, width: cropWidth, height: cropHeight })
-        .png()
+        .jpeg({ quality: 90 })
         .toBuffer();
-      return [view, { data: cropped.toString("base64"), mimeType: "image/png" }] as const;
+      // JPEG instead of PNG: about a fifth of the size, so the review screen, the saved draft and the
+      // upload to the 3D service are all much lighter. The figurine stands on plain white, where JPEG
+      // loses nothing visible.
+      return [view, { data: cropped.toString("base64"), mimeType: "image/jpeg" }] as const;
     })
   );
   return Object.fromEntries(entries) as Record<View, ImagePayload>;

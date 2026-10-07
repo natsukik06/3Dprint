@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -10,7 +10,16 @@ import { clearDraftSlice, loadDraftSlice, saveDraftSlice } from "@/lib/draftStor
 import type { ImagePayload } from "@/lib/gemini";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
 import { POSE_LABELS } from "@/lib/pricing";
-import { POSE_OPTIONS, type PetDetails, type Pose, type SubjectType } from "@/types/order";
+import {
+  MODEL_STYLE_LABELS,
+  MODEL_STYLE_OPTIONS,
+  POSE_SET_POSES,
+  type ModelStyle,
+  type PetDetails,
+  type Pose,
+  type SubjectType,
+} from "@/types/order";
+import { PreviousVersions } from "@/components/order/PreviousVersions";
 
 type PoseModelState =
   | { phase: "starting" }
@@ -34,7 +43,25 @@ type SavedPoseSetDraft = {
   builder: { phase: "idle" } | Extract<BuilderState, { phase: "reviewing" }>;
   selected: Pose[];
   poseModels: Partial<Record<Pose, PoseModelState>>;
+  // Optional: drafts saved before these existed have neither.
+  modelStyle?: ModelStyle;
+  history?: PoseVersion[];
 };
+
+// An earlier 5-pose result kept after 作り直す so the customer can switch back to it.
+type PoseVersion = {
+  id: string;
+  poseViews: Record<Pose, ImagePayload>;
+  referenceImageUrls: string[];
+  modelStyle?: ModelStyle;
+};
+const MAX_HISTORY = 3;
+
+// A saved result is only usable if it has an image for every one of today's 5 poses (older drafts
+// were saved with a different pose list).
+function hasAllPoses(views: Partial<Record<Pose, ImagePayload>> | undefined): boolean {
+  return !!views && POSE_SET_POSES.every((pose) => !!views[pose]);
+}
 
 // The 5-pose generation is one long request. If the customer leaves this step (or this component is
 // otherwise unmounted) while it runs, the request itself keeps going -- this module-level handle lets
@@ -68,8 +95,11 @@ export function PoseSetBuilder({
   const { user } = useAuth();
   const credits = useCredits();
   const [builder, setBuilder] = useState<BuilderState>({ phase: "idle" });
-  const [selected, setSelected] = useState<Set<Pose>>(new Set(POSE_OPTIONS));
+  const [selected, setSelected] = useState<Set<Pose>>(new Set<Pose>(POSE_SET_POSES));
   const [poseModels, setPoseModels] = useState<Partial<Record<Pose, PoseModelState>>>({});
+  // デフォルメ (the original cute toy look) / リアル -- chosen before generating or re-generating.
+  const [modelStyle, setModelStyle] = useState<ModelStyle>("deformed");
+  const [history, setHistory] = useState<PoseVersion[]>([]);
   const [purchasingPreview, setPurchasingPreview] = useState(false);
   const pollTimersRef = useRef<Partial<Record<Pose, ReturnType<typeof setTimeout>>>>({});
   // Gates the save effect below so it can't race ahead and clear/overwrite a saved slice with
@@ -82,7 +112,7 @@ export function PoseSetBuilder({
     const result = await job;
     if (pendingPoseGeneration === job) pendingPoseGeneration = null;
     if (!mountedRef.current) return;
-    if (result.phase === "reviewing") setSelected(new Set(POSE_OPTIONS));
+    if (result.phase === "reviewing") setSelected(new Set<Pose>(POSE_SET_POSES));
     setBuilder(result);
   }
 
@@ -128,10 +158,14 @@ export function PoseSetBuilder({
       }
       const saved = await loadDraftSlice<SavedPoseSetDraft>("poseSetDraft");
       if (cancelled) return;
-      if (saved) {
+      const savedUsable =
+        saved && (saved.builder.phase !== "reviewing" || hasAllPoses(saved.builder.poseViews));
+      if (saved && savedUsable) {
         setBuilder(saved.builder);
         setSelected(new Set(saved.selected));
         setPoseModels(saved.poseModels);
+        if (saved.modelStyle) setModelStyle(saved.modelStyle);
+        setHistory((saved.history ?? []).filter((v) => hasAllPoses(v.poseViews)));
         if (saved.builder.phase === "reviewing") {
           for (const [poseKey, state] of Object.entries(saved.poseModels)) {
             if (state?.phase === "polling") {
@@ -164,15 +198,17 @@ export function PoseSetBuilder({
         }
         saveDraftSlice<SavedPoseSetDraft>("poseSetDraft", {
           builder,
-          selected: POSE_OPTIONS.filter((pose) => selected.has(pose)),
+          selected: POSE_SET_POSES.filter((pose) => selected.has(pose)),
           poseModels: savablePoseModels,
+          modelStyle,
+          history,
         });
       } else {
         clearDraftSlice("poseSetDraft");
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [hasRestored, builder, selected, poseModels]);
+  }, [hasRestored, builder, selected, poseModels, modelStyle, history]);
 
   const ready = photos.length > 0 && subject.trim().length > 0;
   const selectedCount = selected.size;
@@ -196,6 +232,16 @@ export function PoseSetBuilder({
     Object.values(pollTimersRef.current).forEach((timer) => timer && clearTimeout(timer));
     pollTimersRef.current = {};
     setPoseModels({});
+    // Keep the result being replaced so the customer can switch back to it.
+    if (builder.phase === "reviewing") {
+      const previous: PoseVersion = {
+        id: `${Date.now()}`,
+        poseViews: builder.poseViews,
+        referenceImageUrls: builder.referenceImageUrls,
+        modelStyle,
+      };
+      setHistory((prev) => [previous, ...prev].slice(0, MAX_HISTORY));
+    }
     setBuilder({ phase: "generating" });
 
     const currentUser = user;
@@ -206,6 +252,7 @@ export function PoseSetBuilder({
         photos.forEach((file) => formData.append("photos", file));
         formData.append("subject", subject);
         formData.append("subjectType", subjectType);
+        formData.append("modelStyle", modelStyle);
         formData.append("furColorNote", petDetails.furColorNote ?? "");
         formData.append("breedNote", petDetails.breedNote ?? "");
         formData.append("accessoryNote", petDetails.accessoryNote ?? "");
@@ -233,7 +280,7 @@ export function PoseSetBuilder({
         // result must still survive so it is there when they come back.
         await saveDraftSlice<SavedPoseSetDraft>("poseSetDraft", {
           builder: reviewing,
-          selected: [...POSE_OPTIONS],
+          selected: [...POSE_SET_POSES],
           poseModels: {},
         }).catch(() => {});
         return reviewing;
@@ -246,6 +293,32 @@ export function PoseSetBuilder({
     })();
     pendingPoseGeneration = job;
     adoptPendingGeneration(job);
+  }
+
+  // Switch back to an earlier result; the one on screen takes its place in the history.
+  function handleRestoreVersion(id: string) {
+    if (anyModeling) return;
+    const target = history.find((v) => v.id === id);
+    if (!target) return;
+    setHistory((prev) => {
+      const rest = prev.filter((v) => v.id !== id);
+      if (builder.phase !== "reviewing") return rest;
+      const current: PoseVersion = {
+        id: `${Date.now()}`,
+        poseViews: builder.poseViews,
+        referenceImageUrls: builder.referenceImageUrls,
+        modelStyle,
+      };
+      return [current, ...rest].slice(0, MAX_HISTORY);
+    });
+    setPoseModels({});
+    setSelected(new Set<Pose>(POSE_SET_POSES));
+    if (target.modelStyle) setModelStyle(target.modelStyle);
+    setBuilder({
+      phase: "reviewing",
+      poseViews: target.poseViews,
+      referenceImageUrls: target.referenceImageUrls,
+    });
   }
 
   function pollPoseStatus(pose: Pose, taskId: string, referenceImageUrls: string[]) {
@@ -292,7 +365,7 @@ export function PoseSetBuilder({
   async function handleModelSelected() {
     if (builder.phase !== "reviewing" || !user || selectedCount === 0) return;
     const { poseViews, referenceImageUrls } = builder;
-    const poses = POSE_OPTIONS.filter((pose) => selected.has(pose));
+    const poses = POSE_SET_POSES.filter((pose) => selected.has(pose));
 
     setPoseModels((prev) => {
       const next = { ...prev };
@@ -359,8 +432,36 @@ export function PoseSetBuilder({
     );
   }
 
+  const styleToggle = (
+    <fieldset className="space-y-1.5">
+      <legend className="text-xs font-medium text-slate-700">仕上がりのスタイル</legend>
+      <div className="grid grid-cols-2 gap-2">
+        {MODEL_STYLE_OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setModelStyle(option)}
+            disabled={anyModeling || builder.phase === "generating"}
+            aria-pressed={modelStyle === option}
+            className={`rounded-lg border py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              modelStyle === option
+                ? "border-slate-800 bg-slate-800 text-white"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {MODEL_STYLE_LABELS[option]}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-slate-500">
+        デフォルメ＝頭が大きいかわいいトイ風／リアル＝写真に近い体つき。変えたあとは「作り直す」を押してください
+      </p>
+    </fieldset>
+  );
+
   return (
     <div className="space-y-4">
+      {builder.phase !== "generating" && styleToggle}
       {builder.phase !== "reviewing" && (
         <button
           type="button"
@@ -401,13 +502,27 @@ export function PoseSetBuilder({
         </div>
       )}
 
+      {builder.phase !== "generating" && (
+        <PreviousVersions
+          versions={history.map((v, i) => ({
+            id: v.id,
+            thumbs: POSE_SET_POSES.slice(0, 4).map(
+              (pose) => `data:${v.poseViews[pose].mimeType};base64,${v.poseViews[pose].data}`
+            ),
+            label: `${i + 1}つ前（${MODEL_STYLE_LABELS[v.modelStyle ?? "deformed"]}）`,
+          }))}
+          onRestore={handleRestoreVersion}
+          disabled={anyModeling}
+        />
+      )}
+
       {builder.phase === "reviewing" && (
         <div className="space-y-3">
           <p className="text-xs text-slate-500">
             作りたいポーズだけチェックを入れてください（外すとそのポーズは作りません）
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {POSE_OPTIONS.map((pose) => {
+            {POSE_SET_POSES.map((pose) => {
               const image = builder.poseViews[pose];
               const state = poseModels[pose];
               return (

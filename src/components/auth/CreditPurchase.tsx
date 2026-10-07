@@ -16,6 +16,8 @@ export function CreditPurchase() {
   useEffect(() => {
     const result = new URLSearchParams(window.location.search).get("credit");
     if (result === "success" || result === "cancel") {
+      // Reads the browser URL (an external system) once on mount, then strips the param.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReturned(result);
       const url = new URL(window.location.href);
       url.searchParams.delete("credit");

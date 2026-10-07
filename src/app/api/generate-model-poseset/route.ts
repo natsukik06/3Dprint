@@ -8,7 +8,12 @@ import { uploadReferencePhotos } from "@/lib/storageServer";
 import { readPetDetails } from "@/lib/petDetails";
 import { guardTripoCapacity } from "@/lib/tripoCapacity";
 import { verifyRequestUser } from "@/lib/verifyRequestUser";
-import { SUBJECT_TYPE_OPTIONS, type SubjectType } from "@/types/order";
+import {
+  MODEL_STYLE_OPTIONS,
+  SUBJECT_TYPE_OPTIONS,
+  type ModelStyle,
+  type SubjectType,
+} from "@/types/order";
 
 function isImageFile(value: FormDataEntryValue | null): value is File {
   return value instanceof File && value.type.startsWith("image/");
@@ -45,6 +50,11 @@ export async function POST(request: NextRequest) {
     ? (subjectTypeRaw as SubjectType)
     : "pet";
 
+  const modelStyleRaw = formData.get("modelStyle");
+  const modelStyle: ModelStyle = MODEL_STYLE_OPTIONS.includes(modelStyleRaw as ModelStyle)
+    ? (modelStyleRaw as ModelStyle)
+    : "deformed";
+
   if (photoFiles.length === 0) {
     return NextResponse.json(
       { error: "写真を1枚以上アップロードしてください" },
@@ -79,7 +89,7 @@ export async function POST(request: NextRequest) {
     // view, so that check doesn't carry over. Revisit if this product ever gets its own
     // single-view-appropriate risk check.
     const [poseViews, referenceImageUrls] = await Promise.all([
-      generatePoseSetViews(referencePhotos, subject, petDetails, subjectType),
+      generatePoseSetViews(referencePhotos, subject, petDetails, subjectType, modelStyle),
       uploadReferencePhotos(photoFiles),
     ]);
 

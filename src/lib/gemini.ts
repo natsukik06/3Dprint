@@ -558,12 +558,137 @@ function figurePosePrompt(
     petDetailsPhrase(petDetails, subjectType)
   );
 }
+// Layout guide for the 5-pose grid: a white 3x2 canvas with a soft gray square centered in each of the
+// first five cells. Sent as the LAST image so the model puts one whole figurine inside each square (the
+// sixth cell stays empty). Without it the model ignored the "3 columns x 2 rows" wording and drew 4
+// images or an uneven layout; with it all five land inside their own cell with a wide white margin, so
+// the grid can be cut into equal cells safely (see splitPoseGrid).
+const POSE_GRID_COLS = 3;
+const POSE_GRID_ROWS = 2;
+const POSE_GRID_POSITION_NAMES = ["top-left", "top-middle", "top-right", "bottom-left", "bottom-middle"];
+
+async function makePoseGridGuide(): Promise<ImagePayload> {
+  const W = 1536;
+  const H = 1024;
+  const cw = W / POSE_GRID_COLS;
+  const ch = H / POSE_GRID_ROWS;
+  const side = Math.round(Math.min(cw, ch) * 0.58);
+  const boxes = POSE_SET_POSES.map((_, i) => {
+    const cx = (i % POSE_GRID_COLS) * cw + cw / 2;
+    const cy = Math.floor(i / POSE_GRID_COLS) * ch + ch / 2;
+    return `<rect x="${cx - side / 2}" y="${cy - side / 2}" width="${side}" height="${side}" rx="40" fill="#cfcfcf"/>`;
+  });
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
+    `<rect width="100%" height="100%" fill="#fff"/>${boxes.join("")}</svg>`;
+  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  return { data: png.toString("base64"), mimeType: "image/png" };
+}
+
+function figurePoseGridPrompt(
+  subject: string,
+  petDetails: PetDetails | undefined,
+  subjectType: SubjectType,
+  style: ModelStyle,
+  photoCount: number
+): string {
+  const printSafetyPhrase =
+    subjectType === "pet"
+      ? "render fur/feathers as defined locks or tufts of a real, printable thickness rather " +
+        "than fine wispy individual strands, keep every part of the body thick and continuous, " +
+        "and avoid any thin protrusion that tapers down to a sharp point."
+      : "keep every part of the object thick and continuous, and avoid any thin handle, rim, " +
+        "blade, or protrusion that tapers down to a sharp or fragile edge.";
+  const same = subjectType === "pet" ? "the very same animal" : "the very same object";
+  const positions = POSE_SET_POSES.map(
+    (pose, i) =>
+      `Position ${i + 1} (${POSE_GRID_POSITION_NAMES[i]}): ${posePhrase(pose, subjectType)}.`
+  ).join(" ");
+  return (
+    `Create ONE wide image (${POSE_GRID_COLS} columns x ${POSE_GRID_ROWS} rows) of FIVE separate photos of ` +
+    `one small figurine of ${subjectPhrase(subject, subjectType)}, each on a plain white background. ` +
+    `All five show ${same} (identical coat length and texture, colors, markings and face) — only the pose ` +
+    "changes. " +
+    positions +
+    " The sixth cell (bottom-right) stays completely empty white. " +
+    "The LAST attached image is only a LAYOUT GUIDE: each gray square marks where one whole figurine must " +
+    "be placed — put each figurine centered inside its gray square position, fully inside it with its whole " +
+    "body visible (head, ears, tail, paws), about the size of the square or a little smaller, with a wide " +
+    "white margin around it. Do NOT draw the gray squares, do NOT copy their gray color, and draw no " +
+    "lines, borders or dividers. Every figurine is photographed from a front-facing 3/4 camera angle. " +
+    stylePhrase(style) +
+    " Render the figurines' actual colors, markings, and " +
+    `${subjectType === "pet" ? "coat pattern" : "surface pattern/texture"} as closely as possible to the ` +
+    "reference photos — do not simplify them to a plain or single-color material. This will be 3D " +
+    `printed at only a few centimeters tall, so keep the sculpted form itself sturdy: ${printSafetyPhrase} ` +
+    "Soft even studio lighting with no harsh shadows or reflections, full body of every figurine visible, " +
+    "no base, plate or pedestal, no text or watermark anywhere." +
+    OMIT_SURROUNDINGS_PHRASE +
+    " Use the attached reference photos (all except the last, the layout guide) to match the subject's " +
+    "shape, features, coloring, and identity exactly." +
+    referenceRolesPhrase(photoCount, subjectType) +
+    petDetailsPhrase(petDetails, subjectType)
+  );
+}
+
+// Cuts the 3x2 grid into its five pose cells, trims the white around each figurine and re-centers it in a
+// white square with an even margin. Returns null for a cell that is blank (the model left it empty), so
+// the caller can fill just that pose another way.
+async function splitPoseGrid(grid: ImagePayload): Promise<(ImagePayload | null)[]> {
+  const buffer = Buffer.from(grid.data, "base64");
+  const { width, height } = await sharp(buffer).metadata();
+  if (!width || !height) throw new Error("pose grid image is missing dimensions");
+  const cw = Math.floor(width / POSE_GRID_COLS);
+  const ch = Math.floor(height / POSE_GRID_ROWS);
+  return Promise.all(
+    POSE_SET_POSES.map(async (_, i) => {
+      try {
+        // Inset a little from the cell edge: the model sometimes draws thin divider lines on the cell
+        // borders despite being told not to, and they must not end up in the figurine image.
+        const insetX = Math.round(cw * 0.03);
+        const insetY = Math.round(ch * 0.03);
+        const left = (i % POSE_GRID_COLS) * cw + insetX;
+        const top = Math.floor(i / POSE_GRID_COLS) * ch + insetY;
+        const cell = await sharp(buffer)
+          .extract({ left, top, width: cw - insetX * 2, height: ch - insetY * 2 })
+          .png()
+          .toBuffer();
+        // The studio background is usually a very light gray, not pure white; pad with that same color
+        // so the re-centered picture has one even background.
+        const corner = await sharp(cell).extract({ left: 0, top: 0, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+        const background = { r: corner[0], g: corner[1], b: corner[2] };
+        const { data, info } = await sharp(cell).resize(64, 64, { fit: "fill" }).greyscale().raw().toBuffer({ resolveWithObject: true });
+        let dark = 0;
+        for (let p = 0; p < data.length; p++) if (data[p] < 215) dark++;
+        if (dark / (info.width * info.height) < 0.04) return null; // blank cell
+        const trimmed = await sharp(cell).trim({ threshold: 28 }).toBuffer({ resolveWithObject: true });
+        const side = Math.max(trimmed.info.width, trimmed.info.height);
+        const pad = Math.round(side * 0.14);
+        const out = await sharp(trimmed.data)
+          .extend({
+            top: Math.floor((side - trimmed.info.height) / 2) + pad,
+            bottom: Math.ceil((side - trimmed.info.height) / 2) + pad,
+            left: Math.floor((side - trimmed.info.width) / 2) + pad,
+            right: Math.ceil((side - trimmed.info.width) / 2) + pad,
+            background,
+          })
+          .resize(1024, 1024, { fit: "inside" })
+          .jpeg({ quality: 90 })
+          .toBuffer();
+        return { data: out.toString("base64"), mimeType: "image/jpeg" };
+      } catch {
+        return null;
+      }
+    })
+  );
+}
+
 /**
- * Generates all 5 POSE_OPTIONS of the same subject as a single Gemini call (one 2x3 grid image,
- * split locally into 5 single-view images) -- mirrors generateWhiteClayViews's one-call-per-grid
- * approach, just posed-based instead of angle-based. Each returned image is ONE view, meant for
- * Tripo's single-image reconstruction mode (createMultiviewTask with only `front` set), not the
- * full 4-angle turnaround used for the regular single-figure product.
+ * Generates the 5 POSE_SET_POSES of the same subject. ONE Gemini call draws all five on a 3x2 sheet
+ * (guided by a layout-guide image, so they sit inside equal cells), which is then cut apart and
+ * re-centered -- one drawing means it is the same animal in every pose, unlike five independent calls
+ * (which drifted from the real pet). Any pose that comes back blank is generated on its own as a
+ * fallback. Each returned image is ONE view, meant for Tripo's single-image reconstruction mode.
  */
 export async function generatePoseSetViews(
   referencePhotos: ImagePayload[],
@@ -574,18 +699,32 @@ export async function generatePoseSetViews(
 ): Promise<Record<Pose, ImagePayload>> {
   const client = getClient();
   const poses = [...POSE_SET_POSES] as Pose[];
-  const images = await Promise.all(
-    poses.map((pose) =>
-      generateImage(
-        client,
-        referencePhotos,
-        figurePosePrompt(pose, subject, petDetails, subjectType, style, referencePhotos.length)
-      ).then(toJpeg)
-    )
-  );
-  return Object.fromEntries(poses.map((pose, i) => [pose, images[i]])) as Record<Pose, ImagePayload>;
+  const results: (ImagePayload | null)[] = poses.map(() => null);
+  try {
+    const guide = await makePoseGridGuide();
+    const gridImage = await generateImage(
+      client,
+      [...referencePhotos, guide],
+      figurePoseGridPrompt(subject, petDetails, subjectType, style, referencePhotos.length)
+    );
+    results.splice(0, results.length, ...(await splitPoseGrid(gridImage)));
+  } catch (error) {
+    console.error("pose grid generation failed, falling back to one image per pose", error);
+  }
+  const missing = poses.map((_, i) => i).filter((i) => !results[i]);
+  if (missing.length > 0) {
+    await Promise.all(
+      missing.map(async (i) => {
+        results[i] = await generateImage(
+          client,
+          referencePhotos,
+          figurePosePrompt(poses[i], subject, petDetails, subjectType, style, referencePhotos.length)
+        ).then(toJpeg);
+      })
+    );
+  }
+  return Object.fromEntries(poses.map((pose, i) => [pose, results[i]!])) as Record<Pose, ImagePayload>;
 }
-
 const SCENE_LAYOUT_PHRASES: Record<SceneLayout, string> = {
   sideBySide:
     "sitting side by side on the same ground, their shoulders and sides pressed together so they " +

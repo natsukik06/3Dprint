@@ -3,6 +3,7 @@
 import { Check, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { BusyBanner } from "@/components/order/BusyBanner";
 import type { ImagePayload } from "@/lib/gemini";
 import { POSE_LABELS } from "@/lib/pricing";
 import { POSE_SET_POSES, type ModelStyle, type PetDetails, type Pose } from "@/types/order";
@@ -68,6 +69,11 @@ export function PoseTryOut({
 
   return (
     <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+      <BusyBanner
+        active={state.phase === "generating"}
+        title="ボタンを受け付けました。5つのポーズを作っています"
+        detail="1分ほどかかります。このままお待ちください"
+      />
       <p className="text-xs font-medium text-slate-700">どのポーズにするか迷ったら</p>
       <p className="text-[11px] leading-relaxed text-slate-500">
         5つの人気ポーズを、まとめて見てから選べます（イメージ作り1回分・1日の無料回数を使います）。気に入ったものをタップすると、そのポーズで作れます。
@@ -79,7 +85,7 @@ export function PoseTryOut({
         className="w-full rounded-lg border border-slate-300 bg-white py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {state.phase === "generating"
-          ? "5つのポーズを作っています..."
+          ? "✓ 受け付けました。5つのポーズを作っています…"
           : state.phase === "done"
             ? "もう一度、5つのポーズを作る"
             : "いろんなポーズを試す"}

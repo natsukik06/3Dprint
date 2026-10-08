@@ -19,6 +19,7 @@ import {
   type Pose,
   type SubjectType,
 } from "@/types/order";
+import { BusyBanner } from "@/components/order/BusyBanner";
 import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
 import { SavedImageSets, type LoadedImageSet } from "@/components/order/SavedImageSets";
@@ -486,6 +487,15 @@ export function PoseSetBuilder({
 
   return (
     <div className="space-y-4">
+      <BusyBanner
+        active={builder.phase === "generating" || anyModeling}
+        title={
+          builder.phase === "generating"
+            ? "ボタンを受け付けました。5つのポーズを作っています"
+            : "3Dモデルを作っています"
+        }
+        detail="1〜2分かかります。このままお待ちください（画像は保存されます）"
+      />
       <GenerationAllowance creditsNeeded={Math.max(1, creditsNeeded)} />
       <SavedImageSets
         kind="poseset"

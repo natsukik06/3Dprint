@@ -6,6 +6,7 @@ import { useFormContext } from "react-hook-form";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCredits } from "@/components/auth/useCredits";
 import { PhotoUploader } from "@/components/order/PhotoUploader";
+import { BusyBanner } from "@/components/order/BusyBanner";
 import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PreviousVersions } from "@/components/order/PreviousVersions";
 import { SavedImageSets, type LoadedImageSet } from "@/components/order/SavedImageSets";
@@ -665,6 +666,19 @@ export function DuoBuilder({
           </button>
         ))}
 
+      <BusyBanner
+        active={
+          modelState.phase === "starting" ||
+          modelState.phase === "polling" ||
+          (modelState.phase === "reviewingViews" && modelState.confirming)
+        }
+        title={
+          modelState.phase === "starting"
+            ? "ボタンを受け付けました。2匹のイメージを作っています"
+            : "3Dモデルを作っています"
+        }
+        detail="1〜2分かかります。このままお待ちください（画像は保存されます）"
+      />
       <GenerationAllowance />
       <SavedImageSets
         kind="duo"

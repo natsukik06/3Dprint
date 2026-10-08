@@ -32,6 +32,7 @@ import { db } from "@/lib/firebase";
 import { uploadCustomModel } from "@/lib/orders";
 import { CHARO_PREMADE_MODEL, PREMADE_MODELS } from "@/lib/premadeModels";
 import { MAX_CONSECUTIVE_POLL_FAILURES } from "@/lib/generationPolling";
+import { BusyBanner } from "@/components/order/BusyBanner";
 import { GenerationAllowance } from "@/components/order/GenerationAllowance";
 import { PoseTryOut } from "@/components/order/PoseTryOut";
 import { optimizedImageUrl } from "@/lib/imageUrl";
@@ -1027,9 +1028,13 @@ export function PreviewPanel({
             }
             className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {modelState.phase === "success" || modelState.phase === "error"
-              ? "ステップ1をやり直す：4方向のイメージを作り直す"
-              : "ステップ1：写真から4方向のイメージを作る（1日6回まで無料）"}
+            {modelState.phase === "starting"
+              ? "✓ 受け付けました。4方向のイメージを作っています…"
+              : modelState.phase === "polling"
+                ? "✓ 3Dモデルを作っています…"
+                : modelState.phase === "success" || modelState.phase === "error"
+                  ? "ステップ1をやり直す：4方向のイメージを作り直す"
+                  : "ステップ1：写真から4方向のイメージを作る（1日6回まで無料）"}
           </button>
         ) : (
           <button
@@ -1041,6 +1046,21 @@ export function PreviewPanel({
           </button>
         ))}
 
+      {mode === "ai" && (
+        <BusyBanner
+          active={
+            modelState.phase === "starting" ||
+            modelState.phase === "polling" ||
+            (modelState.phase === "reviewingViews" && modelState.confirming)
+          }
+          title={
+            modelState.phase === "starting"
+              ? "ボタンを受け付けました。4方向のイメージを作っています"
+              : "3Dモデルを作っています"
+          }
+          detail="1〜2分かかります。このままお待ちください（画面を閉じても、画像は保存されます）"
+        />
+      )}
       {mode === "ai" && <GenerationAllowance />}
       {mode === "ai" && subjectType === "pet" && modelState.phase !== "starting" && modelState.phase !== "polling" && (
         <PoseTryOut
@@ -1144,7 +1164,9 @@ export function PreviewPanel({
               }
               className="flex-1 rounded-lg bg-slate-800 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {modelState.confirming ? "作成中..." : "ステップ2：この形でOK → 3Dモデルを作る（1クレジット）"}
+              {modelState.confirming
+                ? "✓ 受け付けました。3Dモデルの作成を始めています…"
+                : "ステップ2：この形でOK → 3Dモデルを作る（1クレジット）"}
             </button>
           </div>
         </div>

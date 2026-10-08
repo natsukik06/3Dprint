@@ -67,6 +67,8 @@ export async function loadDraftSlice<T>(key: string): Promise<T | undefined> {
 
 export async function clearDraftSlice(key: string): Promise<void> {
   if (!isSupported()) return;
+  // The small "has content" flag lives next to the order draft (see resumeDraft.ts); drop it with it.
+  if (key === "orderDraft") await clearDraftSlice("orderDraftHasContent");
   try {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {

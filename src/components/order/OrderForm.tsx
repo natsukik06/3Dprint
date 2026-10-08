@@ -20,10 +20,16 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { LAB_FEATURES_PUBLIC, canUseLabFeatures } from "@/lib/labFeatures";
 import { ConsentSection } from "@/components/order/ConsentSection";
 import { CustomerInfoForm } from "@/components/order/CustomerInfoForm";
-import { DuoBuilder } from "@/components/order/DuoBuilder";
+import dynamic from "next/dynamic";
+import { ORDER_DRAFT_FLAG_KEY, orderDraftHasContent } from "@/lib/resumeDraft";
 import { EstimateSummary } from "@/components/order/EstimateSummary";
 import { PhotoUploader } from "@/components/order/PhotoUploader";
-import { PoseSetBuilder } from "@/components/order/PoseSetBuilder";
+// The 2-pet and 5-pose builders are big and, for now, only used by the shop owner (準備中 for customers),
+// so they are loaded only when actually opened instead of being part of every /order visit.
+const DuoBuilder = dynamic(() => import("@/components/order/DuoBuilder").then((m) => m.DuoBuilder));
+const PoseSetBuilder = dynamic(() =>
+  import("@/components/order/PoseSetBuilder").then((m) => m.PoseSetBuilder)
+);
 import { PreviewPanel } from "@/components/order/PreviewPanel";
 import { SpecOptions } from "@/components/order/SpecOptions";
 import { SubjectPoseFields } from "@/components/order/SubjectPoseFields";
@@ -535,7 +541,7 @@ export function OrderForm() {
     function scheduleSave() {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        saveDraftSlice<SavedOrderDraft>("orderDraft", {
+        const draft: SavedOrderDraft = {
           formValues: methods.getValues(),
           currentStep,
           modelSource,
@@ -546,8 +552,11 @@ export function OrderForm() {
           generatedReferenceImageUrls,
           isCustomModel,
           cartOpen,
-        });
-      }, 500);
+        };
+        saveDraftSlice<SavedOrderDraft>("orderDraft", draft);
+        // Tiny flag so the header's red "続きから" dot never has to read the whole draft (photos and all).
+        saveDraftSlice<boolean>(ORDER_DRAFT_FLAG_KEY, orderDraftHasContent(draft));
+      }, 1200);
     }
     const subscription = methods.watch(scheduleSave);
     scheduleSave();

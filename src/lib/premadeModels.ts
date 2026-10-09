@@ -1,4 +1,5 @@
 import type { GeneratedModel } from "@/components/order/PreviewPanel";
+import { BREED_PREMADE_MODELS } from "@/lib/breedPremadeModels";
 
 // The brand mascot, generated once from public/logo-full.png via the same Gemini+Tripo pipeline
 // customer photos go through, then hosted permanently in Storage -- see the "前に作ったモデルから
@@ -46,7 +47,7 @@ export const CHARO_REAL_PREMADE_MODEL: GeneratedModel = {
   pose: "sitting",
 };
 
-export const PREMADE_MODELS: GeneratedModel[] = [CHARO_PREMADE_MODEL, CHARO_REAL_PREMADE_MODEL];
+export const PREMADE_MODELS: GeneratedModel[] = [CHARO_PREMADE_MODEL, CHARO_REAL_PREMADE_MODEL, ...BREED_PREMADE_MODELS];
 
 // True when `url` is one of the shop's ready-made figures (as opposed to a model made from the customer's
 // own photos). Compared without the query string, since the Storage links carry an access token.

@@ -1,3 +1,4 @@
+import { isPremadeModelUrl } from "@/lib/premadeModels";
 import {
   CREDIT_PRICE_YEN,
   GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN,
@@ -40,6 +41,10 @@ export const HARDWARE_ADDON_PRICE_YEN = 50;
 // Per physical piece -- covers picking/positioning a 3D-text font in the slicer and the extra
 // slice/print verification per order, on top of the hardware addon's own labor.
 export const ENGRAVING_PRICE_YEN = 300;
+// Added per piece for オーダーメイド (a figure made from the customer's own photos or own 3D model), on top of the
+// size price above, which is the ready-made (既製品) price. Covers the per-order work: generation, checks and
+// the individual file preparation.
+export const CUSTOM_ORDER_SURCHARGE_YEN = 200;
 export const SHIPPING_FEE_YEN = 330;
 export const FREE_SHIPPING_SUBTOTAL_YEN = 2200;
 // Friend-referral reward: both the referrer and the new customer they referred get this much off
@@ -112,6 +117,9 @@ export type EstimateInput = {
     colorQuantities: ColorQuantities;
     wantsHardware: boolean;
     wantsEngraving: boolean;
+    // Used to tell a ready-made figure from an オーダーメイド one (see CUSTOM_ORDER_SURCHARGE_YEN). A missing
+    // or unknown URL counts as オーダーメイド, so a price can never come out too low.
+    modelUrl?: string;
   }[];
   generationCreditsUsed?: number;
   referralDiscountActive?: boolean;
@@ -176,6 +184,10 @@ export function calculateEstimate({
     .filter((item) => item.wantsHardware)
     .reduce((sum, item) => sum + getTotalQuantity(item.colorQuantities), 0);
   const hardwarePriceYen = hardwareQuantity * HARDWARE_ADDON_PRICE_YEN;
+  const customQuantity = items
+    .filter((item) => !isPremadeModelUrl(item.modelUrl))
+    .reduce((sum, item) => sum + getTotalQuantity(item.colorQuantities), 0);
+  const customSurchargeYen = customQuantity * CUSTOM_ORDER_SURCHARGE_YEN;
   const engravingQuantity = items
     .filter((item) => item.wantsEngraving)
     .reduce((sum, item) => sum + getTotalQuantity(item.colorQuantities), 0);
@@ -196,7 +208,12 @@ export function calculateEstimate({
     0
   );
   const subtotalYen =
-    mPriceYen + solidPriceYen + hardwarePriceYen + engravingPriceYen + colorSurchargeYen;
+    mPriceYen +
+    solidPriceYen +
+    hardwarePriceYen +
+    engravingPriceYen +
+    colorSurchargeYen +
+    customSurchargeYen;
   const shippingYen = subtotalYen >= FREE_SHIPPING_SUBTOTAL_YEN ? 0 : SHIPPING_FEE_YEN;
   // 3Dモデル生成代（生成クレジット）の割引は、商品小計が GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN
   // （¥1,000）以上のときだけ適用する。サイズは問わない（小さいサイズだけでも¥1,000以上なら対象）。

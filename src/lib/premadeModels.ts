@@ -47,3 +47,12 @@ export const CHARO_REAL_PREMADE_MODEL: GeneratedModel = {
 };
 
 export const PREMADE_MODELS: GeneratedModel[] = [CHARO_PREMADE_MODEL, CHARO_REAL_PREMADE_MODEL];
+
+// True when `url` is one of the shop's ready-made figures (as opposed to a model made from the customer's
+// own photos). Compared without the query string, since the Storage links carry an access token.
+const stripQuery = (url: string) => url.split("?")[0];
+export function isPremadeModelUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const target = stripQuery(url);
+  return PREMADE_MODELS.some((m) => stripQuery(m.modelUrl) === target);
+}

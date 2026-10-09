@@ -9,6 +9,7 @@ import {
 import {
   ENGRAVING_PRICE_YEN,
   FREE_SHIPPING_SUBTOTAL_YEN,
+  CUSTOM_ORDER_SURCHARGE_YEN,
   HARDWARE_ADDON_PRICE_YEN,
   SHIPPING_FEE_YEN,
   SOLID_PRICE_YEN,
@@ -34,7 +35,7 @@ const ROWS: Row[] = [
   { label: "メールアドレス", value: "natsuki.ko006@gmail.com" },
   {
     label: "販売価格",
-    value: `20mmサイズ 1個${SOLID_PRICE_YEN.solid20.toLocaleString()}円、30mmサイズ 1個${SOLID_PRICE_YEN.solid30.toLocaleString()}円、35mmサイズ 1個${SOLID_PRICE_YEN.solid35.toLocaleString()}円、40mmサイズ 1個${SOLID_PRICE_YEN.solid40.toLocaleString()}円（いずれも税込）。表示価格はすべて税込です。`,
+    value: `20mmサイズ 1個${SOLID_PRICE_YEN.solid20.toLocaleString()}円、30mmサイズ 1個${SOLID_PRICE_YEN.solid30.toLocaleString()}円、35mmサイズ 1個${SOLID_PRICE_YEN.solid35.toLocaleString()}円、40mmサイズ 1個${SOLID_PRICE_YEN.solid40.toLocaleString()}円（いずれも税込）。表示価格はすべて税込です。上記は既製品の価格で、お客様の写真などから作るオーダーメイドは、1個につき${CUSTOM_ORDER_SURCHARGE_YEN.toLocaleString()}円（税込）が加算されます。`,
   },
   {
     label: "商品代金以外の必要料金",

@@ -7,7 +7,9 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { colorPriceBySizeMap } from "@/lib/colorSettings";
 import { GENERATION_FEE_REFUND_MIN_SUBTOTAL_YEN } from "@/lib/creditPacks";
 import { db } from "@/lib/firebase";
+import { isPremadeModelUrl } from "@/lib/premadeModels";
 import {
+  CUSTOM_ORDER_SURCHARGE_YEN,
   ENGRAVING_PRICE_YEN,
   FIGURE_PRICE_YEN,
   FREE_SHIPPING_SUBTOTAL_YEN,
@@ -82,7 +84,8 @@ export function EstimateSummary() {
     const unitPrice = isSolid
       ? SOLID_PRICE_YEN[item.sizeOption as SolidSizeOption]
       : FIGURE_PRICE_YEN;
-    return sum + unitPrice * quantity + hardwarePrice + engravingPrice + colorSurcharge;
+    const customSurcharge = isPremadeModelUrl(item.modelUrl) ? 0 : CUSTOM_ORDER_SURCHARGE_YEN * quantity;
+    return sum + unitPrice * quantity + hardwarePrice + engravingPrice + colorSurcharge + customSurcharge;
   }, 0);
   const hasSetDiscount = quantity > 1 && listPriceYen > subtotalYen;
   const yenUntilFreeShipping = Math.max(

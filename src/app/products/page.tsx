@@ -11,6 +11,7 @@ import { displayFont as display, zenGothic, zenMincho } from "@/lib/fonts";
 import { CHARO_PREMADE_MODEL } from "@/lib/premadeModels";
 import {
   FREE_SHIPPING_SUBTOTAL_YEN,
+  CUSTOM_ORDER_SURCHARGE_YEN,
   HARDWARE_ADDON_PRICE_YEN,
   SHIPPING_FEE_YEN,
   SOLID_PRICE_YEN,
@@ -98,6 +99,9 @@ export default function ProductsPage() {
               </div>
             ))}
           </div>
+          <p className="mt-3 text-xs leading-relaxed text-[#6b5c40] dark:text-[#cdbb8a]">
+            上の金額は<b>既製品（選んで買う商品）</b>の価格です。<b>写真から作るオーダーメイド</b>は、1個につき＋¥{CUSTOM_ORDER_SURCHARGE_YEN.toLocaleString()}です（例：20mmなら¥{(SOLID_PRICE_YEN.solid20 + CUSTOM_ORDER_SURCHARGE_YEN).toLocaleString()}）。
+          </p>
           <p className="mt-3 text-xs leading-relaxed text-[#8a7c5e] dark:text-[#6d7c79]">
             送料は¥{SHIPPING_FEE_YEN.toLocaleString()}(商品代金合計¥
             {FREE_SHIPPING_SUBTOTAL_YEN.toLocaleString()}

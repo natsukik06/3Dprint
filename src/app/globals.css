@@ -25,6 +25,46 @@
   }
 }
 
+/* Press feedback for every button, so a tap always visibly "lands" (no layout shift: `scale` and
+   `filter` only). Disabled buttons look disabled and show it on hover. */
+button,
+[role="button"],
+summary,
+a[class*="rounded-full"],
+label[for] {
+  -webkit-tap-highlight-color: rgba(15, 118, 110, 0.18);
+  touch-action: manipulation;
+  transition: scale 90ms ease-out, filter 90ms ease-out, opacity 150ms ease-out;
+}
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active,
+a[class*="rounded-full"]:active {
+  scale: 0.96;
+  filter: brightness(0.92);
+}
+button:not(:disabled):hover,
+a[class*="rounded-full"]:hover {
+  cursor: pointer;
+}
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  [role="button"]:active,
+  a[class*="rounded-full"]:active {
+    scale: none;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

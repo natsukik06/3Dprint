@@ -1,5 +1,5 @@
 import type { GeneratedModel } from "@/components/order/PreviewPanel";
-import { BREED_PREMADE_MODELS } from "@/lib/breedPremadeModels";
+import { BREED_PREMADE_MODELS, PHOTO_BASED_BREED_MODELS, REPLACED_BREED_TASK_IDS } from "@/lib/breedPremadeModels";
 
 // The brand mascot, generated once from public/logo-full.png via the same Gemini+Tripo pipeline
 // customer photos go through, then hosted permanently in Storage -- see the "前に作ったモデルから
@@ -47,13 +47,20 @@ export const CHARO_REAL_PREMADE_MODEL: GeneratedModel = {
   pose: "sitting",
 };
 
-export const PREMADE_MODELS: GeneratedModel[] = [CHARO_PREMADE_MODEL, CHARO_REAL_PREMADE_MODEL, ...BREED_PREMADE_MODELS];
+// What the picker and the lineup show: the mascot pair, then the redone breeds (リアル/かわいい), then the rest.
+export const PREMADE_MODELS: GeneratedModel[] = [
+  CHARO_PREMADE_MODEL,
+  CHARO_REAL_PREMADE_MODEL,
+  ...PHOTO_BASED_BREED_MODELS,
+  ...BREED_PREMADE_MODELS.filter((m) => !REPLACED_BREED_TASK_IDS.has(m.taskId)),
+];
 
 // True when `url` is one of the shop's ready-made figures (as opposed to a model made from the customer's
-// own photos). Compared without the query string, since the Storage links carry an access token.
+// own photos). Compared without the query string, since the Storage links carry an access token. The
+// replaced first versions still count, so a cart that already holds one is not priced as made-to-order.
 const stripQuery = (url: string) => url.split("?")[0];
 export function isPremadeModelUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   const target = stripQuery(url);
-  return PREMADE_MODELS.some((m) => stripQuery(m.modelUrl) === target);
+  return [...PREMADE_MODELS, ...BREED_PREMADE_MODELS].some((m) => stripQuery(m.modelUrl) === target);
 }

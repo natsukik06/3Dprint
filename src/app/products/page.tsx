@@ -8,7 +8,7 @@ import { optimizedImageUrl } from "@/lib/imageUrl";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { displayFont as display, zenGothic, zenMincho } from "@/lib/fonts";
-import { CHARO_PREMADE_MODEL } from "@/lib/premadeModels";
+import { CHARO_PREMADE_MODEL, PREMADE_MODELS } from "@/lib/premadeModels";
 import {
   FREE_SHIPPING_SUBTOTAL_YEN,
   CUSTOM_ORDER_SURCHARGE_YEN,
@@ -201,6 +201,42 @@ export default function ProductsPage() {
                   <p className="text-xs text-[#9a5b00] dark:text-[#f0c36b]">準備中・まだ注文できません</p>
                 </div>
               </div>
+            ))}
+          </div>
+        </section>
+
+        {/* READY-MADE BREEDS */}
+        <section id="breeds" className="scroll-mt-6 pb-12">
+          <div className="mb-1 flex items-baseline justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-[0.15em] text-[#8a5a34] dark:text-[#7fd8cb]">
+              Breeds
+            </h2>
+            <span className="text-xs text-[#8a7c5e] dark:text-[#6d7c79]">生成不要・選ぶだけ</span>
+          </div>
+          <p className="mb-3 text-xs leading-relaxed text-[#6b5c40] dark:text-[#cdbb8a]">
+            人気の犬種を、あらかじめ形にしました。写真のアップロードなしで、すぐ注文できます（リアルとかわいいの2タイプ）。画像は3Dモデルのイメージで、実物とは細部が異なる場合があります。
+          </p>
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:gap-5">
+            {PREMADE_MODELS.filter((m) => m.taskId.startsWith("premade-breed-")).map((m) => (
+              <Link
+                key={m.taskId}
+                href="/order"
+                className="overflow-hidden rounded-xl border border-[#d9cbb0] bg-white transition-opacity hover:opacity-90 dark:border-[#232726] dark:bg-[#121415]"
+              >
+                <div className="relative aspect-square bg-[#f1eee6] dark:bg-[#1a1d1c]">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- Firebase Storage URL */}
+                  <img
+                    src={m.renderedImageUrl ? optimizedImageUrl(m.renderedImageUrl, 384) : undefined}
+                    alt={m.subject}
+                    loading="lazy"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="p-2">
+                  <p className="text-[11px] leading-tight">{m.subject}</p>
+                  <p className="text-xs font-bold tabular-nums">¥{SOLID_PRICE_YEN.solid20.toLocaleString()}〜</p>
+                </div>
+              </Link>
             ))}
           </div>
         </section>

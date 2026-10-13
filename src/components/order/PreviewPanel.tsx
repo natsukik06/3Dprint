@@ -1221,16 +1221,18 @@ export function PreviewPanel({
       )}
 
       {(mode === "ai" || mode === "reuse") && gallery.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className={mode === "reuse" ? "grid grid-cols-3 gap-2 sm:grid-cols-4" : "flex gap-2 overflow-x-auto pb-1"}>
           {gallery.map((entry) => (
             <button
               key={entry.taskId}
               type="button"
               onClick={() => handleSelectGalleryItem(entry)}
               aria-label={entry.subject || "生成済みモデル"}
-              className={`relative flex w-24 shrink-0 flex-col overflow-hidden rounded-lg border-2 bg-white ${
+              className={`relative flex flex-col overflow-hidden rounded-xl border-2 bg-white ${
+                mode === "reuse" ? "w-full" : "w-24 shrink-0"
+              } ${
                 entry.taskId === selectedTaskId
-                  ? "border-slate-800"
+                  ? "border-slate-800 shadow-md"
                   : "border-slate-200 hover:border-slate-400"
               }`}
             >
@@ -1238,7 +1240,7 @@ export function PreviewPanel({
                 {entry.renderedImageUrl && !failedThumbnails.has(entry.taskId) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={optimizedImageUrl(entry.renderedImageUrl, 128)}
+                    src={optimizedImageUrl(entry.renderedImageUrl, mode === "reuse" ? 256 : 128)}
                     alt={entry.subject || "生成済みモデル"}
                     className="h-full w-full object-cover"
                     onError={() =>
@@ -1249,7 +1251,11 @@ export function PreviewPanel({
                   <Box className="h-6 w-6 text-slate-300" />
                 )}
               </div>
-              <span className="truncate px-1 py-0.5 text-center text-[11px] text-slate-600">
+              <span
+                className={`px-1 py-1 text-center text-[11px] leading-tight text-slate-600 ${
+                  mode === "reuse" ? "" : "truncate"
+                }`}
+              >
                 {entry.subject || "モデル"}
               </span>
             </button>
